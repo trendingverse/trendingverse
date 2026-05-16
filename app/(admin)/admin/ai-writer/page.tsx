@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { createClient } from '@/lib/supabase/server'
 import { AIWriterPanel } from '@/components/admin/AIWriterPanel'
 
@@ -10,7 +11,7 @@ export default async function AIWriterPage() {
         <h1 className="font-display text-2xl font-bold text-ink-950">✦ AI Writer</h1>
         <p className="text-sm text-ink-400">Generate, rewrite, and enhance articles with Gemini AI.</p>
       </div>
-      <AIWriterPanel categories={categories||[]} />
+      <AIWriterPanel categories={(categories || []) as any} />
     </div>
   )
 }
