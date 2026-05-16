@@ -68,3 +68,22 @@ export async function generateWithOpenAI(prompt: string): Promise<string> {
   })
   return res.choices[0].message.content || ''
 }
+export async function generateSeoEnhancement(article: { title: string; content: string; focus_keyword?: string }) {
+  const prompt = `Analyze this article and return SEO improvements as JSON:
+Title: ${article.title}
+Keyword: ${article.focus_keyword || 'not set'}
+Content preview: ${article.content.replace(/<[^>]+>/g,'').slice(0,400)}
+
+Return ONLY valid JSON:
+{"seo_title":"","meta_description":"","focus_keyword":"","keywords":[],"discover_tips":[],"readability_suggestions":[],"internal_link_suggestions":[]}`
+  const text = await generate(prompt)
+  return parseJSON<{seo_title:string;meta_description:string;focus_keyword:string;keywords:string[];discover_tips:string[];readability_suggestions:string[];internal_link_suggestions:string[]}>(text)
+}
+
+export async function detectTrendingTopics(region = 'Global') {
+  const prompt = `List 10 trending news topics right now for ${region}. Return ONLY a JSON array:
+[{"title":"topic","summary":"1 sentence","category":"Technology","keywords":["kw1","kw2"]}]
+Categories: Technology,Business,Politics,Science,Health,Sports,Entertainment,World`
+  const text = await generate(prompt)
+  return parseJSON<{title:string;summary:string;category:string;keywords:string[]}[]>(text)
+}
