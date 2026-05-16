@@ -35,9 +35,13 @@ export function AdminSidebar() {
       <nav className="flex-1 p-3 space-y-5">
         {nav.map(section => (
           <div key={section.label}>
-            <p className="text-[10px] font-bold text-ink-300 uppercase tracking-widest px-2 mb-1">{section.label}</p>
+            <p className="text-[10px] font-bold text-ink-300 uppercase tracking-widest px-2 mb-1">
+              {section.label}
+            </p>
             {section.items.map(item => {
-              const active = item.href === '/admin' ? path === '/admin' : path.startsWith(item.href)
+              const active = item.href === '/admin'
+                ? path === '/admin'
+                : path.startsWith(item.href)
               return (
                 <Link key={item.href} href={item.href}
                   className={`admin-nav-item ${active ? 'active' : ''}`}>
