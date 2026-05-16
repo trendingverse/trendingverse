@@ -11,6 +11,7 @@ export default async function EditArticlePage({ params }: { params: Promise<{ id
     supabase.from('categories').select('*').order('name'),
     supabase.from('tags').select('*').order('name'),
   ])
+  
   if (!article) notFound()
   return (
     <div>
