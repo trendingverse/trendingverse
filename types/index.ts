@@ -1,16 +1,80 @@
-export type ArticleStatus = 'draft'|'scheduled'|'published'|'archived'
-export type AdSlotPosition = 'header'|'inline'|'sidebar'|'footer'
+export type ArticleStatus = 'draft' | 'scheduled' | 'published' | 'archived'
+export type AdSlotPosition = 'header' | 'inline' | 'sidebar' | 'footer'
 
 export interface Category {
   id: string; name: string; slug: string; description?: string
   color: string; icon?: string; meta_title?: string; meta_desc?: string
   article_count?: number; created_at?: string
 }
+
 export interface Tag {
   id: string; name: string; slug: string; created_at?: string
 }
-export interface MediaAsset { id:string; filename:string; original_name:string; url:string; storage_path:string; mime_type:string; size_bytes:number; width?:number; height?:number; alt_text?:string; caption?:string; folder:string; uploaded_by?:string; created_at:string }
-export interface Article { id:string; title:string; slug:string; excerpt?:string; content?:string; cover_image_url?:string; cover_image_alt?:string; cover_image_id?:string; category_id?:string; category_name?:string; status:ArticleStatus; is_featured:boolean; is_sponsored:boolean; sponsor_name?:string; sponsor_disclosure?:string; author_id?:string; author_name:string; author_avatar?:string; seo_title?:string; meta_description?:string; focus_keyword?:string; keywords:string[]; canonical_url?:string; og_image_url?:string; schema_type:string; seo_score:number; discover_score:number; ai_generated:boolean; published_at?:string; scheduled_at?:string; has_affiliate_links:boolean; view_count:number; reading_time_min:number; word_count:number; related_article_ids:string[]; created_at:string; updated_at:string; categories?:Category; article_tags?:{tags:Tag}[] }
-export interface AdSlot { id:string; name:string; position:AdSlotPosition; adsense_slot_id?:string; is_active:boolean; custom_html?:string; description?:string; created_at:string; updated_at:string }
-export interface AffiliateLink { id:string; name:string; url:string; trigger_keywords:string[]; is_active:boolean; click_count:number; commission_pct?:number; category_id?:string; created_at:string; updated_at:string }
-export interface SeoSuggestion { type:'error'|'warning'|'info'|'success'; message:string }
+
+export interface MediaAsset {
+  id: string; filename: string; original_name: string; url: string
+  storage_path: string; mime_type: string; size_bytes: number
+  width?: number; height?: number; alt_text?: string; caption?: string
+  folder: string; uploaded_by?: string; created_at: string
+}
+
+export interface Article {
+  id: string; title: string; slug: string; excerpt?: string; content?: string
+  cover_image_url?: string; cover_image_alt?: string; cover_image_id?: string
+  category_id?: string; category_name?: string
+  status: ArticleStatus; is_featured: boolean; is_sponsored: boolean
+  sponsor_name?: string; sponsor_disclosure?: string
+  author_id?: string; author_name: string; author_avatar?: string
+  seo_title?: string; meta_description?: string; focus_keyword?: string
+  keywords: string[]; canonical_url?: string; og_image_url?: string
+  schema_type: string; seo_score: number; discover_score: number
+  ai_generated: boolean; published_at?: string; scheduled_at?: string
+  has_affiliate_links: boolean; view_count: number
+  reading_time_min: number; word_count: number
+  related_article_ids: string[]
+  created_at: string; updated_at: string
+  categories?: Category; article_tags?: { tags: Tag }[]
+}
+
+export interface AdSlot {
+  id: string; name: string; position: AdSlotPosition
+  adsense_slot_id?: string; is_active: boolean
+  custom_html?: string; description?: string
+  created_at: string; updated_at: string
+}
+
+export interface AffiliateLink {
+  id: string; name: string; url: string
+  trigger_keywords: string[]; is_active: boolean
+  click_count: number; commission_pct?: number
+  category_id?: string; created_at: string; updated_at: string
+}
+
+export interface SeoSuggestion {
+  type: 'error' | 'warning' | 'info' | 'success'
+  message: string; field?: string
+}
+
+export interface NewsletterSubscriber {
+  id: string; email: string; name?: string
+  is_active: boolean; subscribed_at: string
+}
+
+export interface DashboardStats {
+  total_articles: number; published_articles: number
+  draft_articles: number; total_views: number
+  views_today: number; views_week: number
+  total_subscribers: number
+}
+
+export interface AIGenerateRequest {
+  title?: string; keywords?: string[]; topic?: string
+  category?: string; tone?: string; wordCount?: number
+}
+
+export interface AIGenerateResponse {
+  title: string; content: string; excerpt: string
+  seo_title: string; meta_description: string
+  focus_keyword: string; keywords: string[]
+  tags: string[]; reading_time: number
+}
