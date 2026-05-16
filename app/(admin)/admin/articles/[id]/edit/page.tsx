@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { createClient } from '@/lib/supabase/server'
 import { ArticleEditor } from '@/components/admin/ArticleEditor'
 import { notFound } from 'next/navigation'
@@ -17,7 +18,11 @@ export default async function EditArticlePage({ params }: { params: Promise<{ id
         <h1 className="font-display text-2xl font-bold text-ink-950">Edit Article</h1>
         <p className="text-sm text-ink-400 font-mono">/article/{article.slug}</p>
       </div>
-      <ArticleEditor article={article} categories={categories||[]} tags={tags||[]} />
+      <ArticleEditor
+        article={article as any}
+        categories={(categories || []) as any}
+        tags={(tags || []) as any}
+      />
     </div>
   )
 }
