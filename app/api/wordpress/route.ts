@@ -6,7 +6,7 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { article_id, wp_url, wp_username, wp_password } = await req.json()
+  const { article_id, wp_url, wp_username, wp_password, featured_media } = await req.json()
 
   if (!article_id || !wp_url || !wp_username || !wp_password) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
