@@ -82,4 +82,9 @@ export async function POST(req: NextRequest) {
   const tag_ids = body.tag_ids
   if (Array.isArray(tag_ids) && tag_ids.length > 0 && data) {
     await supabase.from('article_tags').insert(
-      tag_ids.map((tid: string) => ({ a
+      tag_ids.map((tid: string) => ({ article_id: data.id, tag_id: tid }))
+    )
+  }
+
+  return NextResponse.json(data, { status: 201 })
+}
