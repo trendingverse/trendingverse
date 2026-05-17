@@ -3,10 +3,11 @@ import { createClient } from '@/lib/supabase/server'
 
 // Verify cron secret
 function isAuthorized(req: NextRequest): boolean {
-  const secret = req.headers.get('authorization')?.replace('Bearer ', '')
   const cronSecret = process.env.CRON_SECRET
-  // Allow Vercel cron (no auth header) or valid secret
-  return !cronSecret || secret === cronSecret || req.headers.get('x-vercel-cron') === '1'
+  if (!cronSecret) return true
+  const headerSecret = req.headers.get('authorization')?.replace('Bearer ', '')
+  const querySecret = new URL(req.url).searchParams.get('secret')
+  return headerSecret === cronSecret || querySecret === cronSecret || req.headers.get('x-vercel-cron') === '1'
 }
 
 async function getTrendingTopic(geminiKey: string, newsApiKey?: string): Promise<{ title: string; category: string; keywords: string[] }> {
