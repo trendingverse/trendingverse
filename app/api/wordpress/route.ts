@@ -47,8 +47,9 @@ export async function POST(req: NextRequest) {
       excerpt: article.excerpt || '',
       status: 'publish',
       slug: article.slug,
-      categories: categoryIds,
-      ...(body.featured_media ? { featured_media: body.featured_media } : {}),
+     categories: categoryIds,
+...(featured_media ? { featured_media } : {}),
+    
       meta: {
         _yoast_wpseo_title: article.seo_title || article.title,
         _yoast_wpseo_metadesc: article.meta_description || '',
