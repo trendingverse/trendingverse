@@ -57,10 +57,15 @@ export async function GET(req: NextRequest) {
   }
 
   // Use Gemini if no results yet
-  if (allTrends.length === 0) {
+  // Use Gemini for regions where NewsAPI doesn't have data (India, UK, Global)
+const geminiRegions = regionsToFetch.filter(r =>
+  !allTrends.some(t => t.region === (REGIONS[r]?.label || r))
+)
+
+if (geminiRegions.length > 0) {
     try {
       const today = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })
-      const regionList = regionsToFetch.join(', ')
+      const regionList = geminiRegions.join(', ')
 
       const prompt = `Today is ${today}. List 12 real current trending news topics for ${regionList}.
 Include mix of: politics, technology, sports, entertainment, business.
