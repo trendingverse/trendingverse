@@ -105,11 +105,25 @@ Return ONLY valid JSON:
     }
   )
   const data = await res.json()
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
-  const clean = text.replace(/```json\n?|```/g, '').trim()
-  const match = clean.match(/\{[\s\S]*\}/)
-  if (!match) throw new Error('Gemini returned no article content')
-  return JSON.parse(match[0])
+// Handle thinking model - get all text parts
+const parts = data.candidates?.[0]?.content?.parts || []
+const text = parts
+  .filter((p: { text?: string }) => p.text)
+  .map((p: { text: string }) => p.text)
+  .join('')
+  .replace(/```json\n?|```/g, '')
+  .trim()
+
+if (!text) throw new Error('Gemini returned empty response: ' + JSON.stringify(data).slice(0, 200))
+
+// Find JSON object - get the LAST match to skip thinking content
+const matches = [...text.matchAll(/\{[\s\S]*?"reading_time"[\s\S]*?\}/g)]
+const jsonStr = matches.length > 0
+  ? matches[matches.length - 1][0]
+  : text.match(/\{[\s\S]*\}/)?.[0]
+
+if (!jsonStr) throw new Error('No JSON found in response. Raw: ' + text.slice(0, 300))
+return JSON.parse(jsonStr)
 }
 
 async function fetchPexelsImage(query: string, pexelsKey: string) {
