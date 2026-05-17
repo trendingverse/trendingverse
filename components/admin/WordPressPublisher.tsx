@@ -9,24 +9,32 @@ export function WordPressPublisher({ articles }: Props) {
   const [wpUrl, setWpUrl] = useState('https://trendingverse.online')
   const [wpUser, setWpUser] = useState('')
   const [wpPass, setWpPass] = useState('')
-  const [genImage, setGenImage] = useState(true)
-  const [status, setStatus] = useState<'idle' | 'generating' | 'pushing' | 'success' | 'error'>('idle')
-  const [message, setMessage] = useState('')
-  const [wpLink, setWpLink] = useState('')
+  const [autoImage, setAutoImage] = useState(true)
+  const [status, setStatus] = useState<'idle'|'image'|'pushing'|'success'|'error'>('idle')
+  const [log, setLog] = useState<{text: string; type: 'info'|'success'|'error'|'warn'}[]>([])
   const [previewImg, setPreviewImg] = useState('')
+  const [wpLink, setWpLink] = useState('')
   const [open, setOpen] = useState(false)
 
   const selectedArticle = articles.find(a => a.id === selectedId)
 
+  function addLog(text: string, type: 'info'|'success'|'error'|'warn' = 'info') {
+    setLog(prev => [...prev, { text, type }])
+  }
+
   async function publish() {
     if (!selectedId) return alert('Please select an article')
     if (!wpUrl || !wpUser || !wpPass) return alert('Please fill in WordPress credentials')
+    setLog([])
+    setPreviewImg('')
+    setWpLink('')
 
     let wpMediaId: number | null = null
 
-    if (genImage) {
-      setStatus('generating')
-      setMessage('Generating editorial image with AI...')
+    // Step 1: Fetch image from Pexels
+    if (autoImage) {
+      setStatus('image')
+      addLog('Searching for editorial photo on Pexels...', 'info')
       try {
         const imgRes = await fetch('/api/generate-image', {
           method: 'POST',
@@ -43,19 +51,20 @@ export function WordPressPublisher({ articles }: Props) {
         const imgData = await imgRes.json()
         if (imgData.success) {
           wpMediaId = imgData.wp_media_id
-          setPreviewImg('data:image/jpeg;base64,' + imgData.image_b64)
-          setMessage('Image generated and uploaded to WordPress (ID: ' + wpMediaId + ')')
+          setPreviewImg(imgData.image_url)
+          addLog(`Photo found: "${imgData.search_query}" by ${imgData.photographer}`, 'success')
+          addLog(`Uploaded to WordPress media library (ID: ${wpMediaId})`, 'success')
         } else {
-          setMessage('Image generation failed: ' + imgData.error + ' - continuing without image...')
+          addLog(`Image: ${imgData.error} — publishing without featured image`, 'warn')
         }
       } catch (e) {
-        setMessage('Image error: ' + (e as Error).message + ' - continuing without image...')
+        addLog(`Image error: ${(e as Error).message} — continuing without image`, 'warn')
       }
-      await new Promise(r => setTimeout(r, 1000))
     }
 
+    // Step 2: Push article
     setStatus('pushing')
-    setMessage('Publishing article to WordPress...')
+    addLog('Checking for duplicates on WordPress...', 'info')
     try {
       const res = await fetch('/api/wordpress', {
         method: 'POST',
@@ -69,24 +78,36 @@ export function WordPressPublisher({ articles }: Props) {
         }),
       })
       const data = await res.json()
+
+      if (res.status === 409) {
+        setStatus('error')
+        addLog(`Duplicate detected! This article already exists on WordPress.`, 'error')
+        addLog(`Existing post: ${data.existing_url}`, 'warn')
+        return
+      }
+
       if (!res.ok) throw new Error(data.error || 'Push failed')
+
       setStatus('success')
       setWpLink(data.wp_url)
-      setMessage('Published successfully!')
+      addLog(`Article published successfully!`, 'success')
+      addLog(`Live at: ${data.wp_url}`, 'success')
     } catch (e) {
       setStatus('error')
-      setMessage((e as Error).message)
+      addLog(`Error: ${(e as Error).message}`, 'error')
     }
   }
 
+  const logColors = { info: 'text-ink-500', success: 'text-green-600', error: 'text-red-500', warn: 'text-amber-500' }
+
   return (
-    <div className="card p-5 border border-blue-100 bg-blue-50/30">
+    <div className="card p-5">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <span className="text-2xl">🚀</span>
           <div>
             <h2 className="font-semibold text-ink-900">Push to WordPress</h2>
-            <p className="text-xs text-ink-400">Generate image + publish article to trendingverse.online</p>
+            <p className="text-xs text-ink-400">Auto-fetch photo + publish to trendingverse.online with duplicate protection</p>
           </div>
         </div>
         <button onClick={() => setOpen(!open)}
@@ -122,28 +143,40 @@ export function WordPressPublisher({ articles }: Props) {
             </div>
           </div>
 
-          <div className="flex items-center gap-3 p-3 bg-white rounded-xl border border-ink-100">
-            <input type="checkbox" id="gen_img" checked={genImage} onChange={e => setGenImage(e.target.checked)} className="w-4 h-4 accent-blue-600" />
-            <label htmlFor="gen_img" className="text-sm font-medium text-ink-700 cursor-pointer">Auto-generate editorial featured image with AI (Imagen 4)</label>
+          <div className="flex items-center gap-3 p-3 bg-ink-50 rounded-xl">
+            <input type="checkbox" id="auto_img" checked={autoImage} onChange={e => setAutoImage(e.target.checked)} className="w-4 h-4 accent-blue-600" />
+            <label htmlFor="auto_img" className="text-sm text-ink-700 cursor-pointer">
+              Auto-fetch relevant editorial photo from Pexels (free)
+            </label>
           </div>
 
           {previewImg && (
             <div className="rounded-xl overflow-hidden border border-ink-100">
-              <img src={previewImg} alt="Generated featured image" className="w-full h-48 object-cover" />
-              <p className="text-xs text-ink-400 p-2">Image generated and uploaded to WordPress</p>
+              <img src={previewImg} alt="Featured" className="w-full h-44 object-cover" />
             </div>
           )}
 
-          <div className="flex items-center gap-4">
-            <button onClick={publish} disabled={status === 'generating' || status === 'pushing'}
+          {log.length > 0 && (
+            <div className="bg-ink-950 rounded-xl p-3 space-y-1 font-mono text-xs">
+              {log.map((l, i) => (
+                <div key={i} className={logColors[l.type]}>
+                  {l.type === 'success' ? '✓' : l.type === 'error' ? '✗' : l.type === 'warn' ? '⚠' : '›'} {l.text}
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="flex items-center gap-3">
+            <button onClick={publish}
+              disabled={status === 'image' || status === 'pushing'}
               className="px-6 py-2.5 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors">
-              {status === 'generating' ? 'Generating image...' : status === 'pushing' ? 'Publishing...' : 'Generate Image & Publish'}
+              {status === 'image' ? 'Fetching photo...' : status === 'pushing' ? 'Publishing...' : '🚀 Publish to WordPress'}
             </button>
-            {message && (
-              <div className={`text-sm ${status === 'success' ? 'text-green-600' : status === 'error' ? 'text-red-500' : 'text-ink-500'}`}>
-                {message}
-                {wpLink && <a href={wpLink} target="_blank" rel="noopener noreferrer" className="ml-2 underline text-blue-600">View on site</a>}
-              </div>
+            {wpLink && (
+              <a href={wpLink} target="_blank" rel="noopener noreferrer"
+                className="text-sm text-blue-600 underline font-medium">
+                View live post →
+              </a>
             )}
           </div>
         </div>
