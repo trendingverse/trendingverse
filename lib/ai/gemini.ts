@@ -70,14 +70,22 @@ Rules: 150-160 characters, include keyword, compelling CTA. Return ONLY the desc
 
 export async function detectTrendingTopics(region = 'Global') {
   const prompt = `List 10 trending news topics right now for ${region}.
-Return ONLY a JSON array:
-[{"title":"topic","summary":"1 sentence","category":"Technology","keywords":["kw1","kw2"]}]
-Categories: Technology,Business,Politics,Science,Health,Sports,Entertainment,World`
-  const result = await model.generateContent(prompt)
-  const text = result.response.text()
-  return parseJSON<{ title: string; summary: string; category: string; keywords: string[] }[]>(text)
-}
+Return ONLY a valid JSON array, nothing else before or after it:
+[{"title":"topic title","summary":"one sentence summary","category":"Technology","keywords":["kw1","kw2"]}]
+Categories must be one of: Technology, Business, Politics, Science, Health, Sports, Entertainment, World`
 
+  try {
+    const result = await model.generateContent(prompt)
+    const text = result.response.text()
+    // Extract JSON array from response
+    const match = text.match(/\[[\s\S]*\]/)
+    if (!match) throw new Error('No JSON array found in response')
+    return JSON.parse(match[0])
+  } catch (e) {
+    console.error('detectTrendingTopics error:', e)
+    return []
+  }
+}
 export async function suggestRelatedArticles(title: string, keywords: string[], allTitles: string[]) {
   const prompt = `Given article: "${title}" with keywords: ${keywords.join(', ')}
 From this list, pick the 3 most related:
