@@ -160,20 +160,20 @@ export function SettingsPanel({ settings: initial, subscribers, campaigns }: { s
                 <input value={settings[f.key]||''} onChange={e=>update(f.key,e.target.value)} className="input font-mono text-xs" placeholder={f.placeholder}/>
               </div>
             ))}
-            <div>
+        <div>
   <label className="block text-xs font-medium text-ink-500 mb-1">WORDPRESS SITE URL</label>
   <input className="input w-full" placeholder="https://trendingverse.online"
-    value={form.wp_url || ''} onChange={e => setForm({...form, wp_url: e.target.value})} />
+    defaultValue="" id="wp_url" />
 </div>
 <div>
   <label className="block text-xs font-medium text-ink-500 mb-1">WORDPRESS USERNAME</label>
   <input className="input w-full" placeholder="admin"
-    value={form.wp_username || ''} onChange={e => setForm({...form, wp_username: e.target.value})} />
+    defaultValue="" id="wp_username" />
 </div>
 <div>
   <label className="block text-xs font-medium text-ink-500 mb-1">WORDPRESS APPLICATION PASSWORD</label>
   <input className="input w-full" type="password" placeholder="xxxx xxxx xxxx xxxx xxxx xxxx"
-    value={form.wp_password || ''} onChange={e => setForm({...form, wp_password: e.target.value})} />
+    defaultValue="" id="wp_password" />
 </div>
             <button onClick={saveSettings} disabled={saving} className="btn-primary w-full justify-center">
               {saving?'Saving…':'Save Integrations'}
