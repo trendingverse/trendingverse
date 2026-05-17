@@ -11,9 +11,10 @@ const nav = [
     { href: '/admin/categories', label: 'Categories', icon: '◼' },
     { href: '/admin/media', label: 'Media', icon: '◧' },
   ]},
-  { label: 'AI & SEO', items: [
+{ label: 'AI & SEO', items: [
     { href: '/admin/ai-writer', label: 'AI Writer', icon: '✦' },
     { href: '/admin/seo', label: 'SEO Engine', icon: '◈' },
+    { href: '/admin/trends', label: 'Trends', icon: '🔥' },
   ]},
   { label: 'Revenue', items: [
     { href: '/admin/monetization', label: 'Monetization', icon: '◎' },
