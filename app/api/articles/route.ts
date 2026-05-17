@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json()
-  const { tag_ids, ...rest } = body
+  const { tag_ids, reading_time, ...rest } = body
 
   if (!rest.title) return NextResponse.json({ error: 'title is required' }, { status: 400 })
 
