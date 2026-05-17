@@ -12,7 +12,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
 
-  // Fetch article from Supabase
   const { data: article, error } = await supabase
     .from('articles')
     .select('*, categories(name)')
@@ -27,13 +26,52 @@ export async function POST(req: NextRequest) {
   const auth = Buffer.from(`${wp_username}:${wp_password}`).toString('base64')
 
   try {
+    // ── DUPLICATE CHECK ──────────────────────────────────────────
+    // Check by slug
+    const slugCheck = await fetch(
+      `${base}/wp-json/wp/v2/posts?slug=${encodeURIComponent(article.slug)}&status=any`,
+      { headers: { Authorization: `Basic ${auth}` } }
+    )
+    if (slugCheck.ok) {
+      const existing = await slugCheck.json()
+      if (Array.isArray(existing) && existing.length > 0) {
+        return NextResponse.json({
+          error: `Duplicate detected: A post with slug "${article.slug}" already exists on WordPress.`,
+          duplicate: true,
+          existing_url: existing[0].link,
+          existing_id: existing[0].id,
+        }, { status: 409 })
+      }
+    }
+
+    // Check by title similarity
+    const titleCheck = await fetch(
+      `${base}/wp-json/wp/v2/posts?search=${encodeURIComponent(article.title.slice(0, 30))}&status=any&per_page=5`,
+      { headers: { Authorization: `Basic ${auth}` } }
+    )
+    if (titleCheck.ok) {
+      const titleResults = await titleCheck.json()
+      if (Array.isArray(titleResults)) {
+        const exact = titleResults.find((p: { title: { rendered: string } }) =>
+          p.title.rendered.toLowerCase().trim() === article.title.toLowerCase().trim()
+        )
+        if (exact) {
+          return NextResponse.json({
+            error: `Duplicate detected: A post with the same title already exists on WordPress.`,
+            duplicate: true,
+            existing_url: exact.link,
+            existing_id: exact.id,
+          }, { status: 409 })
+        }
+      }
+    }
+    // ── END DUPLICATE CHECK ───────────────────────────────────────
+
     // Fetch WP categories
     const catRes = await fetch(`${base}/wp-json/wp/v2/categories?per_page=100`, {
       headers: { Authorization: `Basic ${auth}` }
     })
     const wpCats = catRes.ok ? await catRes.json() : []
-
-    // Match category name
     const catName = article.categories?.name || article.category_name || ''
     const matched = wpCats.find((c: { name: string; id: number }) =>
       c.name.toLowerCase() === catName.toLowerCase()
@@ -47,9 +85,8 @@ export async function POST(req: NextRequest) {
       excerpt: article.excerpt || '',
       status: 'publish',
       slug: article.slug,
-     categories: categoryIds,
-...(featured_media ? { featured_media } : {}),
-    
+      categories: categoryIds,
+      ...(featured_media ? { featured_media } : {}),
       meta: {
         _yoast_wpseo_title: article.seo_title || article.title,
         _yoast_wpseo_metadesc: article.meta_description || '',
@@ -75,7 +112,7 @@ export async function POST(req: NextRequest) {
       }, { status: wpRes.status })
     }
 
-    // Update article with WP post ID and URL
+    // Mark as published in Supabase
     await supabase.from('articles').update({
       status: 'published',
       published_at: new Date().toISOString(),
