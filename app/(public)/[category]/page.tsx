@@ -1,3 +1,6 @@
+// Prevent /admin from being caught by category route
+const { category: slug } = await params
+if (['admin','login','api','search','article'].includes(slug)) notFound()
 import { createClient } from '@/lib/supabase/server'
 import { ArticleCard } from '@/components/public/ArticleCard'
 import { AdSlot } from '@/components/public/AdSlot'
