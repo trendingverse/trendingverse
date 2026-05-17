@@ -19,6 +19,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json()
+  const { tag_ids, reading_time, tags, ...updateData } = body
   const { tag_ids, ...rest } = body
 
   const content = rest.content || ''
