@@ -7,133 +7,125 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { title, content, article_id, wp_url, wp_username, wp_password } = await req.json()
-  const apiKey = process.env.GEMINI_API_KEY
-  if (!apiKey) return NextResponse.json({ error: 'GEMINI_API_KEY not set' }, { status: 500 })
+  const pexelsKey = process.env.PEXELS_API_KEY
 
-  // Build editorial image prompt from article title/content
-  const excerpt = (content || '').replace(/<[^>]+>/g, '').slice(0, 200)
-  const prompt = `Professional news editorial photograph for article: "${title}". ${excerpt}. 
-Style: high-quality photojournalism, editorial news style, realistic, professional lighting, 
-no text overlays, no watermarks, suitable for news website featured image, 
-16:9 aspect ratio, sharp focus, dramatic but professional composition.`
+  if (!pexelsKey) {
+    return NextResponse.json({ error: 'PEXELS_API_KEY not set in Vercel environment variables' }, { status: 500 })
+  }
+
+  // Extract best search keywords from title
+  const stopWords = new Set(['a','an','the','and','or','but','in','on','at','to','for','of','with','by','from','is','are','was','were','has','have','had','will','would','could','should','this','that','these','those','after','before','about','how','why','what','when','where','who'])
+  const keywords = title
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, '')
+    .split(' ')
+    .filter((w: string) => w.length > 3 && !stopWords.has(w))
+    .slice(0, 3)
+    .join(' ')
+
+  const searchQuery = keywords || title.split(' ').slice(0, 3).join(' ')
 
   try {
-    // Use Imagen 4 for image generation
-    const imgRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-001:predict?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          instances: [{ prompt }],
-          parameters: {
-            sampleCount: 1,
-            aspectRatio: '16:9',
-            safetyFilterLevel: 'block_some',
-            personGeneration: 'allow_adult',
-          }
-        })
-      }
+    // Search Pexels for relevant editorial photos
+    const searchRes = await fetch(
+      `https://api.pexels.com/v1/search?query=${encodeURIComponent(searchQuery)}&per_page=5&orientation=landscape&size=large`,
+      { headers: { Authorization: pexelsKey } }
     )
 
+    if (!searchRes.ok) {
+      return NextResponse.json({ error: 'Pexels API error: ' + searchRes.statusText }, { status: searchRes.status })
+    }
+
+    const searchData = await searchRes.json()
+    const photos = searchData.photos || []
+
+    if (photos.length === 0) {
+      // Try broader search with first word
+      const fallbackQuery = title.split(' ')[0]
+      const fallbackRes = await fetch(
+        `https://api.pexels.com/v1/search?query=${encodeURIComponent(fallbackQuery)}&per_page=5&orientation=landscape`,
+        { headers: { Authorization: pexelsKey } }
+      )
+      const fallbackData = await fallbackRes.json()
+      if (!fallbackData.photos?.length) {
+        return NextResponse.json({ error: 'No images found for this topic on Pexels' }, { status: 404 })
+      }
+      photos.push(...fallbackData.photos)
+    }
+
+    // Pick the best photo (first result, landscape, large)
+    const photo = photos[0]
+    const imageUrl = photo.src.large2x || photo.src.large || photo.src.original
+    const photographer = photo.photographer
+    const pexelsUrl = photo.url
+
+    // Download the image
+    const imgRes = await fetch(imageUrl)
     if (!imgRes.ok) {
-      const err = await imgRes.json()
-      // Fallback: try Gemini 2.5 Flash image model
-      return await fallbackImageGen(apiKey, prompt, title, article_id, wp_url, wp_username, wp_password, supabase)
+      return NextResponse.json({ error: 'Failed to download image from Pexels' }, { status: 500 })
     }
+    const imgBuffer = Buffer.from(await imgRes.arrayBuffer())
+    const mimeType = imgRes.headers.get('content-type') || 'image/jpeg'
+    const ext = mimeType.includes('png') ? 'png' : 'jpg'
 
-    const imgData = await imgRes.json()
-    const b64 = imgData.predictions?.[0]?.bytesBase64Encoded
+    let wpMediaId: number | null = null
+    let wpMediaUrl: string | null = null
 
-    if (!b64) {
-      return await fallbackImageGen(apiKey, prompt, title, article_id, wp_url, wp_username, wp_password, supabase)
-    }
-
-    // Upload to WordPress if credentials provided
+    // Upload to WordPress media library
     if (wp_url && wp_username && wp_password) {
-      const wpMediaId = await uploadToWordPress(b64, title, wp_url, wp_username, wp_password)
-      if (article_id && wpMediaId) {
-        // Store image info in article
-        await supabase.from('articles').update({
-          cover_image_alt: `Featured image for: ${title}`
-        }).eq('id', article_id)
-      }
-      return NextResponse.json({
-        success: true,
-        image_b64: b64,
-        wp_media_id: wpMediaId,
-        source: 'imagen4'
-      })
-    }
+      const base = wp_url.replace(/\/$/, '')
+      const auth = Buffer.from(`${wp_username}:${wp_password}`).toString('base64')
+      const filename = `${searchQuery.replace(/\s+/g, '-')}-${Date.now()}.${ext}`
 
-    return NextResponse.json({ success: true, image_b64: b64, source: 'imagen4' })
-
-  } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 500 })
-  }
-}
-
-async function fallbackImageGen(
-  apiKey: string, prompt: string, title: string,
-  article_id: string, wp_url: string, wp_username: string, wp_password: string,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  supabase: any
-) {
-  // Try gemini-2.5-flash-image as fallback
-  try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${apiKey}`,
-      {
+      const uploadRes = await fetch(`${base}/wp-json/wp/v2/media`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { responseModalities: ['IMAGE', 'TEXT'] }
-        })
+        headers: {
+          Authorization: `Basic ${auth}`,
+          'Content-Type': mimeType,
+          'Content-Disposition': `attachment; filename="${filename}"`,
+        },
+        body: imgBuffer,
+      })
+
+      if (uploadRes.ok) {
+        const mediaData = await uploadRes.json()
+        wpMediaId = mediaData.id
+        wpMediaUrl = mediaData.source_url
+
+        // Set alt text and caption with photographer credit
+        if (wpMediaId) {
+          await fetch(`${base}/wp-json/wp/v2/media/${wpMediaId}`, {
+            method: 'POST',
+            headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              alt_text: title,
+              caption: `Photo by ${photographer} on Pexels`,
+              description: `Source: ${pexelsUrl}`,
+            }),
+          })
+        }
       }
-    )
-    const data = await res.json()
-    const parts = data.candidates?.[0]?.content?.parts || []
-    const imgPart = parts.find((p: { inlineData?: { data: string; mimeType: string } }) => p.inlineData)
-    if (!imgPart?.inlineData?.data) {
-      return NextResponse.json({ error: 'Image generation not available for this API key. Please upgrade your Gemini API plan or try again.' }, { status: 422 })
     }
-    const b64 = imgPart.inlineData.data
 
-    if (wp_url && wp_username && wp_password) {
-      const wpMediaId = await uploadToWordPress(b64, title, wp_url, wp_username, wp_password)
-      if (article_id && wpMediaId && supabase) {
-        await supabase.from('articles').update({ cover_image_alt: `Featured image for: ${title}` }).eq('id', article_id)
-      }
-      return NextResponse.json({ success: true, image_b64: b64, wp_media_id: wpMediaId, source: 'gemini-flash-image' })
+    // Save to Supabase article
+    if (article_id && wpMediaUrl) {
+      await supabase.from('articles').update({
+        cover_image_url: wpMediaUrl,
+        cover_image_alt: title,
+      }).eq('id', article_id)
     }
-    return NextResponse.json({ success: true, image_b64: b64, source: 'gemini-flash-image' })
-  } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 500 })
-  }
-}
 
-async function uploadToWordPress(b64: string, title: string, wpUrl: string, wpUser: string, wpPass: string): Promise<number | null> {
-  try {
-    const base = wpUrl.replace(/\/$/, '')
-    const auth = Buffer.from(`${wpUser}:${wpPass}`).toString('base64')
-    const filename = `${title.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 50)}-${Date.now()}.jpg`
-    const imgBuffer = Buffer.from(b64, 'base64')
-
-    const uploadRes = await fetch(`${base}/wp-json/wp/v2/media`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Basic ${auth}`,
-        'Content-Type': 'image/jpeg',
-        'Content-Disposition': `attachment; filename="${filename}"`,
-      },
-      body: imgBuffer,
+    return NextResponse.json({
+      success: true,
+      image_url: imageUrl,
+      wp_media_id: wpMediaId,
+      wp_media_url: wpMediaUrl,
+      photographer,
+      pexels_url: pexelsUrl,
+      search_query: searchQuery,
     })
 
-    if (!uploadRes.ok) return null
-    const mediaData = await uploadRes.json()
-    return mediaData.id || null
-  } catch {
-    return null
+  } catch (e) {
+    return NextResponse.json({ error: (e as Error).message }, { status: 500 })
   }
 }
