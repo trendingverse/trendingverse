@@ -30,15 +30,23 @@ function slugify(text: string): string {
   return text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80)
 }
 
+// Drop-in replacement for getTrendingTopic function in auto-publish/route.ts
+
 async function getTrendingTopic(geminiKey: string, newsApiKey?: string, region = 'India') {
+  // NewsAPI free tier: use 'everything' endpoint with Indian sources for India trends
   if (newsApiKey) {
     try {
-      const countryMap: Record<string, string> = { 'India': 'in', 'US': 'us', 'UK': 'gb' }
-      const country = countryMap[region] || 'in'
-      const res = await fetch(
-        `https://newsapi.org/v2/top-headlines?country=${country}&pageSize=10&apiKey=${newsApiKey}`,
-        { cache: 'no-store' }
-      )
+      let url = ''
+      if (region === 'India') {
+        // Use 'everything' endpoint with Indian news sources — works on free tier
+        url = `https://newsapi.org/v2/everything?sources=the-times-of-india,the-hindu,ndtv,india-today&pageSize=10&sortBy=publishedAt&apiKey=${newsApiKey}`
+      } else if (region === 'UK') {
+        url = `https://newsapi.org/v2/top-headlines?country=gb&pageSize=10&apiKey=${newsApiKey}`
+      } else {
+        url = `https://newsapi.org/v2/top-headlines?country=us&pageSize=10&apiKey=${newsApiKey}`
+      }
+
+      const res = await fetch(url, { cache: 'no-store' })
       if (res.ok) {
         const data = await res.json()
         const articles = (data.articles || []).filter((a: { title: string }) =>
@@ -47,29 +55,50 @@ async function getTrendingTopic(geminiKey: string, newsApiKey?: string, region =
         if (articles.length > 0) {
           const pick = articles[Math.floor(Math.random() * Math.min(5, articles.length))]
           const title = pick.title.replace(/ [-|] [^-|]+$/, '').trim()
-          return { title, category: 'News', keywords: title.split(' ').filter((w: string) => w.length > 4).slice(0, 5) }
+          return {
+            title,
+            category: 'News',
+            keywords: title.split(' ').filter((w: string) => w.length > 4).slice(0, 5)
+          }
         }
       }
-    } catch { /* fallback */ }
+    } catch { /* fallback to Gemini */ }
   }
+
+  // Gemini trending detection — works for any region including India
   const today = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${geminiKey}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: `Today is ${today}. Give me ONE highly trending news topic in ${region} right now. Return ONLY JSON: {"title":"Specific engaging headline","category":"Technology","keywords":["kw1","kw2","kw3","kw4","kw5"]}` }] }],
-        generationConfig: { temperature: 1 }
-      }),
-      cache: 'no-store'
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${geminiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: `Today is ${today}. What is ONE specific breaking or trending news topic in ${region} right now? Pick from: politics, technology, sports, entertainment, business, health. Return ONLY JSON: {"title":"Specific news headline","category":"Technology","keywords":["kw1","kw2","kw3","kw4","kw5"]}` }] }],
+          generationConfig: { temperature: 1 }
+        }),
+        cache: 'no-store'
+      }
+    )
+    if (res.ok) {
+      const data = await res.json()
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+      const match = text.match(/\{[\s\S]*\}/)
+      if (match) {
+        const parsed = JSON.parse(match[0])
+        if (parsed.title) return parsed
+      }
     }
-  )
-  const data = await res.json()
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
-  const match = text.match(/\{[\s\S]*\}/)
-  if (match) { try { return JSON.parse(match[0]) } catch { /* fallback */ } }
-  return { title: `Top Technology Trends in India ${new Date().getFullYear()}`, category: 'Technology', keywords: ['technology', 'india', 'trends'] }
+  } catch { /* final fallback */ }
+
+  // Final fallback with region-specific defaults
+  const defaults: Record<string, { title: string; category: string; keywords: string[] }> = {
+    'India': { title: `India Business and Technology News ${new Date().getFullYear()}`, category: 'Business', keywords: ['india', 'business', 'technology', 'economy', 'news'] },
+    'UK': { title: `UK Politics and Economy Update ${new Date().getFullYear()}`, category: 'Politics', keywords: ['uk', 'politics', 'economy', 'britain', 'news'] },
+    'US': { title: `US Technology and Business Headlines ${new Date().getFullYear()}`, category: 'Technology', keywords: ['us', 'technology', 'business', 'america', 'news'] },
+    'Global': { title: `Global News and World Affairs ${new Date().getFullYear()}`, category: 'World', keywords: ['global', 'world', 'news', 'international', 'affairs'] },
+  }
+  return defaults[region] || defaults['India']
 }
 
 async function generateArticle(title: string, keywords: string[], category: string, geminiKey: string, language = 'en') {
