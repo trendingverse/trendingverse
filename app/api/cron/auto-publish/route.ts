@@ -271,7 +271,7 @@ export async function GET(req: NextRequest) {
 
   } catch (e) {
     log.push(`Error: ${(e as Error).message}`)
-    await supabase.from('cron_logs').insert({ status: 'failed', error: (e as Error).message, wp_url: wpUrl, log }).catch(() => {})
+    try { await supabase.from('cron_logs').insert({ status: 'failed', error: (e as Error).message, wp_url: wpUrl, log }) } catch { /* ignore log errors */ }
     return NextResponse.json({ success: false, error: (e as Error).message, log }, { status: 500 })
   }
 }
