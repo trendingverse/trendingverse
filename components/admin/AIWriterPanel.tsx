@@ -4,6 +4,19 @@ import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 import type { Category } from '@/types'
 
+const LANGUAGES = [
+  { code: 'en', name: 'English', native: 'English' },
+  { code: 'hi', name: 'Hindi', native: 'हिंदी' },
+  { code: 'ta', name: 'Tamil', native: 'தமிழ்' },
+  { code: 'te', name: 'Telugu', native: 'తెలుగు' },
+  { code: 'kn', name: 'Kannada', native: 'ಕನ್ನಡ' },
+  { code: 'ml', name: 'Malayalam', native: 'മലയാളം' },
+  { code: 'mr', name: 'Marathi', native: 'मराठी' },
+  { code: 'gu', name: 'Gujarati', native: 'ગુજરાતી' },
+  { code: 'bn', name: 'Bengali', native: 'বাংলা' },
+  { code: 'pa', name: 'Punjabi', native: 'ਪੰਜਾਬੀ' },
+]
+
 export function AIWriterPanel({ categories }: { categories: Category[] }) {
   const router = useRouter()
   const [tab, setTab] = useState<'generate'|'headlines'|'trending'>('generate')
@@ -17,6 +30,7 @@ export function AIWriterPanel({ categories }: { categories: Category[] }) {
   const [keywords, setKeywords] = useState<string[]>([])
   const [wordCount, setWordCount] = useState(700)
   const [tone, setTone] = useState('objective, journalistic')
+  const [language, setLanguage] = useState('en')
   const [result, setResult] = useState<Record<string,unknown>|null>(null)
 
   // Headlines
@@ -37,7 +51,7 @@ export function AIWriterPanel({ categories }: { categories: Category[] }) {
     setLoading(true); setResult(null)
     try {
       const res = await fetch('/api/ai/generate', { method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ title: title||topic, keywords, category: categories.find(c=>c.id===catId)?.name, wordCount, tone }) })
+        body: JSON.stringify({ title: title||topic, keywords, category: categories.find(c=>c.id===catId)?.name, wordCount, tone, language }) })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       setResult(data)
@@ -71,13 +85,14 @@ export function AIWriterPanel({ categories }: { categories: Category[] }) {
 
   async function useGenerated() {
     if (!result) return
-    // Save as draft and redirect to editor
     const res = await fetch('/api/articles', { method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ ...result, title: result.title, category_id: catId||null, status:'draft', ai_generated: true }) })
     const article = await res.json()
     if (res.ok) { toast.success('Saved as draft!'); router.push(`/admin/articles/${article.id}/edit`) }
     else toast.error(article.error)
   }
+
+  const selectedLang = LANGUAGES.find(l => l.code === language)
 
   return (
     <div className="space-y-5">
@@ -96,10 +111,12 @@ export function AIWriterPanel({ categories }: { categories: Category[] }) {
         <div className="grid lg:grid-cols-2 gap-6">
           <div className="card p-5 space-y-4">
             <h3 className="font-semibold text-ink-900">Article Generator</h3>
+
             <div>
               <label className="label">Title or Topic *</label>
               <input value={title} onChange={e=>setTitle(e.target.value)} className="input" placeholder="e.g. 'AI Revolution in Indian Healthcare 2025'"/>
             </div>
+
             <div>
               <label className="label">Category</label>
               <select value={catId} onChange={e=>setCatId(e.target.value)} className="input">
@@ -107,6 +124,33 @@ export function AIWriterPanel({ categories }: { categories: Category[] }) {
                 {categories.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
+
+            {/* Language Selector */}
+            <div>
+              <label className="label">Content Language</label>
+              <div className="grid grid-cols-5 gap-1.5">
+                {LANGUAGES.map(lang => (
+                  <button
+                    key={lang.code}
+                    onClick={() => setLanguage(lang.code)}
+                    className={`flex flex-col items-center justify-center px-2 py-2 rounded-lg border text-center transition-all ${
+                      language === lang.code
+                        ? 'border-accent bg-accent/10 text-accent'
+                        : 'border-ink-100 hover:border-ink-300 text-ink-600'
+                    }`}
+                  >
+                    <span className="text-xs font-medium leading-tight">{lang.native}</span>
+                    <span className="text-[10px] text-ink-400 mt-0.5">{lang.name}</span>
+                  </button>
+                ))}
+              </div>
+              {language !== 'en' && (
+                <p className="text-xs text-amber-600 mt-1.5 bg-amber-50 px-3 py-1.5 rounded-lg">
+                  ✦ Article will be generated entirely in {selectedLang?.native} ({selectedLang?.name})
+                </p>
+              )}
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="label">Target Words</label>
@@ -121,6 +165,7 @@ export function AIWriterPanel({ categories }: { categories: Category[] }) {
                 </select>
               </div>
             </div>
+
             <div>
               <label className="label">Seed Keywords</label>
               <div className="flex gap-2 mb-2">
@@ -136,15 +181,24 @@ export function AIWriterPanel({ categories }: { categories: Category[] }) {
                 ))}
               </div>
             </div>
+
             <button onClick={generate} disabled={loading} className="btn-primary w-full justify-center py-2.5">
-              {loading?<span className="flex items-center gap-2"><span className="animate-spin">⟳</span>Generating…</span>:'✦ Generate Article'}
+              {loading
+                ? <span className="flex items-center gap-2"><span className="animate-spin">⟳</span>Generating in {selectedLang?.native}…</span>
+                : `✦ Generate Article ${language !== 'en' ? `in ${selectedLang?.native}` : ''}`
+              }
             </button>
           </div>
 
           {result && (
             <div className="card p-5 space-y-4">
               <div className="flex items-center justify-between">
-                <h3 className="font-semibold text-ink-900">Generated Article</h3>
+                <div>
+                  <h3 className="font-semibold text-ink-900">Generated Article</h3>
+                  {result.language_name && (
+                    <span className="text-xs text-accent">{result.language_name as string}</span>
+                  )}
+                </div>
                 <button onClick={useGenerated} className="btn-primary btn-sm">Save as Draft →</button>
               </div>
               <div>
