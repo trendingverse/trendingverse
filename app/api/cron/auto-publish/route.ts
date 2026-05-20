@@ -1,0 +1,277 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { createClient as createServiceClient } from '@supabase/supabase-js'
+
+const LANGUAGES: Record<string, string> = {
+  'en': 'English',
+  'hi': 'Hindi (हिंदी)',
+  'ta': 'Tamil (தமிழ்)',
+  'te': 'Telugu (తెలుగు)',
+  'kn': 'Kannada (ಕನ್ನಡ)',
+  'ml': 'Malayalam (മലയാളം)',
+  'mr': 'Marathi (मराठी)',
+  'gu': 'Gujarati (ગુજરાતી)',
+  'bn': 'Bengali (বাংলা)',
+  'pa': 'Punjabi (ਪੰਜਾਬੀ)',
+}
+
+function isAuthorized(req: NextRequest): boolean {
+  const cronSecret = process.env.CRON_SECRET
+  if (!cronSecret) return true
+  const headerSecret = req.headers.get('authorization')?.replace('Bearer ', '')
+  const querySecret = new URL(req.url).searchParams.get('secret')
+  return (
+    headerSecret === cronSecret ||
+    querySecret === cronSecret ||
+    req.headers.get('x-vercel-cron') === '1'
+  )
+}
+
+function slugify(text: string): string {
+  return text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80)
+}
+
+async function getTrendingTopic(geminiKey: string, newsApiKey?: string, region = 'India') {
+  if (newsApiKey) {
+    try {
+      const countryMap: Record<string, string> = { 'India': 'in', 'US': 'us', 'UK': 'gb' }
+      const country = countryMap[region] || 'in'
+      const res = await fetch(
+        `https://newsapi.org/v2/top-headlines?country=${country}&pageSize=10&apiKey=${newsApiKey}`,
+        { cache: 'no-store' }
+      )
+      if (res.ok) {
+        const data = await res.json()
+        const articles = (data.articles || []).filter((a: { title: string }) =>
+          a.title && a.title !== '[Removed]' && a.title.length > 20
+        )
+        if (articles.length > 0) {
+          const pick = articles[Math.floor(Math.random() * Math.min(5, articles.length))]
+          const title = pick.title.replace(/ [-|] [^-|]+$/, '').trim()
+          return { title, category: 'News', keywords: title.split(' ').filter((w: string) => w.length > 4).slice(0, 5) }
+        }
+      }
+    } catch { /* fallback */ }
+  }
+  const today = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${geminiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: `Today is ${today}. Give me ONE highly trending news topic in ${region} right now. Return ONLY JSON: {"title":"Specific engaging headline","category":"Technology","keywords":["kw1","kw2","kw3","kw4","kw5"]}` }] }],
+        generationConfig: { temperature: 1 }
+      }),
+      cache: 'no-store'
+    }
+  )
+  const data = await res.json()
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+  const match = text.match(/\{[\s\S]*\}/)
+  if (match) { try { return JSON.parse(match[0]) } catch { /* fallback */ } }
+  return { title: `Top Technology Trends in India ${new Date().getFullYear()}`, category: 'Technology', keywords: ['technology', 'india', 'trends'] }
+}
+
+async function generateArticle(title: string, keywords: string[], category: string, geminiKey: string, language = 'en') {
+  const langName = LANGUAGES[language] || 'English'
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${geminiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          parts: [{ text: `You are a senior journalist for TrendingVerse news portal.
+Write a complete, original, SEO-optimized news article in ${langName}.
+Title: ${title}
+Category: ${category}
+Keywords: ${keywords.join(', ')}
+Language: ${langName}
+Word count: 700-900 words
+Requirements: Professional journalistic tone, E-E-A-T compliant, Google Discover ready, no AI spam patterns, AdSense safe.
+Return ONLY valid JSON:
+{"title":"Headline in ${langName}","content":"Full HTML article using only p h2 h3 strong em ul li tags","excerpt":"2-3 sentence summary","seo_title":"SEO title 50-60 chars","meta_description":"150-160 chars","focus_keyword":"primary keyword","keywords":["kw1","kw2","kw3"],"reading_time":4}` }]
+        }],
+        generationConfig: { temperature: 1, maxOutputTokens: 4096 }
+      }),
+      cache: 'no-store'
+    }
+  )
+  const data = await res.json()
+  const parts = data.candidates?.[0]?.content?.parts || []
+  const text = parts.filter((p: { text?: string }) => p.text).map((p: { text: string }) => p.text).join('').replace(/```json\n?|```/g, '').trim()
+  if (!text) throw new Error('Gemini returned empty response: ' + JSON.stringify(data).slice(0, 200))
+  const matches = [...text.matchAll(/\{[\s\S]*?"reading_time"[\s\S]*?\}/g)]
+  const jsonStr = matches.length > 0 ? matches[matches.length - 1][0] : text.match(/\{[\s\S]*\}/)?.[0]
+  if (!jsonStr) throw new Error('No JSON in response. Raw: ' + text.slice(0, 300))
+  return JSON.parse(jsonStr)
+}
+
+async function fetchPexelsImage(query: string, pexelsKey: string) {
+  const res = await fetch(
+    `https://api.pexels.com/v1/search?query=${encodeURIComponent(query)}&per_page=3&orientation=landscape&size=large`,
+    { headers: { Authorization: pexelsKey } }
+  )
+  if (!res.ok) return null
+  const data = await res.json()
+  return data.photos?.[0] || null
+}
+
+async function checkDuplicate(slug: string, title: string, wpBase: string, auth: string): Promise<boolean> {
+  const [slugRes, titleRes] = await Promise.all([
+    fetch(`${wpBase}/wp-json/wp/v2/posts?slug=${encodeURIComponent(slug)}&status=any`, { headers: { Authorization: `Basic ${auth}` } }),
+    fetch(`${wpBase}/wp-json/wp/v2/posts?search=${encodeURIComponent(title.slice(0, 30))}&status=any&per_page=5`, { headers: { Authorization: `Basic ${auth}` } }),
+  ])
+  const slugData = slugRes.ok ? await slugRes.json() : []
+  if (Array.isArray(slugData) && slugData.length > 0) return true
+  const titleData = titleRes.ok ? await titleRes.json() : []
+  if (Array.isArray(titleData)) {
+    return titleData.some((p: { title: { rendered: string } }) =>
+      p.title.rendered.toLowerCase().trim() === title.toLowerCase().trim()
+    )
+  }
+  return false
+}
+
+export async function GET(req: NextRequest) {
+  if (!isAuthorized(req)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const geminiKey = process.env.GEMINI_API_KEY
+  const pexelsKey = process.env.PEXELS_API_KEY
+  const newsApiKey = process.env.NEWS_API_KEY
+  const wpUrl = process.env.WP_URL
+  const wpUsername = process.env.WP_USERNAME
+  const wpPassword = process.env.WP_APP_PASSWORD
+
+  // Use service role client — no user session needed for cron
+  const supabase = createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+
+  // Allow override via query params for testing
+  const url = new URL(req.url)
+  const langParam = url.searchParams.get('lang') || 'en'
+  const regionParam = url.searchParams.get('region') || 'India'
+
+  if (!geminiKey) return NextResponse.json({ error: 'GEMINI_API_KEY not set' }, { status: 500 })
+  if (!wpUrl || !wpUsername || !wpPassword) return NextResponse.json({ error: 'WordPress credentials (WP_URL, WP_USERNAME, WP_APP_PASSWORD) not set in env vars' }, { status: 500 })
+
+  const wpBase = wpUrl.replace(/\/$/, '')
+  const auth = Buffer.from(`${wpUsername}:${wpPassword}`).toString('base64')
+  const log: string[] = []
+
+  try {
+    log.push(`Starting auto-publish | lang: ${langParam} | region: ${regionParam}`)
+
+    // Step 1: Trending topic
+    log.push('Fetching trending topic...')
+    const trend = await getTrendingTopic(geminiKey, newsApiKey, regionParam)
+    log.push(`Topic: ${trend.title}`)
+
+    // Step 2: Duplicate check
+    const slug = slugify(trend.title)
+    const isDuplicate = await checkDuplicate(slug, trend.title, wpBase, auth)
+    if (isDuplicate) {
+      log.push(`Duplicate detected — skipping`)
+      await supabase.from('cron_logs').insert({ status: 'skipped', title: trend.title, wp_url: wpUrl, log })
+      return NextResponse.json({ success: false, skipped: true, reason: 'duplicate', log })
+    }
+
+    // Step 3: Generate article
+    log.push(`Generating article in ${LANGUAGES[langParam] || 'English'}...`)
+    const article = await generateArticle(trend.title, trend.keywords, trend.category, geminiKey, langParam)
+    log.push(`Article: ${article.title}`)
+
+    // Step 4: Fetch image
+    let wpMediaId: number | null = null
+    if (pexelsKey) {
+      log.push('Fetching photo from Pexels...')
+      const photo = await fetchPexelsImage(trend.keywords.slice(0, 2).join(' '), pexelsKey)
+      if (photo) {
+        try {
+          const imgRes = await fetch(photo.src.large || photo.src.original)
+          if (imgRes.ok) {
+            const imgBuffer = Buffer.from(await imgRes.arrayBuffer())
+            const filename = `${slug}-${Date.now()}.jpg`
+            const uploadRes = await fetch(`${wpBase}/wp-json/wp/v2/media`, {
+              method: 'POST',
+              headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'image/jpeg', 'Content-Disposition': `attachment; filename="${filename}"` },
+              body: imgBuffer,
+            })
+            if (uploadRes.ok) {
+              const media = await uploadRes.json()
+              wpMediaId = media.id
+              log.push(`Photo uploaded (ID: ${wpMediaId})`)
+            }
+          }
+        } catch { log.push('Photo upload failed — continuing') }
+      }
+    }
+
+    // Step 5: Get WP category
+    const catRes = await fetch(`${wpBase}/wp-json/wp/v2/categories?per_page=100`, { headers: { Authorization: `Basic ${auth}` } })
+    const wpCats = catRes.ok ? await catRes.json() : []
+    const matched = wpCats.find((c: { name: string }) => c.name.toLowerCase() === (trend.category || 'news').toLowerCase())
+    const categoryIds = matched ? [matched.id] : []
+
+    // Step 6: Publish to WordPress
+    log.push('Publishing to WordPress...')
+    const wpRes = await fetch(`${wpBase}/wp-json/wp/v2/posts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Basic ${auth}` },
+      body: JSON.stringify({
+        title: article.title,
+        content: article.content,
+        excerpt: article.excerpt,
+        status: 'publish',
+        slug: slugify(article.title),
+        categories: categoryIds,
+        ...(wpMediaId ? { featured_media: wpMediaId } : {}),
+        meta: {
+          _yoast_wpseo_title: article.seo_title || article.title,
+          _yoast_wpseo_metadesc: article.meta_description || '',
+          _yoast_wpseo_focuskw: article.focus_keyword || '',
+        }
+      }),
+    })
+    const wpData = await wpRes.json()
+    if (!wpRes.ok) throw new Error(wpData.message || 'WordPress publish failed')
+    log.push(`Published: ${wpData.link}`)
+
+    // Step 7: Save to Supabase (no user_id for cron runs)
+    await supabase.from('articles').insert({
+      title: article.title,
+      slug: slugify(article.title),
+      content: article.content,
+      excerpt: article.excerpt,
+      seo_title: article.seo_title,
+      meta_description: article.meta_description,
+      focus_keyword: article.focus_keyword,
+      keywords: article.keywords || [],
+      status: 'published',
+      ai_generated: true,
+      author_name: 'TrendingVerse AI',
+      word_count: (article.content || '').replace(/<[^>]+>/g, '').split(' ').length,
+      reading_time_min: article.reading_time || 4,
+      published_at: new Date().toISOString(),
+    })
+
+    // Log the cron run
+    await supabase.from('cron_logs').insert({
+      status: 'success',
+      title: article.title,
+      wp_url: wpData.link,
+      log,
+    })
+
+    return NextResponse.json({ success: true, title: article.title, wp_url: wpData.link, wp_post_id: wpData.id, language: LANGUAGES[langParam], log })
+
+  } catch (e) {
+    log.push(`Error: ${(e as Error).message}`)
+    await supabase.from('cron_logs').insert({ status: 'failed', error: (e as Error).message, wp_url: wpUrl, log }).catch(() => {})
+    return NextResponse.json({ success: false, error: (e as Error).message, log }, { status: 500 })
+  }
+}
