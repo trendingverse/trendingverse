@@ -23,6 +23,8 @@ export async function POST(req: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  // Admin bypass — no limits for admin account
+const isAdmin = user.email === process.env.ADMIN_EMAIL
 
   const body = await req.json()
 
