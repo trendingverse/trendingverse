@@ -11,7 +11,7 @@ const nav = [
     { href: '/admin/categories', label: 'Categories', icon: '◼' },
     { href: '/admin/media', label: 'Media', icon: '◧' },
   ]},
-{ label: 'AI & SEO', items: [
+  { label: 'AI & SEO', items: [
     { href: '/admin/ai-writer', label: 'AI Writer', icon: '✦' },
     { href: '/admin/seo', label: 'SEO Engine', icon: '◈' },
     { href: '/admin/trends', label: 'Trends', icon: '🔥' },
@@ -20,9 +20,11 @@ const nav = [
     { href: '/admin/monetization', label: 'Monetization', icon: '◎' },
   ]},
   { label: 'System', items: [
+    { href: '/admin/analytics', label: 'Analytics', icon: '📊' },
     { href: '/admin/settings', label: 'Settings', icon: '⚙' },
-    { href: '/admin/analytics', label: 'Analytics', icon: '📊' },
-    { href: '/admin/analytics', label: 'Analytics', icon: '📊' },
+  ]},
+  { label: 'Admin', items: [
+    { href: '/admin/publishers', label: 'Publishers', icon: '👥' },
   ]},
 ]
 
@@ -63,8 +65,4 @@ export function AdminSidebar() {
       </div>
     </aside>
   )
- { label: 'Admin', items: [
-  { href: '/admin/publishers', label: '👥 Publishers', icon: '👥' },
-  { href: '/admin/analytics', label: 'Analytics', icon: '📊' },
-]},
 }
