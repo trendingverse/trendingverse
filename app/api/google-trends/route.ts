@@ -1,119 +1,155 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
+// GNews API - works on Vercel, free tier = 100 req/day
+async function fetchGNews(query: string, lang: string, apiKey: string) {
+  const url = `https://gnews.io/api/v4/search?q=${encodeURIComponent(query)}&lang=${lang}&country=in&max=10&sortby=publishedAt&apikey=${apiKey}`
+  const res = await fetch(url, { cache: 'no-store' })
+  if (!res.ok) return []
+  const data = await res.json()
+  return (data.articles || []).map((a: { title: string; description: string; source: { name: string } }) => ({
+    title: a.title?.replace(/ - .*$/, '').trim(),
+    description: a.description || '',
+    source: a.source?.name || '',
+  })).filter((a: { title: string }) => a.title && a.title.length > 10)
+}
+
+// MediaStack API - works on Vercel, free tier = 500 req/month
+async function fetchMediaStack(apiKey: string) {
+  const url = `http://api.mediastack.com/v1/news?access_key=${apiKey}&countries=in&languages=en&limit=10&sort=published_desc`
+  const res = await fetch(url, { cache: 'no-store' })
+  if (!res.ok) return []
+  const data = await res.json()
+  return (data.data || []).map((a: { title: string; description: string; source: string }) => ({
+    title: a.title?.replace(/ - .*$/, '').trim(),
+    description: a.description || '',
+    source: a.source || '',
+  })).filter((a: { title: string }) => a.title && a.title.length > 10)
+}
+
+// Gemini with today's date - forces it to think about current events
+async function fetchGeminiTrends(regions: string[], geminiKey: string) {
+  const today = new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+  const regionList = regions.join(', ')
+
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${geminiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: `Today is ${today}.
+
+List 15 real, specific trending news headlines from ${regionList} that are making headlines RIGHT NOW today.
+Focus on: breaking news, viral stories, politics, sports results, technology launches, business news, entertainment.
+Be specific — use real names, real events, real numbers.
+Mix of regions: India, US, UK, Global.
+
+Return ONLY a JSON array, no other text:
+[
+  {"title":"Specific real headline happening today","description":"One sentence context with specific details","category":"Politics","region":"India","flag":"🇮🇳"},
+  {"title":"Another specific real headline","description":"Context","category":"Technology","region":"Global","flag":"🌍"}
+]
+
+Use flags: India=🇮🇳 US=🇺🇸 UK=🇬🇧 Global=🌍` }] }],
+        generationConfig: { temperature: 0.7, maxOutputTokens: 2048 }
+      }),
+      cache: 'no-store'
+    }
+  )
+
+  if (!res.ok) return []
+  const data = await res.json()
+  const parts = data.candidates?.[0]?.content?.parts || []
+  const text = parts.filter((p: { text?: string }) => p.text).map((p: { text: string }) => p.text).join('').replace(/```json\n?|```/g, '').trim()
+  const match = text.match(/\[[\s\S]*\]/)
+  if (!match) return []
+  try { return JSON.parse(match[0]) } catch { return [] }
+}
+
+const REGIONS_MAP: Record<string, { label: string; flag: string }> = {
+  'India': { label: 'India', flag: '🇮🇳' },
+  'United States': { label: 'United States', flag: '🇺🇸' },
+  'United Kingdom': { label: 'United Kingdom', flag: '🇬🇧' },
+  'Global': { label: 'Global', flag: '🌍' },
+}
+
 export async function GET(req: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { searchParams } = new URL(req.url)
-  const region = searchParams.get('region') || 'India'
+  const region = searchParams.get('region') || 'ALL'
   const geminiKey = process.env.GEMINI_API_KEY
-  const newsApiKey = process.env.NEWS_API_KEY
+  const geminiKey2 = process.env.GEMINI_API_KEY_2
+  const gnewsKey = process.env.GNEWS_API_KEY
+  const mediastackKey = process.env.MEDIASTACK_API_KEY
 
   if (!geminiKey) return NextResponse.json({ error: 'GEMINI_API_KEY not set' }, { status: 500 })
-
-  const REGIONS: Record<string, { label: string; flag: string; newsCode: string }> = {
-    'India': { label: 'India', flag: '🇮🇳', newsCode: 'in' },
-    'United States': { label: 'United States', flag: '🇺🇸', newsCode: 'us' },
-    'United Kingdom': { label: 'United Kingdom', flag: '🇬🇧', newsCode: 'gb' },
-    'Global': { label: 'Global', flag: '🌍', newsCode: '' },
-    'ALL': { label: 'All', flag: '🌐', newsCode: '' },
-  }
 
   const regionsToFetch = region === 'ALL'
     ? ['India', 'United States', 'United Kingdom', 'Global']
     : [region]
 
-  const allTrends: { title: string; description: string; category: string; region: string; flag: string; source: string }[] = []
+  let allTrends: { title: string; description: string; category: string; region: string; flag: string; source: string }[] = []
 
-  // Try NewsAPI first if key exists
-  if (newsApiKey) {
+  // Try GNews API first (works on Vercel)
+  if (gnewsKey) {
     try {
-      for (const r of regionsToFetch) {
-        const info = REGIONS[r] || { label: r, flag: '🌍', newsCode: '' }
-        const countryParam = info.newsCode ? `country=${info.newsCode}` : 'language=en'
-        const url = `https://newsapi.org/v2/top-headlines?${countryParam}&pageSize=8&apiKey=${newsApiKey}`
-        const res = await fetch(url, { cache: 'no-store' })
-        if (res.ok) {
-          const data = await res.json()
-          for (const a of data.articles || []) {
-            if (a.title && a.title !== '[Removed]') {
-              allTrends.push({
-                title: a.title.replace(/ [-|] [^-|]+$/, '').trim(),
-                description: a.description || '',
-                category: 'News',
-                region: info.label,
-                flag: info.flag,
-                source: a.source?.name || 'NewsAPI',
-              })
-            }
-          }
+      const articles = await fetchGNews('India news today', 'en', gnewsKey)
+      for (const a of articles) {
+        if (a.title) {
+          allTrends.push({
+            title: a.title,
+            description: a.description,
+            category: 'News',
+            region: 'India',
+            flag: '🇮🇳',
+            source: a.source,
+          })
         }
       }
-    } catch (e) {
-      console.error('NewsAPI error:', e)
-    }
+    } catch { /* fallback */ }
   }
 
-  // Use Gemini if no results yet
-  // Use Gemini for regions where NewsAPI doesn't have data (India, UK, Global)
-const geminiRegions = regionsToFetch.filter(r =>
-  !allTrends.some(t => t.region === (REGIONS[r]?.label || r))
-)
-
-if (geminiRegions.length > 0) {
+  // Try MediaStack (works on Vercel)
+  if (mediastackKey && allTrends.length < 5) {
     try {
-      const today = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })
-      const regionList = geminiRegions.join(', ')
-
-      const prompt = `Today is ${today}. List 12 real current trending news topics for ${regionList}.
-Include mix of: politics, technology, sports, entertainment, business.
-Return ONLY a JSON array, nothing else:
-[{"title":"Specific trending news headline","description":"One sentence context","category":"Technology","region":"India","flag":"🇮🇳"}]
-Use these flags: India=🇮🇳 US=🇺🇸 UK=🇬🇧 Global=🌍`
-
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { temperature: 1, maxOutputTokens: 2048 }
-          }),
-          cache: 'no-store'
-        }
-      )
-
-      if (!res.ok) {
-        const err = await res.json()
-        return NextResponse.json({ error: 'Gemini API error: ' + (err.error?.message || res.statusText), trends: [], total: 0 })
-      }
-
-      const data = await res.json()
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
-      const match = text.match(/\[[\s\S]*?\]/)
-
-      if (match) {
-        const parsed = JSON.parse(match[0])
-        for (const t of parsed) {
-          if (t.title) {
-            allTrends.push({
-              title: t.title,
-              description: t.description || t.summary || '',
-              category: t.category || 'General',
-              region: t.region || region,
-              flag: t.flag || '🌍',
-              source: 'Gemini AI',
-            })
-          }
+      const articles = await fetchMediaStack(mediastackKey)
+      for (const a of articles) {
+        if (a.title) {
+          allTrends.push({
+            title: a.title,
+            description: a.description,
+            category: 'News',
+            region: 'India',
+            flag: '🇮🇳',
+            source: a.source,
+          })
         }
       }
-    } catch (e) {
-      return NextResponse.json({ error: 'Trends fetch failed: ' + (e as Error).message, trends: [], total: 0 })
-    }
+    } catch { /* fallback */ }
   }
+
+  // Use Gemini for remaining regions or as fallback
+  const activeKey = geminiKey2 || geminiKey
+  try {
+    const geminiTrends = await fetchGeminiTrends(regionsToFetch, activeKey)
+    for (const t of geminiTrends) {
+      if (t.title) {
+        const regionInfo = REGIONS_MAP[t.region] || { label: t.region || 'Global', flag: t.flag || '🌍' }
+        allTrends.push({
+          title: t.title,
+          description: t.description || '',
+          category: t.category || 'General',
+          region: regionInfo.label,
+          flag: regionInfo.flag,
+          source: 'AI',
+        })
+      }
+    }
+  } catch { /* ignore */ }
 
   // Deduplicate
   const seen = new Set<string>()
@@ -124,5 +160,10 @@ Use these flags: India=🇮🇳 US=🇺🇸 UK=🇬🇧 Global=🌍`
     return true
   })
 
-  return NextResponse.json({ trends: unique, total: unique.length, source: newsApiKey ? 'newsapi' : 'gemini' })
+  return NextResponse.json({
+    trends: unique,
+    total: unique.length,
+    source: gnewsKey ? 'gnews' : mediastackKey ? 'mediastack' : 'gemini',
+    timestamp: new Date().toISOString(),
+  })
 }
