@@ -1,17 +1,100 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createServiceClient } from '@supabase/supabase-js'
 
 const LANGUAGES: Record<string, string> = {
-  'en': 'English',
-  'hi': 'Hindi (हिंदी)',
-  'ta': 'Tamil (தமிழ்)',
-  'te': 'Telugu (తెలుగు)',
-  'kn': 'Kannada (ಕನ್ನಡ)',
-  'ml': 'Malayalam (മലയാളം)',
-  'mr': 'Marathi (मराठी)',
-  'gu': 'Gujarati (ગુજરાતી)',
-  'bn': 'Bengali (বাংলা)',
-  'pa': 'Punjabi (ਪੰਜਾਬੀ)',
+  'en': 'English', 'hi': 'Hindi (हिंदी)', 'ta': 'Tamil (தமிழ்)',
+  'te': 'Telugu (తెలుగు)', 'kn': 'Kannada (ಕನ್ನಡ)', 'ml': 'Malayalam (മലയാളം)',
+  'mr': 'Marathi (मराठी)', 'gu': 'Gujarati (ગુજરાતી)', 'bn': 'Bengali (বাংলা)', 'pa': 'Punjabi (ਪੰਜਾਬੀ)',
+}
+
+// Optimised journalistic prompt — tight token budget, copyright-safe
+function buildPrompt(subject: string, category: string, keywords: string[], tone: string, langName: string, wordCount: number) {
+  return `Expert journalist. Write original SEO news article in ${langName}.
+Topic: ${subject}
+Category: ${category}
+Keywords: ${keywords.slice(0, 5).join(', ')}
+Tone: ${tone} | Length: ${wordCount} words
+Rules: Original reporting only. No copied content. No trademarked phrases. AdSense safe. E-E-A-T compliant. H2/H3 structure. Google Discover optimised.
+Return ONLY raw JSON (no markdown, no backticks):
+{"title":"headline","content":"<p>html</p>","excerpt":"2-3 sentences","seo_title":"50-60 chars","meta_description":"150-160 chars","focus_keyword":"main kw","keywords":["k1","k2","k3"],"tags":["t1","t2"],"reading_time":4}`
+}
+
+// Gemini generator
+async function generateWithGemini(prompt: string, apiKey: string): Promise<string> {
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.9, maxOutputTokens: 3000, responseMimeType: 'application/json' }
+      })
+    }
+  )
+  if (!res.ok) {
+    const err = await res.json()
+    throw new Error(err.error?.message || `Gemini error ${res.status}`)
+  }
+  const data = await res.json()
+  const parts = data.candidates?.[0]?.content?.parts || []
+  return parts.filter((p: { text?: string }) => p.text).map((p: { text: string }) => p.text).join('')
+}
+
+// OpenAI generator
+async function generateWithOpenAI(prompt: string, apiKey: string): Promise<string> {
+  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify({
+      model: 'gpt-4o-mini',
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 3000,
+      temperature: 0.9,
+      response_format: { type: 'json_object' },
+    })
+  })
+  if (!res.ok) {
+    const err = await res.json()
+    throw new Error(err.error?.message || `OpenAI error ${res.status}`)
+  }
+  const data = await res.json()
+  return data.choices?.[0]?.message?.content || ''
+}
+
+// Claude (Anthropic) generator
+async function generateWithClaude(prompt: string, apiKey: string): Promise<string> {
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model: 'claude-3-5-haiku-20241022',
+      max_tokens: 3000,
+      messages: [{ role: 'user', content: prompt }],
+    })
+  })
+  if (!res.ok) {
+    const err = await res.json()
+    throw new Error(err.error?.message || `Claude error ${res.status}`)
+  }
+  const data = await res.json()
+  return data.content?.[0]?.text || ''
+}
+
+function parseJSON(text: string): Record<string, unknown> | null {
+  const clean = text.replace(/```json\n?|```/g, '').trim()
+  try { return JSON.parse(clean) } catch { /* continue */ }
+  const start = clean.indexOf('{')
+  const end = clean.lastIndexOf('}')
+  if (start !== -1 && end > start) {
+    try { return JSON.parse(clean.slice(start, end + 1)) } catch { /* continue */ }
+  }
+  return null
 }
 
 export async function POST(req: NextRequest) {
@@ -20,139 +103,90 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json()
-  const apiKey = process.env.GEMINI_API_KEY
-  const apiKey2 = process.env.GEMINI_API_KEY_2
-  if (!apiKey) return NextResponse.json({ error: 'GEMINI_API_KEY not set' }, { status: 500 })
-
-  const {
-    title, topic, keywords = [], category = 'General',
-    tone = 'journalistic', wordCount = 700, language = 'en'
-  } = body
-
+  const { title, topic, keywords = [], category = 'General', tone = 'journalistic', wordCount = 700, language = 'en' } = body
   const langName = LANGUAGES[language] || 'English'
   const subject = title || topic || 'Latest trending news'
 
-  const prompt = `You are a senior journalist. Write a complete SEO-optimized news article in ${langName}.
+  // Get user's keys and plan
+  const admin = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+  const { data: profile } = await admin
+    .from('user_profiles')
+    .select('byoak_gemini_key, byoak_openai_key, byoak_claude_key, byoak_preferred_model, plan')
+    .eq('id', user.id)
+    .single()
 
-Topic: ${subject}
-Category: ${category}
-Keywords: ${Array.isArray(keywords) ? keywords.join(', ') : keywords}
-Tone: ${tone}
-Language: ${langName}
-Length: ${wordCount}-${wordCount + 200} words
+  // Determine which key to use
+  const preferredModel = profile?.byoak_preferred_model || 'gemini'
+  const userGeminiKey = profile?.byoak_gemini_key
+  const userOpenAIKey = profile?.byoak_openai_key
+  const userClaudeKey = profile?.byoak_claude_key
+  const platformGeminiKey = process.env.GEMINI_API_KEY
+  const platformGeminiKey2 = process.env.GEMINI_API_KEY_2
 
-Rules:
-- Write entirely in ${langName}
-- Professional journalistic tone
-- Use H2 and H3 subheadings
-- Google Discover ready
-- AdSense safe content
-- No AI filler phrases
+  const prompt = buildPrompt(subject, category, Array.isArray(keywords) ? keywords : [], tone, langName, wordCount)
 
-You MUST respond with ONLY a raw JSON object. No markdown. No backticks. No explanation. Just the JSON:
-{"title":"headline here","content":"<p>article html here</p>","excerpt":"2-3 sentence summary","seo_title":"seo title 50-60 chars","meta_description":"meta desc 150-160 chars","focus_keyword":"main keyword","keywords":["kw1","kw2","kw3","kw4","kw5"],"tags":["tag1","tag2","tag3"],"reading_time":4}`
+  let rawText = ''
+  let modelUsed = ''
+  let error = ''
 
-  // Try primary key first, fallback to secondary
-  async function callGemini(key: string) {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${key}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature: 0.9,
-            maxOutputTokens: 4096,
-            responseMimeType: 'application/json',
-          }
-        })
-      }
-    )
-    if (!res.ok) {
-      const err = await res.json()
-      throw new Error(err.error?.message || `Gemini API error ${res.status}`)
+  // Try user's preferred model first
+  const tryGenerate = async () => {
+    if (preferredModel === 'claude' && userClaudeKey) {
+      modelUsed = 'Claude 3.5 Haiku'
+      return generateWithClaude(prompt, userClaudeKey)
     }
-    return res.json()
-  }
-
-  function extractJSON(text: string): Record<string, unknown> | null {
-    // Remove markdown code blocks
-    let clean = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
-
-    // Try direct parse first
-    try { return JSON.parse(clean) } catch { /* continue */ }
-
-    // Find JSON object — try from first { to last }
-    const start = clean.indexOf('{')
-    const end = clean.lastIndexOf('}')
-    if (start !== -1 && end !== -1 && end > start) {
-      try { return JSON.parse(clean.slice(start, end + 1)) } catch { /* continue */ }
+    if (preferredModel === 'openai' && userOpenAIKey) {
+      modelUsed = 'GPT-4o Mini'
+      return generateWithOpenAI(prompt, userOpenAIKey)
     }
-
-    // Try regex match for JSON with required fields
-    const patterns = [
-      /\{[\s\S]*?"title"[\s\S]*?"content"[\s\S]*?"excerpt"[\s\S]*?\}/,
-      /\{[\s\S]*?"content"[\s\S]*?\}/,
-      /\{[\s\S]*\}/,
-    ]
-    for (const pattern of patterns) {
-      const match = clean.match(pattern)
-      if (match) {
-        try { return JSON.parse(match[0]) } catch { /* continue */ }
-      }
+    if (preferredModel === 'gemini' && userGeminiKey) {
+      modelUsed = 'Gemini 2.5 Flash (your key)'
+      return generateWithGemini(prompt, userGeminiKey)
     }
-    return null
+    // Fallback to any available user key
+    if (userGeminiKey) { modelUsed = 'Gemini 2.5 Flash (your key)'; return generateWithGemini(prompt, userGeminiKey) }
+    if (userOpenAIKey) { modelUsed = 'GPT-4o Mini'; return generateWithOpenAI(prompt, userOpenAIKey) }
+    if (userClaudeKey) { modelUsed = 'Claude 3.5 Haiku'; return generateWithClaude(prompt, userClaudeKey) }
+    // Fallback to platform keys
+    if (platformGeminiKey2) { modelUsed = 'Gemini 2.5 Flash'; return generateWithGemini(prompt, platformGeminiKey2) }
+    if (platformGeminiKey) { modelUsed = 'Gemini 2.5 Flash'; return generateWithGemini(prompt, platformGeminiKey) }
+    throw new Error('No API keys available. Add your own API key in Settings → API Keys.')
   }
 
   try {
-    let data: Record<string, unknown> | null = null
-    let lastError = ''
-
-    // Try primary key
-    try {
-      const response = await callGemini(apiKey)
-      const parts = response.candidates?.[0]?.content?.parts || []
-      const text = parts.filter((p: { text?: string }) => p.text).map((p: { text: string }) => p.text).join('')
-      data = extractJSON(text)
-    } catch (e) {
-      lastError = (e as Error).message
-      // Try backup key
-      if (apiKey2) {
-        try {
-          const response = await callGemini(apiKey2)
-          const parts = response.candidates?.[0]?.content?.parts || []
-          const text = parts.filter((p: { text?: string }) => p.text).map((p: { text: string }) => p.text).join('')
-          data = extractJSON(text)
-        } catch (e2) {
-          lastError = (e2 as Error).message
-        }
-      }
-    }
-
-    if (!data) {
-      return NextResponse.json({
-        error: `Failed to generate article. ${lastError.includes('429') ? 'Gemini quota exceeded — try again in a few minutes.' : lastError || 'Please try again.'}`
-      }, { status: 500 })
-    }
-
-    // Ensure all required fields exist
-    const article = {
-      title: data.title || subject,
-      content: data.content || data.body || '',
-      excerpt: data.excerpt || data.summary || '',
-      seo_title: data.seo_title || data.title || subject,
-      meta_description: data.meta_description || data.metaDescription || '',
-      focus_keyword: data.focus_keyword || data.focusKeyword || (Array.isArray(keywords) ? keywords[0] : '') || '',
-      keywords: data.keywords || keywords || [],
-      tags: data.tags || [],
-      reading_time: data.reading_time || data.readingTime || 4,
-      language,
-      language_name: langName,
-    }
-
-    return NextResponse.json(article)
+    rawText = await tryGenerate()
   } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 500 })
+    error = (e as Error).message
+    // Last resort fallback
+    if (platformGeminiKey && !rawText) {
+      try { rawText = await generateWithGemini(prompt, platformGeminiKey); modelUsed = 'Gemini (platform)' }
+      catch (e2) { error = (e2 as Error).message }
+    }
   }
+
+  if (!rawText) {
+    return NextResponse.json({
+      error: error.includes('429')
+        ? `Quota exceeded on ${modelUsed}. Add your own API key in Settings → API Keys for unlimited generations.`
+        : error || 'Generation failed. Please try again.'
+    }, { status: 500 })
+  }
+
+  const article = parseJSON(rawText)
+  if (!article) return NextResponse.json({ error: 'Failed to parse AI response. Please try again.' }, { status: 500 })
+
+  return NextResponse.json({
+    title: article.title || subject,
+    content: article.content || '',
+    excerpt: article.excerpt || '',
+    seo_title: article.seo_title || article.title || subject,
+    meta_description: article.meta_description || '',
+    focus_keyword: article.focus_keyword || '',
+    keywords: article.keywords || keywords || [],
+    tags: article.tags || [],
+    reading_time: article.reading_time || 4,
+    language,
+    language_name: langName,
+    model_used: modelUsed,
+  })
 }
