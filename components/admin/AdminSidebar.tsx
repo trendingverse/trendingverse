@@ -21,6 +21,7 @@ const nav = [
   ]},
   { label: 'System', items: [
     { href: '/admin/settings', label: 'Settings', icon: '⚙' },
+    { href: '/admin/analytics', label: 'Analytics', icon: '📊' },
   ]},
 ]
 
