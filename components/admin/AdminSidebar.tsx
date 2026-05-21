@@ -63,4 +63,8 @@ export function AdminSidebar() {
       </div>
     </aside>
   )
+ { label: 'Admin', items: [
+  { href: '/admin/publishers', label: '👥 Publishers', icon: '👥' },
+  { href: '/admin/analytics', label: 'Analytics', icon: '📊' },
+]},
 }
