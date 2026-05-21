@@ -20,14 +20,9 @@ export function GSCDashboard() {
   const [rewritingPage, setRewritingPage] = useState<string | null>(null)
   const [rewrites, setRewrites] = useState<Record<string, string[]>>({})
 
-  useEffect(() => {
-    const gscParam = searchParams.get('gsc')
-    if (gscParam === 'connected') {
-      setTimeout(fetchData, 800)
-    } else {
-      fetchData()
-    }
-  }, [])
+useEffect(() => {
+  fetchData()
+}, [])
 
   async function fetchData() {
     setLoading(true)
