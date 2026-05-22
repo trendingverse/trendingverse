@@ -167,7 +167,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const geminiKey = process.env.GEMINI_API_KEY
+  const geminiKey = process.env.GEMINI_API_KEY_2 || process.env.GEMINI_API_KEY
   const pexelsKey = process.env.PEXELS_API_KEY
   const newsApiKey = process.env.NEWS_API_KEY
   const wpUrl = process.env.WP_URL
