@@ -52,11 +52,18 @@ export function AIWriterPanel({ categories }: { categories: Category[] }) {
     try {
       const res = await fetch('/api/ai/generate', { method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ title: title||topic, keywords, category: categories.find(c=>c.id===catId)?.name, wordCount, tone, language }) })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error)
-      setResult(data)
-      toast.success('Article generated!')
-    } catch(e) { toast.error((e as Error).message) }
+const data = await res.json()
+if (!res.ok) {
+  if (data.error === 'FREE_PLAN_NO_KEY') {
+    toast.error('Free plan: Add your Gemini API key in Settings → API Keys', { duration: 8000 })
+    router.push('/admin/settings?tab=apikeys')
+    return
+  }
+  throw new Error(data.message || data.error || 'Generation failed')
+}
+setResult(data)
+toast.success(`Article generated!${data.model_used ? ` (${data.model_used})` : ''}`)
+} catch(e) { toast.error((e as Error).message) }
     setLoading(false)
   }
 
