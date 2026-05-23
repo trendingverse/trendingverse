@@ -66,7 +66,7 @@ export async function GET(req: NextRequest) {
   let topics: unknown[] = []
   let lastError = ''
 
-  // Try user's own Gemini key first
+  // Try user's own Gemini key first (including admin)
   if (userGeminiKey) {
     try {
       topics = await fetchTrends(userGeminiKey, region)
