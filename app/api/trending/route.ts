@@ -51,7 +51,7 @@ export async function GET(req: NextRequest) {
   const plan = profile?.plan || 'free'
   const userGeminiKey = profile?.byoak_gemini_key
   const hasOwnKey = !!(userGeminiKey || profile?.byoak_openai_key || profile?.byoak_claude_key)
-  const canUsePlatformKey = plan === 'popular' || plan === 'pro' || plan === 'byoak' || isAdmin
+  const canUsePlatformKey = plan === 'popular' || plan === 'pro' || plan === 'byoak' || isAdmin  // Admin should also prefer own key if set
 
   // Block free plan with no key
   if (plan === 'free' && !hasOwnKey && !isAdmin) {
