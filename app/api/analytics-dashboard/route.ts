@@ -11,6 +11,7 @@ export async function GET() {
   const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString()
   const today = new Date().toISOString().split('T')[0]
 
+  // All queries filtered by user.id for proper isolation
   const [
     { count: totalArticles },
     { count: publishedArticles },
@@ -23,19 +24,19 @@ export async function GET() {
     { data: profile },
     { data: articlesByDay },
   ] = await Promise.all([
-    supabase.from('articles').select('*', { count: 'exact', head: true }),
-    supabase.from('articles').select('*', { count: 'exact', head: true }).eq('status', 'published'),
-    supabase.from('articles').select('*', { count: 'exact', head: true }).eq('status', 'draft'),
-    supabase.from('articles').select('*', { count: 'exact', head: true }).eq('ai_generated', true),
-    supabase.from('articles').select('*', { count: 'exact', head: true }).gte('created_at', today),
-    supabase.from('articles').select('*', { count: 'exact', head: true }).gte('created_at', sevenDaysAgo),
-    supabase.from('articles').select('id,title,status,view_count,seo_score,published_at,ai_generated').order('created_at', { ascending: false }).limit(5),
-    supabase.from('cron_logs').select('*').order('ran_at', { ascending: false }).limit(10),
+    supabase.from('articles').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
+    supabase.from('articles').select('*', { count: 'exact', head: true }).eq('user_id', user.id).eq('status', 'published'),
+    supabase.from('articles').select('*', { count: 'exact', head: true }).eq('user_id', user.id).eq('status', 'draft'),
+    supabase.from('articles').select('*', { count: 'exact', head: true }).eq('user_id', user.id).eq('ai_generated', true),
+    supabase.from('articles').select('*', { count: 'exact', head: true }).eq('user_id', user.id).gte('created_at', today),
+    supabase.from('articles').select('*', { count: 'exact', head: true }).eq('user_id', user.id).gte('created_at', sevenDaysAgo),
+    supabase.from('articles').select('id,title,status,view_count,seo_score,published_at,ai_generated').eq('user_id', user.id).order('created_at', { ascending: false }).limit(5),
+    supabase.from('cron_logs').select('*').eq('user_id', user.id).order('ran_at', { ascending: false }).limit(10),
     supabase.from('user_profiles').select('plan,articles_used_today,subscription_status').eq('id', user.id).single(),
-    supabase.from('articles').select('created_at').gte('created_at', thirtyDaysAgo).order('created_at', { ascending: true }),
+    supabase.from('articles').select('created_at').eq('user_id', user.id).gte('created_at', thirtyDaysAgo).order('created_at', { ascending: true }),
   ])
 
-  // Build articles per day chart data
+  // Build chart data
   const dayMap: Record<string, number> = {}
   for (let i = 29; i >= 0; i--) {
     const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000)
@@ -48,7 +49,6 @@ export async function GET() {
   }
   const chartData = Object.entries(dayMap).map(([date, count]) => ({ date, count }))
 
-  // Cron stats
   const cronSuccess = (cronLogs || []).filter(l => l.status === 'success').length
   const cronFailed = (cronLogs || []).filter(l => l.status === 'failed').length
   const cronSkipped = (cronLogs || []).filter(l => l.status === 'skipped').length
@@ -68,6 +68,6 @@ export async function GET() {
     cronStats: { success: cronSuccess, failed: cronFailed, skipped: cronSkipped },
     plan: profile?.plan || 'free',
     articlesUsedToday: profile?.articles_used_today || 0,
-    planLimit: profile?.plan === 'pro' ? 999 : 5,
+    planLimit: profile?.plan === 'pro' || profile?.plan === 'popular' || profile?.plan === 'byoak' ? 999 : 5,
   })
 }
