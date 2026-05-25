@@ -15,7 +15,7 @@ Category: ${category}
 Keywords: ${keywords.slice(0, 5).join(', ')}
 Tone: ${tone} | Length: ${wordCount} words
 Rules: Original reporting only. No copied content. No trademarked phrases. AdSense safe. E-E-A-T compliant. H2/H3 structure. Google Discover optimised.
-Return ONLY raw JSON (no markdown, no backticks):
+IMPORTANT: Return ONLY the raw JSON object. No markdown. No backticks. No explanation. Start your response with { and end with }:
 {"title":"headline","content":"<p>html</p>","excerpt":"2-3 sentences","seo_title":"50-60 chars","meta_description":"150-160 chars","focus_keyword":"main kw","keywords":["k1","k2","k3"],"tags":["t1","t2"],"reading_time":4}`
 }
 
@@ -79,13 +79,34 @@ async function generateWithClaude(prompt: string, apiKey: string): Promise<strin
 }
 
 function parseJSON(text: string): Record<string, unknown> | null {
-  const clean = text.replace(/```json\n?|```/g, '').trim()
+  // Remove markdown code blocks
+  let clean = text
+    .replace(/```json\n?/gi, '')
+    .replace(/```\n?/g, '')
+    .replace(/^[^{]*/, '') // remove anything before first {
+    .trim()
+
+  // Direct parse
   try { return JSON.parse(clean) } catch { /* continue */ }
+
+  // Find outermost JSON object
   const start = clean.indexOf('{')
   const end = clean.lastIndexOf('}')
   if (start !== -1 && end > start) {
     try { return JSON.parse(clean.slice(start, end + 1)) } catch { /* continue */ }
   }
+
+  // Fix common issues — trailing commas, unescaped quotes
+  try {
+    const fixed = clean
+      .replace(/,\s*}/g, '}')
+      .replace(/,\s*]/g, ']')
+      .replace(/\n/g, '\\n')
+    const s = fixed.indexOf('{')
+    const e = fixed.lastIndexOf('}')
+    if (s !== -1 && e > s) return JSON.parse(fixed.slice(s, e + 1))
+  } catch { /* continue */ }
+
   return null
 }
 
