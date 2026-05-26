@@ -9,11 +9,13 @@ const LANGUAGES: Record<string, string> = {
 }
 
 function buildPrompt(subject: string, category: string, keywords: string[], tone: string, langName: string, wordCount: number) {
-  return `You are an expert journalist. Write a ${wordCount} word SEO news article about: ${subject}
-Category: ${category} | Keywords: ${keywords.slice(0,5).join(', ')} | Tone: ${tone}
+  const actualWordCount = langName === 'English' ? wordCount : Math.min(wordCount, 500)
+  return `You are an expert journalist. Write a ${actualWordCount} word SEO news article about: ${subject}
+Category: ${category} | Keywords: ${keywords.slice(0, 5).join(', ')} | Tone: ${tone}
 Write ALL text content in ${langName} language.
-Respond with ONLY a JSON object in this exact format (no other text):
-{"title":"[${langName} headline]","content":"[HTML article in ${langName} using p h2 h3 strong tags]","excerpt":"[${langName} summary]","seo_title":"[${langName} SEO title under 60 chars]","meta_description":"[${langName} meta under 160 chars]","focus_keyword":"[main keyword]","keywords":["kw1","kw2","kw3"],"tags":["tag1","tag2"],"reading_time":4}`
+Use only h2 and h3 tags, never h1. No h1 tags allowed.
+Respond with ONLY a JSON object in this exact format (no other text, no markdown, no backticks):
+{"title":"[${langName} headline]","content":"[HTML article in ${langName} using p h2 h3 strong tags only]","excerpt":"[${langName} summary]","seo_title":"[${langName} SEO title under 60 chars]","meta_description":"[${langName} meta under 160 chars]","focus_keyword":"[main keyword]","keywords":["kw1","kw2","kw3"],"tags":["tag1","tag2"],"reading_time":4}`
 }
 
 async function generateWithGemini(prompt: string, apiKey: string): Promise<Record<string, unknown>> {
@@ -24,11 +26,11 @@ async function generateWithGemini(prompt: string, apiKey: string): Promise<Recor
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
-       generationConfig: {
-  temperature: 0.9,
-  maxOutputTokens: 8192,
-  responseMimeType: 'application/json'
-}
+        generationConfig: {
+          temperature: 0.9,
+          maxOutputTokens: 8192,
+          responseMimeType: 'application/json'
+        }
       })
     }
   )
@@ -38,8 +40,7 @@ async function generateWithGemini(prompt: string, apiKey: string): Promise<Recor
   }
   const data = await res.json()
   const parts = data.candidates?.[0]?.content?.parts || []
-  const text = parts.filter((p: {text?: string}) => p.text).map((p: {text: string}) => p.text).join('')
-  // Gemini with responseMimeType returns clean JSON — parse directly
+  const text = parts.filter((p: { text?: string }) => p.text).map((p: { text: string }) => p.text).join('')
   return JSON.parse(text)
 }
 
@@ -60,8 +61,7 @@ async function generateWithOpenAI(prompt: string, apiKey: string): Promise<Recor
     throw new Error(err.error?.message || `OpenAI error ${res.status}`)
   }
   const data = await res.json()
-  const text = data.choices?.[0]?.message?.content || ''
-  return JSON.parse(text)
+  return JSON.parse(data.choices?.[0]?.message?.content || '{}')
 }
 
 async function generateWithClaude(prompt: string, apiKey: string): Promise<Record<string, unknown>> {
@@ -83,48 +83,52 @@ async function generateWithClaude(prompt: string, apiKey: string): Promise<Recor
     throw new Error(err.error?.message || `Claude error ${res.status}`)
   }
   const data = await res.json()
-  const text = (data.content?.[0]?.text || '').trim()
+  const raw = (data.content?.[0]?.text || '').trim()
 
-  // Try all parsing methods
-  // 1. Direct parse
-  try { return JSON.parse(text) } catch { /* continue */ }
+  // Step 1: Remove ALL markdown fences (handles ```json, ```, ``` json etc)
+  const stripped = raw
+    .replace(/^`{3,}(?:json)?\s*/im, '')
+    .replace(/`{3,}\s*$/im, '')
+    .trim()
 
-  // 2. Strip markdown fences
-  const stripped = text   .replace(/^```json\s*/i, '')   .replace(/^```\s*/i, '')   .replace(/```\s*$/i, '')   .trim()
+  // Step 2: Direct parse
   try { return JSON.parse(stripped) } catch { /* continue */ }
 
-  // 3. Extract between first { and last }
+  // Step 3: Find JSON boundaries
   const start = stripped.indexOf('{')
   const end = stripped.lastIndexOf('}')
-  if (start !== -1 && end > start) {
-    try { return JSON.parse(stripped.slice(start, end + 1)) } catch { /* continue */ }
+  if (start === -1 || end <= start) {
+    throw new Error(`Claude returned non-JSON. Raw: ${raw.slice(0, 150)}`)
   }
+  const extracted = stripped.slice(start, end + 1)
 
-  // 4. Unicode escape for Indian languages
-  if (start !== -1 && end > start) {
-    try {
-      const unicoded = stripped.slice(start, end + 1).replace(/[\u0080-\uFFFF]/g, c =>
-        '\\u' + ('0000' + c.charCodeAt(0).toString(16)).slice(-4)
-      )
-      return JSON.parse(unicoded)
-    } catch { /* continue */ }
-  }
+  // Step 4: Parse extracted
+  try { return JSON.parse(extracted) } catch { /* continue */ }
 
-  // 5. Manual field extraction — works even if JSON is malformed
-  const extract = stripped.slice(Math.max(0, start), end + 1)
-  const getStr = (key: string) => {
-    const m = extract.match(new RegExp(`"${key}"\\s*:\\s*"((?:[^"\\\\]|\\\\[\\s\\S])*)"`, 's'))
+  // Step 5: Unicode escape for Indian language characters
+  try {
+    const unicoded = extracted.replace(/[\u0080-\uFFFF]/g, c =>
+      '\\u' + ('0000' + c.charCodeAt(0).toString(16)).slice(-4)
+    )
+    return JSON.parse(unicoded)
+  } catch { /* continue */ }
+
+  // Step 6: Manual field extraction — last resort
+  const getStr = (key: string): string => {
+    const m = extracted.match(new RegExp(`"${key}"\\s*:\\s*"((?:[^"\\\\]|\\\\[\\s\\S])*)"`, 's'))
     if (!m) return ''
-    return m[1].replace(/\\n/g, '\n').replace(/\\"/g, '"')
+    return m[1]
+      .replace(/\\n/g, '\n')
+      .replace(/\\"/g, '"')
       .replace(/\\u([0-9a-fA-F]{4})/g, (_, h) => String.fromCharCode(parseInt(h, 16)))
   }
-  const getArr = (key: string) => {
-    const m = extract.match(new RegExp(`"${key}"\\s*:\\s*\\[([^\\]]*)\\]`))
+  const getArr = (key: string): string[] => {
+    const m = extracted.match(new RegExp(`"${key}"\\s*:\\s*\\[([^\\]]*)\\]`))
     return m ? (m[1].match(/"([^"]*)"/g) || []).map((s: string) => s.replace(/"/g, '')) : []
   }
 
   const title = getStr('title')
-  if (!title) throw new Error(`Claude returned non-JSON response. Raw: ${text.slice(0, 200)}`)
+  if (!title) throw new Error(`Claude parse failed. Raw: ${raw.slice(0, 150)}`)
 
   return {
     title,
@@ -189,7 +193,6 @@ export async function POST(req: NextRequest) {
   let modelUsed = ''
   let lastError = ''
 
-  // Try user's own keys first
   if (hasOwnKey) {
     try {
       if (preferredModel === 'claude' && userClaudeKey) {
@@ -213,7 +216,6 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Fallback to platform key
   if (!article && canUsePlatformKey) {
     const key = platformKey2 || platformKey
     if (key) {
