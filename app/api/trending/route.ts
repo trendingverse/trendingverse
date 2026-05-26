@@ -29,7 +29,7 @@ Return ONLY valid JSON array:
   const data = await res.json()
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
   const match = text.replace(/```json\n?|```/g, '').match(/\[[\s\S]*\]/)
-  if (!match) throw new Error('No JSON in response')
+  if (!match) throw new Error(`No JSON in response. Raw: ${text.slice(0, 150)}`)
   return JSON.parse(match[0])
 }
 
