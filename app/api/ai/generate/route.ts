@@ -65,11 +65,6 @@ async function generateWithOpenAI(prompt: string, apiKey: string): Promise<Recor
 }
 
 async function generateWithClaude(prompt: string, apiKey: string): Promise<Record<string, unknown>> {
-  // For Claude — use a two-step approach: generate content then request JSON
-  const claudePrompt = `${prompt}
-
-Remember: Your ENTIRE response must be a single valid JSON object starting with { and ending with }. Write all article content in the specified language but keep JSON keys in English.`
-
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -80,7 +75,7 @@ Remember: Your ENTIRE response must be a single valid JSON object starting with 
     body: JSON.stringify({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 4096,
-      messages: [{ role: 'user', content: claudePrompt }],
+      messages: [{ role: 'user', content: prompt }],
     })
   })
   if (!res.ok) {
@@ -90,23 +85,58 @@ Remember: Your ENTIRE response must be a single valid JSON object starting with 
   const data = await res.json()
   const text = (data.content?.[0]?.text || '').trim()
 
-  // Try direct parse
+  // Try all parsing methods
+  // 1. Direct parse
   try { return JSON.parse(text) } catch { /* continue */ }
 
-  // Extract JSON block
-  const start = text.indexOf('{')
-  const end = text.lastIndexOf('}')
+  // 2. Strip markdown fences
+  const stripped = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim()
+  try { return JSON.parse(stripped) } catch { /* continue */ }
+
+  // 3. Extract between first { and last }
+  const start = stripped.indexOf('{')
+  const end = stripped.lastIndexOf('}')
   if (start !== -1 && end > start) {
-    try { return JSON.parse(text.slice(start, end + 1)) } catch { /* continue */ }
+    try { return JSON.parse(stripped.slice(start, end + 1)) } catch { /* continue */ }
   }
 
-  // Claude sometimes wraps content in code fences
-  const fenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/)
-  if (fenceMatch) {
-    try { return JSON.parse(fenceMatch[1].trim()) } catch { /* continue */ }
+  // 4. Unicode escape for Indian languages
+  if (start !== -1 && end > start) {
+    try {
+      const unicoded = stripped.slice(start, end + 1).replace(/[\u0080-\uFFFF]/g, c =>
+        '\\u' + ('0000' + c.charCodeAt(0).toString(16)).slice(-4)
+      )
+      return JSON.parse(unicoded)
+    } catch { /* continue */ }
   }
 
-  throw new Error('Claude returned non-JSON response')
+  // 5. Manual field extraction — works even if JSON is malformed
+  const extract = stripped.slice(Math.max(0, start), end + 1)
+  const getStr = (key: string) => {
+    const m = extract.match(new RegExp(`"${key}"\\s*:\\s*"((?:[^"\\\\]|\\\\[\\s\\S])*)"`, 's'))
+    if (!m) return ''
+    return m[1].replace(/\\n/g, '\n').replace(/\\"/g, '"')
+      .replace(/\\u([0-9a-fA-F]{4})/g, (_, h) => String.fromCharCode(parseInt(h, 16)))
+  }
+  const getArr = (key: string) => {
+    const m = extract.match(new RegExp(`"${key}"\\s*:\\s*\\[([^\\]]*)\\]`))
+    return m ? (m[1].match(/"([^"]*)"/g) || []).map((s: string) => s.replace(/"/g, '')) : []
+  }
+
+  const title = getStr('title')
+  if (!title) throw new Error('Claude returned non-JSON response')
+
+  return {
+    title,
+    content: getStr('content'),
+    excerpt: getStr('excerpt'),
+    seo_title: getStr('seo_title'),
+    meta_description: getStr('meta_description'),
+    focus_keyword: getStr('focus_keyword'),
+    keywords: getArr('keywords'),
+    tags: getArr('tags'),
+    reading_time: 4,
+  }
 }
 
 export async function POST(req: NextRequest) {
