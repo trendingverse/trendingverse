@@ -124,7 +124,7 @@ async function generateWithClaude(prompt: string, apiKey: string): Promise<Recor
   }
 
   const title = getStr('title')
-  if (!title) throw new Error('Claude returned non-JSON response')
+  if (!title) throw new Error(`Claude returned non-JSON response. Raw: ${text.slice(0, 200)}`)
 
   return {
     title,
