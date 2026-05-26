@@ -3,57 +3,20 @@ import { createClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 
 const LANGUAGES: Record<string, string> = {
-  'en': 'English', 'hi': 'Hindi (हिंदी)', 'ta': 'Tamil (தமிழ்)',
-  'te': 'Telugu (తెలుగు)', 'kn': 'Kannada (ಕನ್ನಡ)', 'ml': 'Malayalam (മലയാളം)',
-  'mr': 'Marathi (मराठी)', 'gu': 'Gujarati (ગુજરાતી)', 'bn': 'Bengali (বাংলা)', 'pa': 'Punjabi (ਪੰਜਾਬੀ)',
+  'en': 'English', 'hi': 'Hindi', 'ta': 'Tamil',
+  'te': 'Telugu', 'kn': 'Kannada', 'ml': 'Malayalam',
+  'mr': 'Marathi', 'gu': 'Gujarati', 'bn': 'Bengali', 'pa': 'Punjabi',
 }
 
-// Prompt for Gemini and OpenAI
 function buildPrompt(subject: string, category: string, keywords: string[], tone: string, langName: string, wordCount: number) {
-  return `Expert journalist. Write original SEO news article in ${langName}.
-Topic: ${subject}
-Category: ${category}
-Keywords: ${keywords.slice(0, 5).join(', ')}
-Tone: ${tone} | Length: ${wordCount} words
-Rules: Original reporting only. No copied content. AdSense safe. E-E-A-T compliant. H2/H3 structure.
-IMPORTANT: Return ONLY the raw JSON object. No markdown. No backticks. No explanation. Start with { and end with }:
-{"title":"headline in ${langName}","content":"<p>html content in ${langName}</p>","excerpt":"2-3 sentences in ${langName}","seo_title":"50-60 chars","meta_description":"150-160 chars","focus_keyword":"main kw","keywords":["k1","k2","k3"],"tags":["t1","t2"],"reading_time":4}`
+  return `You are an expert journalist. Write a ${wordCount} word SEO news article about: ${subject}
+Category: ${category} | Keywords: ${keywords.slice(0,5).join(', ')} | Tone: ${tone}
+Write ALL text content in ${langName} language.
+Respond with ONLY a JSON object in this exact format (no other text):
+{"title":"[${langName} headline]","content":"[HTML article in ${langName} using p h2 h3 strong tags]","excerpt":"[${langName} summary]","seo_title":"[${langName} SEO title under 60 chars]","meta_description":"[${langName} meta under 160 chars]","focus_keyword":"[main keyword]","keywords":["kw1","kw2","kw3"],"tags":["tag1","tag2"],"reading_time":4}`
 }
 
-// Separate prompt for Claude — more explicit JSON instructions
-function buildClaudePrompt(subject: string, category: string, keywords: string[], tone: string, langName: string, wordCount: number) {
-  return `You are an expert journalist. Write a complete SEO-optimized news article.
-
-Topic: ${subject}
-Category: ${category}
-Keywords: ${keywords.slice(0, 5).join(', ')}
-Tone: ${tone}
-Word count: ${wordCount}
-Language for all content: ${langName}
-
-STRICT JSON RULES:
-- Return ONLY a JSON object, nothing else before or after
-- No markdown, no backticks, no code fences
-- All content must be in ${langName}
-- Newlines inside strings must be written as \\n
-- Double quotes inside strings must be escaped as \\"
-- HTML tags are allowed inside the content string value
-
-JSON structure to return:
-{
-  "title": "article headline in ${langName}",
-  "content": "<p>opening paragraph in ${langName}</p>\\n<h2>section heading in ${langName}</h2>\\n<p>body paragraph in ${langName}</p>",
-  "excerpt": "2-3 sentence summary in ${langName}",
-  "seo_title": "SEO optimized title under 60 characters",
-  "meta_description": "meta description under 160 characters",
-  "focus_keyword": "primary keyword",
-  "keywords": ["keyword1", "keyword2", "keyword3"],
-  "tags": ["tag1", "tag2"],
-  "reading_time": 4
-}`
-}
-
-async function generateWithGemini(prompt: string, apiKey: string): Promise<string> {
+async function generateWithGemini(prompt: string, apiKey: string): Promise<Record<string, unknown>> {
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
     {
@@ -61,7 +24,11 @@ async function generateWithGemini(prompt: string, apiKey: string): Promise<strin
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.9, maxOutputTokens: 4096 }
+        generationConfig: {
+          temperature: 0.9,
+          maxOutputTokens: 4096,
+          responseMimeType: 'application/json'
+        }
       })
     }
   )
@@ -71,10 +38,12 @@ async function generateWithGemini(prompt: string, apiKey: string): Promise<strin
   }
   const data = await res.json()
   const parts = data.candidates?.[0]?.content?.parts || []
-  return parts.filter((p: { text?: string }) => p.text).map((p: { text: string }) => p.text).join('')
+  const text = parts.filter((p: {text?: string}) => p.text).map((p: {text: string}) => p.text).join('')
+  // Gemini with responseMimeType returns clean JSON — parse directly
+  return JSON.parse(text)
 }
 
-async function generateWithOpenAI(prompt: string, apiKey: string): Promise<string> {
+async function generateWithOpenAI(prompt: string, apiKey: string): Promise<Record<string, unknown>> {
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
@@ -91,10 +60,16 @@ async function generateWithOpenAI(prompt: string, apiKey: string): Promise<strin
     throw new Error(err.error?.message || `OpenAI error ${res.status}`)
   }
   const data = await res.json()
-  return data.choices?.[0]?.message?.content || ''
+  const text = data.choices?.[0]?.message?.content || ''
+  return JSON.parse(text)
 }
 
-async function generateWithClaude(prompt: string, apiKey: string): Promise<string> {
+async function generateWithClaude(prompt: string, apiKey: string): Promise<Record<string, unknown>> {
+  // For Claude — use a two-step approach: generate content then request JSON
+  const claudePrompt = `${prompt}
+
+Remember: Your ENTIRE response must be a single valid JSON object starting with { and ending with }. Write all article content in the specified language but keep JSON keys in English.`
+
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -105,7 +80,7 @@ async function generateWithClaude(prompt: string, apiKey: string): Promise<strin
     body: JSON.stringify({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 4096,
-      messages: [{ role: 'user', content: prompt }],
+      messages: [{ role: 'user', content: claudePrompt }],
     })
   })
   if (!res.ok) {
@@ -113,77 +88,25 @@ async function generateWithClaude(prompt: string, apiKey: string): Promise<strin
     throw new Error(err.error?.message || `Claude error ${res.status}`)
   }
   const data = await res.json()
-  return data.content?.[0]?.text || ''
-}
+  const text = (data.content?.[0]?.text || '').trim()
 
-function parseJSON(text: string): Record<string, unknown> | null {
-  if (!text) return null
+  // Try direct parse
+  try { return JSON.parse(text) } catch { /* continue */ }
 
-  // Step 1: Clean markdown fences
-  let clean = text
-    .replace(/```json\s*/gi, '')
-    .replace(/```\s*/g, '')
-    .trim()
+  // Extract JSON block
+  const start = text.indexOf('{')
+  const end = text.lastIndexOf('}')
+  if (start !== -1 && end > start) {
+    try { return JSON.parse(text.slice(start, end + 1)) } catch { /* continue */ }
+  }
 
-  // Step 2: Direct parse
-  try { return JSON.parse(clean) } catch { /* continue */ }
+  // Claude sometimes wraps content in code fences
+  const fenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/)
+  if (fenceMatch) {
+    try { return JSON.parse(fenceMatch[1].trim()) } catch { /* continue */ }
+  }
 
-  // Step 3: Extract between first { and last }
-  const firstBrace = clean.indexOf('{')
-  const lastBrace = clean.lastIndexOf('}')
-  if (firstBrace === -1 || lastBrace <= firstBrace) return null
-  const extracted = clean.slice(firstBrace, lastBrace + 1)
-  try { return JSON.parse(extracted) } catch { /* continue */ }
-
-  // Step 4: Unicode escape — fixes Indian language characters in broken JSON
-  try {
-    const unicodeEscaped = extracted.replace(/[\u0080-\uFFFF]/g, (char) => {
-      return '\\u' + ('0000' + char.charCodeAt(0).toString(16)).slice(-4)
-    })
-    return JSON.parse(unicodeEscaped)
-  } catch { /* continue */ }
-
-  // Step 5: Fix unescaped newlines inside strings
-  try {
-    const noNewlines = extracted.replace(/("(?:[^"\\]|\\.)*")|(\n)/g, (match, str, nl) => {
-      if (nl) return '\\n'
-      return str
-    })
-    return JSON.parse(noNewlines)
-  } catch { /* continue */ }
-
-  // Step 6: Manual field extraction as last resort
-  try {
-    const getString = (key: string): string => {
-      const re = new RegExp(`"${key}"\\s*:\\s*"((?:[^"\\\\]|\\\\[\\s\\S])*)"`, 's')
-      const m = extracted.match(re)
-      if (!m) return ''
-      return m[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
-    }
-    const getArray = (key: string): string[] => {
-      const re = new RegExp(`"${key}"\\s*:\\s*\\[([^\\]]*)\\]`)
-      const m = extracted.match(re)
-      if (!m) return []
-      return (m[1].match(/"([^"]*)"/g) || []).map(s => s.replace(/"/g, ''))
-    }
-    const getNum = (key: string): number => {
-      const m = extracted.match(new RegExp(`"${key}"\\s*:\\s*(\\d+)`))
-      return m ? parseInt(m[1]) : 4
-    }
-    const title = getString('title')
-    if (!title) return null
-    return {
-      title,
-      content: getString('content'),
-      excerpt: getString('excerpt'),
-      seo_title: getString('seo_title'),
-      meta_description: getString('meta_description'),
-      focus_keyword: getString('focus_keyword'),
-      keywords: getArray('keywords'),
-      tags: getArray('tags'),
-      reading_time: getNum('reading_time'),
-    }
-  } catch { return null }
+  throw new Error('Claude returned non-JSON response')
 }
 
 export async function POST(req: NextRequest) {
@@ -192,12 +115,18 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json()
-  const { title, topic, keywords = [], category = 'General', tone = 'journalistic', wordCount = 700, language = 'en' } = body
+  const {
+    title, topic, keywords = [], category = 'General',
+    tone = 'journalistic', wordCount = 700, language = 'en'
+  } = body
   const langName = LANGUAGES[language] || 'English'
   const subject = title || topic || 'Latest trending news'
   const kws = Array.isArray(keywords) ? keywords : []
 
-  const admin = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+  const admin = createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
   const { data: profile } = await admin
     .from('user_profiles')
     .select('byoak_gemini_key, byoak_openai_key, byoak_claude_key, byoak_preferred_model, plan')
@@ -217,14 +146,16 @@ export async function POST(req: NextRequest) {
   if (plan === 'free' && !hasOwnKey && !isAdmin) {
     return NextResponse.json({
       error: 'FREE_PLAN_NO_KEY',
-      message: 'Free plan requires your own API key. Add your free Gemini key in Settings → 🔑 API Keys.',
+      message: 'Free plan requires your own API key. Add your Gemini key in Settings → API Keys.',
       action: 'add_key',
       link: '/admin/settings?tab=apikeys',
     }, { status: 403 })
   }
 
   const preferredModel = profile?.byoak_preferred_model || 'gemini'
-  let rawText = ''
+  const prompt = buildPrompt(subject, category, kws, tone, langName, wordCount)
+
+  let article: Record<string, unknown> | null = null
   let modelUsed = ''
   let lastError = ''
 
@@ -233,19 +164,19 @@ export async function POST(req: NextRequest) {
     try {
       if (preferredModel === 'claude' && userClaudeKey) {
         modelUsed = 'Claude Haiku 4.5'
-        rawText = await generateWithClaude(buildClaudePrompt(subject, category, kws, tone, langName, wordCount), userClaudeKey)
+        article = await generateWithClaude(prompt, userClaudeKey)
       } else if (preferredModel === 'openai' && userOpenAIKey) {
         modelUsed = 'GPT-4o Mini'
-        rawText = await generateWithOpenAI(buildPrompt(subject, category, kws, tone, langName, wordCount), userOpenAIKey)
+        article = await generateWithOpenAI(prompt, userOpenAIKey)
       } else if (userGeminiKey) {
         modelUsed = 'Gemini 2.5 Flash (your key)'
-        rawText = await generateWithGemini(buildPrompt(subject, category, kws, tone, langName, wordCount), userGeminiKey)
+        article = await generateWithGemini(prompt, userGeminiKey)
       } else if (userOpenAIKey) {
         modelUsed = 'GPT-4o Mini'
-        rawText = await generateWithOpenAI(buildPrompt(subject, category, kws, tone, langName, wordCount), userOpenAIKey)
+        article = await generateWithOpenAI(prompt, userOpenAIKey)
       } else if (userClaudeKey) {
         modelUsed = 'Claude Haiku 4.5'
-        rawText = await generateWithClaude(buildClaudePrompt(subject, category, kws, tone, langName, wordCount), userClaudeKey)
+        article = await generateWithClaude(prompt, userClaudeKey)
       }
     } catch (e) {
       lastError = (e as Error).message
@@ -253,31 +184,23 @@ export async function POST(req: NextRequest) {
   }
 
   // Fallback to platform key
-  if (!rawText && canUsePlatformKey) {
+  if (!article && canUsePlatformKey) {
     const key = platformKey2 || platformKey
     if (key) {
       try {
         modelUsed = 'Gemini 2.5 Flash'
-        rawText = await generateWithGemini(buildPrompt(subject, category, kws, tone, langName, wordCount), key)
+        article = await generateWithGemini(prompt, key)
       } catch (e) {
         lastError = (e as Error).message
       }
     }
   }
 
-  if (!rawText) {
+  if (!article) {
     return NextResponse.json({
       error: lastError.includes('429')
         ? 'API quota exceeded. Try again in a few minutes.'
         : lastError || 'Generation failed. Please try again.'
-    }, { status: 500 })
-  }
-
-  const article = parseJSON(rawText)
-  if (!article || !article.title) {
-    return NextResponse.json({
-      error: 'Failed to parse AI response. Please try again.',
-      debug: rawText.slice(0, 300)
     }, { status: 500 })
   }
 
