@@ -82,10 +82,10 @@ toast.success(`Article generated!${data.model_used ? ` (${data.model_used})` : '
   async function fetchTrending() {
     setLoading(true)
     try {
-      const res = await fetch(`/api/trending?region=${region}`)
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error)
-      setTrending(data.topics||[])
+     const res = await fetch(`/api/google-trends?region=${region}`)
+const data = await res.json()
+if (!res.ok) throw new Error(data.error)
+setTrending(data.trends||[])
     } catch(e) { toast.error((e as Error).message) }
     setLoading(false)
   }
