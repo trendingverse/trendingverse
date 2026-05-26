@@ -90,7 +90,7 @@ async function generateWithClaude(prompt: string, apiKey: string): Promise<Recor
   try { return JSON.parse(text) } catch { /* continue */ }
 
   // 2. Strip markdown fences
-  const stripped = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim()
+  const stripped = text   .replace(/^```json\s*/i, '')   .replace(/^```\s*/i, '')   .replace(/```\s*$/i, '')   .trim()
   try { return JSON.parse(stripped) } catch { /* continue */ }
 
   // 3. Extract between first { and last }
