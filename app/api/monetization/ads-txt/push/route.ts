@@ -66,20 +66,7 @@ export async function POST(req: NextRequest) {
           body: JSON.stringify({ 'trendingverse_ads_txt': adsTxtContent }),
         })
         results.push({ site: site.name, success: optRes.ok, error: optRes.ok ? undefined : 'Manual upload required' })
-        <button onClick={() => {
-  const content = adsTxt.map(e => 
-    `${e.domain}, ${e.publisher_id}, ${e.relationship}${e.certification_authority_id ? `, ${e.certification_authority_id}` : ''}`
-  ).join('\n')
-  const blob = new Blob([content], { type: 'text/plain' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = 'ads.txt'
-  a.click()
-}} className="btn-secondary btn-sm">
-  ⬇ Download ads.txt
-</button>
-      }
+           }
     } catch (e) {
       results.push({ site: site.name, success: false, error: (e as Error).message })
     }
