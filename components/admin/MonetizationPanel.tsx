@@ -1,111 +1,220 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
-import type { AdSlot, AffiliateLink } from '@/types'
 
-export function MonetizationPanel({ adSlots: initialSlots, affiliates: initialAff }: { adSlots: AdSlot[]; affiliates: AffiliateLink[] }) {
-  const [slots, setSlots] = useState(initialSlots)
-  const [affiliates, setAffiliates] = useState(initialAff)
-  const [tab, setTab] = useState<'ads'|'affiliate'|'analytics'>('ads')
-  const [saving, setSaving] = useState(false)
+interface AdUnit {
+  id: string; name: string; ad_type: 'gam' | 'direct'; position: string
+  ad_code: string; gam_network_code?: string; gam_unit_path?: string
+  size_width: number; size_height: number; is_active: boolean
+}
+interface AdsTxtEntry {
+  id: string; domain: string; publisher_id: string; relationship: string
+  certification_authority_id?: string; notes?: string
+}
+interface RevenueReport {
+  report_date: string; impressions: number; clicks: number
+  revenue_usd: number; publisher_earnings_usd: number; platform_earnings_usd: number
+  sites?: { name: string }; ad_units?: { name: string; position: string }
+}
+interface RevenueStats {
+  totalRevenue: number; totalImpressions: number; totalClicks: number
+  publisherEarnings: number; platformEarnings: number
+}
 
-  // Ad slot edit
-  const [editSlot, setEditSlot] = useState<AdSlot|null>(null)
+const POSITIONS = ['header', 'footer', 'in_content', 'sidebar']
+const SIZES = [
+  { label: 'Leaderboard 728×90', w: 728, h: 90 },
+  { label: 'Medium Rectangle 300×250', w: 300, h: 250 },
+  { label: 'Half Page 300×600', w: 300, h: 600 },
+  { label: 'Large Rectangle 336×280', w: 336, h: 280 },
+  { label: 'Mobile Banner 320×50', w: 320, h: 50 },
+]
 
-  // New affiliate form
-  const [affName, setAffName] = useState('')
-  const [affUrl, setAffUrl] = useState('')
-  const [affKws, setAffKws] = useState('')
-  const [affComm, setAffComm] = useState('')
+export function MonetizationPanel({ isAdmin = false }: { isAdmin?: boolean }) {
+  const [tab, setTab] = useState<'ad_units' | 'ads_txt' | 'revenue'>('ad_units')
 
-  async function saveSlot(slot: AdSlot) {
-    setSaving(true)
-    const res = await fetch(`/api/adslots/${slot.id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(slot) })
-    if (res.ok) { const d = await res.json(); setSlots(s=>s.map(x=>x.id===d.id?d:x)); setEditSlot(null); toast.success('Ad slot saved') }
-    else toast.error('Save failed')
-    setSaving(false)
+  // Ad units state
+  const [adUnits, setAdUnits] = useState<AdUnit[]>([])
+  const [showAdForm, setShowAdForm] = useState(false)
+  const [adForm, setAdForm] = useState({ name: '', ad_type: 'direct', position: 'in_content', ad_code: '', gam_network_code: '', gam_unit_path: '', size_width: 728, size_height: 90 })
+
+  // Ads.txt state
+  const [adsTxt, setAdsTxt] = useState<AdsTxtEntry[]>([])
+  const [showTxtForm, setShowTxtForm] = useState(false)
+  const [txtForm, setTxtForm] = useState({ domain: '', publisher_id: '', relationship: 'DIRECT', certification_authority_id: '', notes: '' })
+  const [pushing, setPushing] = useState(false)
+
+  // Revenue state
+  const [revenue, setRevenue] = useState<{ reports: RevenueReport[]; stats: RevenueStats; ctr: number; ecpm: number } | null>(null)
+  const [period, setPeriod] = useState('30')
+  const [showRevenueForm, setShowRevenueForm] = useState(false)
+  const [revForm, setRevForm] = useState({ publisher_id: '', report_date: new Date().toISOString().split('T')[0], impressions: '', clicks: '', revenue_usd: '', revenue_share_pct: '70', network: 'GAM' })
+
+  useEffect(() => { fetchAdUnits(); fetchAdsTxt(); fetchRevenue() }, [])
+  useEffect(() => { fetchRevenue() }, [period])
+
+  async function fetchAdUnits() {
+    const res = await fetch('/api/monetization/ad-units')
+    if (res.ok) setAdUnits(await res.json())
+  }
+  async function fetchAdsTxt() {
+    const res = await fetch('/api/monetization/ads-txt')
+    if (res.ok) setAdsTxt(await res.json())
+  }
+  async function fetchRevenue() {
+    const res = await fetch(`/api/monetization/revenue?period=${period}`)
+    if (res.ok) setRevenue(await res.json())
   }
 
-  async function toggleSlot(id: string, active: boolean) {
-    const res = await fetch(`/api/adslots/${id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ is_active: !active }) })
-    if (res.ok) setSlots(s=>s.map(x=>x.id===id?{...x,is_active:!active}:x))
+  async function createAdUnit() {
+    const res = await fetch('/api/monetization/ad-units', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(adForm)
+    })
+    if (res.ok) { toast.success('Ad unit created'); setShowAdForm(false); fetchAdUnits(); setAdForm({ name: '', ad_type: 'direct', position: 'in_content', ad_code: '', gam_network_code: '', gam_unit_path: '', size_width: 728, size_height: 90 }) }
+    else toast.error('Failed to create ad unit')
   }
 
-  async function createAffiliate() {
-    if (!affName||!affUrl) { toast.error('Name and URL required'); return }
-    const keywords = affKws.split(',').map(k=>k.trim()).filter(Boolean)
-    if (!keywords.length) { toast.error('Add at least one keyword'); return }
-    setSaving(true)
-    const res = await fetch('/api/affiliate', { method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ name:affName, url:affUrl, trigger_keywords:keywords, commission_pct:affComm?parseFloat(affComm):null, is_active:true }) })
-    if (res.ok) {
-      const d = await res.json(); setAffiliates(a=>[d,...a])
-      setAffName(''); setAffUrl(''); setAffKws(''); setAffComm('')
-      toast.success('Affiliate link created')
-    } else toast.error('Create failed')
-    setSaving(false)
+  async function deleteAdUnit(id: string) {
+    if (!confirm('Delete this ad unit?')) return
+    await fetch('/api/monetization/ad-units', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
+    toast.success('Deleted'); fetchAdUnits()
   }
 
-  async function toggleAffiliate(id: string, active: boolean) {
-    const res = await fetch(`/api/affiliate/${id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ is_active: !active }) })
-    if (res.ok) setAffiliates(a=>a.map(x=>x.id===id?{...x,is_active:!active}:x))
+  async function addAdsTxt() {
+    const res = await fetch('/api/monetization/ads-txt', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(txtForm)
+    })
+    if (res.ok) { toast.success('Entry added'); setShowTxtForm(false); fetchAdsTxt(); setTxtForm({ domain: '', publisher_id: '', relationship: 'DIRECT', certification_authority_id: '', notes: '' }) }
+    else toast.error('Failed to add entry')
   }
 
-  async function deleteAffiliate(id: string) {
-    if (!confirm('Delete this affiliate link?')) return
-    const res = await fetch(`/api/affiliate/${id}`, { method:'DELETE' })
-    if (res.ok) { setAffiliates(a=>a.filter(x=>x.id!==id)); toast.success('Deleted') }
+  async function pushAdsTxt() {
+    setPushing(true)
+    const res = await fetch('/api/monetization/ads-txt/push', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({})
+    })
+    const data = await res.json()
+    toast.success(`Pushed to ${data.successful}/${data.total_sites} sites`)
+    setPushing(false)
   }
 
-  const positionLabels: Record<string, string> = { header:'728×90 Header', inline:'336×280 In-Article', sidebar:'300×250 Sidebar', footer:'728×90 Footer' }
+  async function addRevenue() {
+    const res = await fetch('/api/monetization/revenue', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...revForm, impressions: parseInt(revForm.impressions), clicks: parseInt(revForm.clicks), revenue_usd: parseFloat(revForm.revenue_usd), revenue_share_pct: parseInt(revForm.revenue_share_pct) })
+    })
+    if (res.ok) { toast.success('Revenue report added'); setShowRevenueForm(false); fetchRevenue() }
+    else toast.error('Failed to add report')
+  }
+
+  const tabs = [
+    { key: 'ad_units', label: '📢 Ad Units' },
+    { key: 'ads_txt', label: '📄 ads.txt' },
+    { key: 'revenue', label: '💰 Revenue' },
+  ] as const
 
   return (
     <div className="space-y-5">
       <div className="flex gap-1 p-1 bg-ink-100 rounded-xl w-fit">
-        {([['ads','Ad Slots'],['affiliate','Affiliate Links'],['analytics','Revenue Analytics']] as const).map(([t,l])=>(
-          <button key={t} onClick={()=>setTab(t)}
-            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${tab===t?'bg-white shadow text-ink-900':'text-ink-500 hover:text-ink-700'}`}>
-            {l}
+        {tabs.map(t => (
+          <button key={t.key} onClick={() => setTab(t.key)}
+            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${tab === t.key ? 'bg-white shadow text-ink-900' : 'text-ink-500 hover:text-ink-700'}`}>
+            {t.label}
           </button>
         ))}
       </div>
 
-      {/* ADS */}
-      {tab==='ads' && (
+      {/* AD UNITS */}
+      {tab === 'ad_units' && (
         <div className="space-y-4">
-          <div className="card p-4 bg-amber-50 border-amber-100">
-            <p className="text-sm text-amber-800"><strong>Setup:</strong> Add your AdSense publisher ID to <code className="bg-amber-100 px-1 rounded">.env.local</code> as <code className="bg-amber-100 px-1 rounded">NEXT_PUBLIC_ADSENSE_CLIENT</code>, then set each slot ID below.</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="font-semibold text-ink-900">Ad Units</h3>
+              <p className="text-xs text-ink-400">Create and manage ad slots — assign them to publishers with custom revenue splits</p>
+            </div>
+            {isAdmin && (
+              <button onClick={() => setShowAdForm(!showAdForm)} className="btn-primary btn-sm">
+                + New Ad Unit
+              </button>
+            )}
           </div>
-          <div className="grid sm:grid-cols-2 gap-4">
-            {slots.map(slot=>(
-              <div key={slot.id} className="card p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-semibold text-ink-900">{slot.name}</p>
-                    <p className="text-xs text-ink-400">{positionLabels[slot.position] || slot.position}</p>
-                  </div>
-                  <button onClick={()=>toggleSlot(slot.id, slot.is_active)}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${slot.is_active?'bg-emerald-500':'bg-ink-200'}`}>
-                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${slot.is_active?'translate-x-6':'translate-x-1'}`}/>
-                  </button>
+
+          {showAdForm && isAdmin && (
+            <div className="card p-5 space-y-4 border-2 border-accent/20">
+              <h4 className="font-semibold text-ink-900">Create Ad Unit</h4>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label">Name</label>
+                  <input className="input" value={adForm.name} onChange={e => setAdForm({...adForm, name: e.target.value})} placeholder="e.g. In-content 300x250"/>
                 </div>
-                {editSlot?.id===slot.id ? (
-                  <div className="space-y-2">
-                    <input value={editSlot.adsense_slot_id||''} onChange={e=>setEditSlot({...editSlot,adsense_slot_id:e.target.value})}
-                      className="input text-xs font-mono" placeholder="AdSense Slot ID (e.g. 1234567890)"/>
-                    <div className="flex gap-2">
-                      <button onClick={()=>saveSlot(editSlot)} disabled={saving} className="btn-primary btn-sm flex-1 justify-center">Save</button>
-                      <button onClick={()=>setEditSlot(null)} className="btn-secondary btn-sm">Cancel</button>
-                    </div>
+                <div>
+                  <label className="label">Type</label>
+                  <select className="input" value={adForm.ad_type} onChange={e => setAdForm({...adForm, ad_type: e.target.value as 'gam' | 'direct'})}>
+                    <option value="direct">Direct (paste ad code)</option>
+                    <option value="gam">Google Ad Manager (GAM)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="label">Position</label>
+                  <select className="input" value={adForm.position} onChange={e => setAdForm({...adForm, position: e.target.value})}>
+                    {POSITIONS.map(p => <option key={p} value={p}>{p.replace('_', ' ')}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="label">Size</label>
+                  <select className="input" onChange={e => {
+                    const s = SIZES[parseInt(e.target.value)]
+                    setAdForm({...adForm, size_width: s.w, size_height: s.h})
+                  }}>
+                    {SIZES.map((s, i) => <option key={i} value={i}>{s.label}</option>)}
+                  </select>
+                </div>
+              </div>
+              {adForm.ad_type === 'gam' && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="label">GAM Network Code</label>
+                    <input className="input font-mono text-xs" value={adForm.gam_network_code} onChange={e => setAdForm({...adForm, gam_network_code: e.target.value})} placeholder="123456789"/>
                   </div>
-                ) : (
-                  <div className="flex items-center justify-between">
-                    <code className="text-xs text-ink-500 bg-ink-50 px-2 py-1 rounded">{slot.adsense_slot_id||'No slot ID set'}</code>
-                    <button onClick={()=>setEditSlot({...slot})} className="btn-ghost btn-sm">Edit</button>
+                  <div>
+                    <label className="label">GAM Ad Unit Path</label>
+                    <input className="input font-mono text-xs" value={adForm.gam_unit_path} onChange={e => setAdForm({...adForm, gam_unit_path: e.target.value})} placeholder="/123456/unit-name"/>
                   </div>
-                )}
-                <div className="h-16 bg-ink-50 border border-dashed border-ink-200 rounded-lg flex items-center justify-center">
-                  <span className="text-xs text-ink-300">{positionLabels[slot.position]} Preview</span>
+                </div>
+              )}
+              <div>
+                <label className="label">Ad Code {adForm.ad_type === 'direct' ? '(paste full JS tag)' : '(optional override)'}</label>
+                <textarea className="input font-mono text-xs resize-none" rows={4}
+                  value={adForm.ad_code} onChange={e => setAdForm({...adForm, ad_code: e.target.value})}
+                  placeholder={adForm.ad_type === 'gam' ? '<script>/* GPT tag */</script>' : '<script async src="//pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>...'}/>
+              </div>
+              <div className="flex gap-3">
+                <button onClick={createAdUnit} className="btn-primary">Create Ad Unit</button>
+                <button onClick={() => setShowAdForm(false)} className="btn-secondary">Cancel</button>
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-3">
+            {adUnits.length === 0 && <p className="text-center py-8 text-ink-300 text-sm">No ad units yet. Create your first one.</p>}
+            {adUnits.map(unit => (
+              <div key={unit.id} className="card p-4 flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${unit.ad_type === 'gam' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>
+                    {unit.ad_type.toUpperCase()}
+                  </span>
+                  <div>
+                    <p className="font-medium text-ink-900 text-sm">{unit.name}</p>
+                    <p className="text-xs text-ink-400">{unit.position} · {unit.size_width}×{unit.size_height}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`w-2 h-2 rounded-full ${unit.is_active ? 'bg-green-500' : 'bg-ink-300'}`}/>
+                  {isAdmin && (
+                    <button onClick={() => deleteAdUnit(unit.id)} className="text-xs text-red-500 hover:text-red-600 px-2 py-1">
+                      Delete
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
@@ -113,85 +222,191 @@ export function MonetizationPanel({ adSlots: initialSlots, affiliates: initialAf
         </div>
       )}
 
-      {/* AFFILIATE */}
-      {tab==='affiliate' && (
-        <div className="grid lg:grid-cols-2 gap-5">
-          <div className="card p-5 space-y-4">
-            <h3 className="font-semibold text-ink-900">Add Affiliate Link</h3>
-            <p className="text-xs text-ink-500">Keywords trigger automatic insertion of affiliate links in article content.</p>
+      {/* ADS.TXT */}
+      {tab === 'ads_txt' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-3">
             <div>
-              <label className="label">Link Name *</label>
-              <input value={affName} onChange={e=>setAffName(e.target.value)} className="input" placeholder="e.g. Amazon India"/>
+              <h3 className="font-semibold text-ink-900">ads.txt Manager</h3>
+              <p className="text-xs text-ink-400">Manage demand partner declarations — push to all publisher sites at once</p>
             </div>
-            <div>
-              <label className="label">Affiliate URL *</label>
-              <input value={affUrl} onChange={e=>setAffUrl(e.target.value)} className="input" placeholder="https://affiliate.example.com/?ref=tv"/>
+            <div className="flex gap-2">
+              {isAdmin && (
+                <>
+                  <button onClick={() => setShowTxtForm(!showTxtForm)} className="btn-secondary btn-sm">+ Add entry</button>
+                  <button onClick={pushAdsTxt} disabled={pushing} className="btn-primary btn-sm">
+                    {pushing ? '⟳ Pushing...' : '📤 Push to all sites'}
+                  </button>
+                </>
+              )}
             </div>
-            <div>
-              <label className="label">Trigger Keywords (comma-separated) *</label>
-              <input value={affKws} onChange={e=>setAffKws(e.target.value)} className="input" placeholder="Amazon, buy online, e-commerce"/>
-            </div>
-            <div>
-              <label className="label">Commission % (optional)</label>
-              <input value={affComm} onChange={e=>setAffComm(e.target.value)} type="number" step="0.01" className="input" placeholder="5.00"/>
-            </div>
-            <button onClick={createAffiliate} disabled={saving} className="btn-primary w-full justify-center">
-              {saving?'Adding…':'Add Affiliate Link'}
-            </button>
           </div>
 
-          <div className="card overflow-hidden">
-            <div className="px-4 py-3 border-b border-ink-100">
-              <p className="text-xs font-semibold text-ink-600 uppercase tracking-wide">{affiliates.length} Affiliate Links</p>
+          {showTxtForm && isAdmin && (
+            <div className="card p-5 space-y-4 border-2 border-accent/20">
+              <h4 className="font-semibold text-ink-900">Add ads.txt Entry</h4>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label">Domain</label>
+                  <input className="input font-mono text-xs" value={txtForm.domain} onChange={e => setTxtForm({...txtForm, domain: e.target.value})} placeholder="google.com"/>
+                </div>
+                <div>
+                  <label className="label">Publisher/Seller ID</label>
+                  <input className="input font-mono text-xs" value={txtForm.publisher_id} onChange={e => setTxtForm({...txtForm, publisher_id: e.target.value})} placeholder="pub-1234567890"/>
+                </div>
+                <div>
+                  <label className="label">Relationship</label>
+                  <select className="input" value={txtForm.relationship} onChange={e => setTxtForm({...txtForm, relationship: e.target.value})}>
+                    <option value="DIRECT">DIRECT</option>
+                    <option value="RESELLER">RESELLER</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="label">Cert Authority ID (optional)</label>
+                  <input className="input font-mono text-xs" value={txtForm.certification_authority_id} onChange={e => setTxtForm({...txtForm, certification_authority_id: e.target.value})} placeholder="f08c47fec0942fa0"/>
+                </div>
+                <div className="col-span-2">
+                  <label className="label">Notes (optional)</label>
+                  <input className="input" value={txtForm.notes} onChange={e => setTxtForm({...txtForm, notes: e.target.value})} placeholder="Google AdSense"/>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <button onClick={addAdsTxt} className="btn-primary">Add Entry</button>
+                <button onClick={() => setShowTxtForm(false)} className="btn-secondary">Cancel</button>
+              </div>
             </div>
-            <div className="divide-y divide-ink-50 max-h-[500px] overflow-y-auto">
-              {affiliates.map(a=>(
-                <div key={a.id} className="px-4 py-3 flex items-start gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <p className="text-sm font-medium text-ink-900 truncate">{a.name}</p>
-                      {a.commission_pct && <span className="badge bg-emerald-50 text-emerald-700">{a.commission_pct}%</span>}
-                    </div>
-                    <p className="text-xs text-ink-400 truncate mb-1">{a.url}</p>
-                    <div className="flex flex-wrap gap-1">
-                      {a.trigger_keywords.map(kw=><span key={kw} className="px-1.5 py-0.5 bg-ink-50 text-ink-500 rounded text-xs">{kw}</span>)}
-                    </div>
-                    <p className="text-xs text-ink-400 mt-1">{a.click_count} clicks</p>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <button onClick={()=>toggleAffiliate(a.id, a.is_active)}
-                      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${a.is_active?'bg-emerald-500':'bg-ink-200'}`}>
-                      <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${a.is_active?'translate-x-4':'translate-x-0.5'}`}/>
-                    </button>
-                    <button onClick={()=>deleteAffiliate(a.id)} className="text-red-400 hover:text-red-600 text-sm">✕</button>
-                  </div>
+          )}
+
+          {/* ads.txt preview */}
+          <div className="card p-4">
+            <p className="text-xs font-medium text-ink-500 mb-3">CURRENT ads.txt ({adsTxt.length} entries)</p>
+            <div className="bg-ink-950 rounded-xl p-4 font-mono text-xs text-green-400 max-h-48 overflow-y-auto">
+              {adsTxt.length === 0 && <span className="text-ink-500">No entries yet</span>}
+              {adsTxt.map((e, i) => (
+                <div key={i} className="flex items-center justify-between group">
+                  <span>{e.domain}, {e.publisher_id}, {e.relationship}{e.certification_authority_id ? `, ${e.certification_authority_id}` : ''}</span>
+                  {isAdmin && (
+                    <button onClick={async () => {
+                      await fetch('/api/monetization/ads-txt', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: e.id }) })
+                      fetchAdsTxt()
+                    }} className="opacity-0 group-hover:opacity-100 text-red-400 ml-4">×</button>
+                  )}
                 </div>
               ))}
-              {affiliates.length===0 && <p className="px-4 py-8 text-center text-sm text-ink-300">No affiliate links yet.</p>}
             </div>
           </div>
         </div>
       )}
 
-      {/* ANALYTICS */}
-      {tab==='analytics' && (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[
-            { label:'Total Affiliate Links', val: affiliates.length, color:'text-violet-600' },
-            { label:'Active Links', val: affiliates.filter(a=>a.is_active).length, color:'text-emerald-600' },
-            { label:'Total Clicks', val: affiliates.reduce((s,a)=>s+a.click_count,0), color:'text-blue-600' },
-            { label:'Active Ad Slots', val: slots.filter(s=>s.is_active).length, color:'text-accent' },
-            { label:'Configured Slots', val: slots.filter(s=>s.adsense_slot_id).length, color:'text-amber-600' },
-            { label:'Sponsored Articles', val: '—', color:'text-ink-600' },
-          ].map(c=>(
-            <div key={c.label} className="card p-5">
-              <p className="text-xs text-ink-400 mb-1">{c.label}</p>
-              <p className={`text-3xl font-display font-bold ${c.color}`}>{c.val}</p>
+      {/* REVENUE */}
+      {tab === 'revenue' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div>
+              <h3 className="font-semibold text-ink-900">Revenue Dashboard</h3>
+              <p className="text-xs text-ink-400">{isAdmin ? 'All publishers — earnings and splits' : 'Your earnings'}</p>
             </div>
-          ))}
-          <div className="card p-5 col-span-full">
-            <p className="text-sm font-semibold text-ink-700 mb-2">Revenue Tracking</p>
-            <p className="text-sm text-ink-500">Connect Google Analytics or a dedicated revenue dashboard for full CTR and earnings data. AdSense earnings are available directly in your <a href="https://adsense.google.com" target="_blank" className="text-accent hover:underline">AdSense dashboard</a>.</p>
+            <div className="flex gap-2">
+              <select className="input text-sm w-32" value={period} onChange={e => setPeriod(e.target.value)}>
+                <option value="7">Last 7 days</option>
+                <option value="30">Last 30 days</option>
+                <option value="90">Last 90 days</option>
+              </select>
+              {isAdmin && (
+                <button onClick={() => setShowRevenueForm(!showRevenueForm)} className="btn-primary btn-sm">+ Add report</button>
+              )}
+            </div>
+          </div>
+
+          {revenue && (
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              {[
+                { label: 'Total Revenue', value: `$${revenue.stats.totalRevenue.toFixed(4)}`, icon: '💰', color: 'text-green-600' },
+                { label: isAdmin ? 'Publisher Earnings' : 'Your Earnings', value: `$${revenue.stats.publisherEarnings.toFixed(4)}`, icon: '👤', color: 'text-blue-600' },
+                { label: isAdmin ? 'Platform Earnings' : 'Platform Fee', value: `$${revenue.stats.platformEarnings.toFixed(4)}`, icon: '🏢', color: 'text-violet-600' },
+                { label: 'eCPM', value: `$${revenue.ecpm.toFixed(3)}`, icon: '📊', color: 'text-amber-600' },
+                { label: 'Impressions', value: revenue.stats.totalImpressions.toLocaleString(), icon: '👁', color: 'text-ink-900' },
+                { label: 'Clicks', value: revenue.stats.totalClicks.toLocaleString(), icon: '👆', color: 'text-ink-900' },
+                { label: 'CTR', value: `${revenue.ctr}%`, icon: '📈', color: revenue.ctr > 1 ? 'text-green-600' : 'text-amber-500' },
+                { label: 'INR equiv', value: `₹${(revenue.stats.publisherEarnings * 83).toFixed(2)}`, icon: '₹', color: 'text-ink-900' },
+              ].map(s => (
+                <div key={s.label} className="card p-4">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs text-ink-400">{s.label}</span>
+                    <span>{s.icon}</span>
+                  </div>
+                  <div className={`text-xl font-display font-bold ${s.color}`}>{s.value}</div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {showRevenueForm && isAdmin && (
+            <div className="card p-5 space-y-4 border-2 border-accent/20">
+              <h4 className="font-semibold text-ink-900">Add Revenue Report</h4>
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="label">Publisher ID</label>
+                  <input className="input font-mono text-xs" value={revForm.publisher_id} onChange={e => setRevForm({...revForm, publisher_id: e.target.value})} placeholder="uuid"/>
+                </div>
+                <div>
+                  <label className="label">Date</label>
+                  <input type="date" className="input" value={revForm.report_date} onChange={e => setRevForm({...revForm, report_date: e.target.value})}/>
+                </div>
+                <div>
+                  <label className="label">Network</label>
+                  <select className="input" value={revForm.network} onChange={e => setRevForm({...revForm, network: e.target.value})}>
+                    {['GAM', 'AdSense', 'PubMatic', 'AppNexus', 'Taboola', 'Manual'].map(n => <option key={n}>{n}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="label">Impressions</label>
+                  <input type="number" className="input" value={revForm.impressions} onChange={e => setRevForm({...revForm, impressions: e.target.value})}/>
+                </div>
+                <div>
+                  <label className="label">Clicks</label>
+                  <input type="number" className="input" value={revForm.clicks} onChange={e => setRevForm({...revForm, clicks: e.target.value})}/>
+                </div>
+                <div>
+                  <label className="label">Revenue (USD)</label>
+                  <input type="number" step="0.0001" className="input" value={revForm.revenue_usd} onChange={e => setRevForm({...revForm, revenue_usd: e.target.value})}/>
+                </div>
+                <div>
+                  <label className="label">Publisher share %</label>
+                  <input type="number" min="0" max="100" className="input" value={revForm.revenue_share_pct} onChange={e => setRevForm({...revForm, revenue_share_pct: e.target.value})}/>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <button onClick={addRevenue} className="btn-primary">Save Report</button>
+                <button onClick={() => setShowRevenueForm(false)} className="btn-secondary">Cancel</button>
+              </div>
+            </div>
+          )}
+
+          <div className="card overflow-hidden">
+            <table className="w-full text-sm">
+              <thead><tr className="bg-ink-50 border-b border-ink-100">
+                <th className="text-left px-4 py-2 text-xs font-medium text-ink-500">Date</th>
+                <th className="text-right px-4 py-2 text-xs font-medium text-ink-500">Impressions</th>
+                <th className="text-right px-4 py-2 text-xs font-medium text-ink-500">Clicks</th>
+                <th className="text-right px-4 py-2 text-xs font-medium text-ink-500">Revenue</th>
+                <th className="text-right px-4 py-2 text-xs font-medium text-ink-500">Your share</th>
+              </tr></thead>
+              <tbody>
+                {(revenue?.reports || []).length === 0 && (
+                  <tr><td colSpan={5} className="text-center py-8 text-ink-300 text-sm">No revenue data yet. Add your first report.</td></tr>
+                )}
+                {(revenue?.reports || []).map((r, i) => (
+                  <tr key={i} className="border-b border-ink-50 hover:bg-ink-50/50">
+                    <td className="px-4 py-3 text-xs">{r.report_date}</td>
+                    <td className="px-4 py-3 text-xs text-right">{r.impressions.toLocaleString()}</td>
+                    <td className="px-4 py-3 text-xs text-right">{r.clicks.toLocaleString()}</td>
+                    <td className="px-4 py-3 text-xs text-right font-medium text-green-600">${r.revenue_usd.toFixed(4)}</td>
+                    <td className="px-4 py-3 text-xs text-right font-medium text-blue-600">${r.publisher_earnings_usd.toFixed(4)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
