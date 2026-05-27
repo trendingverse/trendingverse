@@ -289,21 +289,18 @@ setTrending(data.trends||[])
           {trending.length>0 && (
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {trending.map((t,i)=>(
-                <div key={i} className="card p-4 hover:shadow-md transition-shadow">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="badge bg-accent/10 text-accent">{t.category}</span>
-                    <span className="text-xl font-display font-bold text-ink-200">#{i+1}</span>
-                  </div>
-                  <h4 className="font-display font-semibold text-ink-900 text-sm leading-snug mb-2">{t.title}</h4>
-                  <p className="text-xs text-ink-500 leading-relaxed mb-3">{t.summary}</p>
-                  <div className="flex flex-wrap gap-1 mb-3">
-                    {t.keywords.slice(0,3).map(kw=><span key={kw} className="px-1.5 py-0.5 bg-ink-50 text-ink-500 rounded text-xs">{kw}</span>)}
-                  </div>
-                  <button onClick={()=>{setTitle(t.title);setKeywords(t.keywords||[]);setTab('generate');toast.success('Trend loaded!')}} className="btn-secondary btn-sm w-full justify-center">
-                    Write Article →
-                  </button>
-                </div>
-              ))}
+  <div key={i} className="card p-4 hover:shadow-md transition-shadow">
+    <div className="flex items-center justify-between mb-2">
+      <span className="badge bg-accent/10 text-accent">{t.category || 'News'}</span>
+      <span className="text-xs text-ink-300">{(t as Record<string,string>).flag || ''} {(t as Record<string,string>).region || ''}</span>
+    </div>
+    <h4 className="font-display font-semibold text-ink-900 text-sm leading-snug mb-2">{t.title}</h4>
+    <p className="text-xs text-ink-500 leading-relaxed mb-3">{(t as Record<string,string>).description || t.summary || ''}</p>
+    <button onClick={()=>{setTitle(t.title);setKeywords([]);setTab('generate');toast.success('Trend loaded!')}} className="btn-secondary btn-sm w-full justify-center">
+      Write Article →
+    </button>
+  </div>
+))}
             </div>
           )}
         </div>
