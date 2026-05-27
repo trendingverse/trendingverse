@@ -17,6 +17,16 @@ const LANGUAGES = [
   { code: 'pa', name: 'Punjabi', native: 'ਪੰਜਾਬੀ' },
 ]
 
+interface TrendItem {
+  title: string
+  description?: string
+  summary?: string
+  category?: string
+  flag?: string
+  region?: string
+  source?: string
+}
+
 export function AIWriterPanel({ categories }: { categories: Category[] }) {
   const router = useRouter()
   const [tab, setTab] = useState<'generate'|'headlines'|'trending'>('generate')
@@ -24,7 +34,6 @@ export function AIWriterPanel({ categories }: { categories: Category[] }) {
 
   // Generate
   const [title, setTitle] = useState('')
-  const [topic, setTopic] = useState('')
   const [catId, setCatId] = useState('')
   const [kwInput, setKwInput] = useState('')
   const [keywords, setKeywords] = useState<string[]>([])
@@ -39,7 +48,7 @@ export function AIWriterPanel({ categories }: { categories: Category[] }) {
 
   // Trending
   const [region, setRegion] = useState('India')
-  const [trending, setTrending] = useState<{title:string;summary:string;category:string;keywords:string[]}[]>([])
+  const [trending, setTrending] = useState<TrendItem[]>([])
 
   function addKw() {
     const kw = kwInput.trim()
@@ -47,23 +56,33 @@ export function AIWriterPanel({ categories }: { categories: Category[] }) {
   }
 
   async function generate() {
-    if (!title && !topic) { toast.error('Enter a title or topic'); return }
+    if (!title) { toast.error('Enter a title or topic'); return }
     setLoading(true); setResult(null)
     try {
-      const res = await fetch('/api/ai/generate', { method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ title: title||topic, keywords, category: categories.find(c=>c.id===catId)?.name, wordCount, tone, language }) })
-const data = await res.json()
-if (!res.ok) {
-  if (data.error === 'FREE_PLAN_NO_KEY') {
-    toast.error('Free plan: Add your Gemini API key in Settings → API Keys', { duration: 8000 })
-    router.push('/admin/settings?tab=apikeys')
-    return
-  }
-  throw new Error(data.message || data.error || 'Generation failed')
-}
-setResult(data)
-toast.success(`Article generated!${data.model_used ? ` (${data.model_used})` : ''}`)
-} catch(e) { toast.error((e as Error).message) }
+      const res = await fetch('/api/ai/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title,
+          keywords,
+          category: categories.find(c=>c.id===catId)?.name,
+          wordCount,
+          tone,
+          language
+        })
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        if (data.error === 'FREE_PLAN_NO_KEY') {
+          toast.error('Free plan: Add your Gemini API key in Settings → API Keys', { duration: 8000 })
+          router.push('/admin/settings?tab=apikeys')
+          return
+        }
+        throw new Error(data.message || data.error || 'Generation failed')
+      }
+      setResult(data)
+      toast.success(`Article generated!${data.model_used ? ` (${data.model_used})` : ''}`)
+    } catch(e) { toast.error((e as Error).message) }
     setLoading(false)
   }
 
@@ -71,7 +90,11 @@ toast.success(`Article generated!${data.model_used ? ` (${data.model_used})` : '
     if (!hlTopic) { toast.error('Enter a topic'); return }
     setLoading(true)
     try {
-      const res = await fetch('/api/ai/headlines', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ topic: hlTopic, count: 8 }) })
+      const res = await fetch('/api/ai/headlines', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topic: hlTopic, count: 8 })
+      })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       setHeadlines(data.headlines||[])
@@ -82,18 +105,21 @@ toast.success(`Article generated!${data.model_used ? ` (${data.model_used})` : '
   async function fetchTrending() {
     setLoading(true)
     try {
-     const res = await fetch(`/api/google-trends?region=${region}`)
-const data = await res.json()
-if (!res.ok) throw new Error(data.error)
-setTrending(data.trends||[])
+      const res = await fetch(`/api/google-trends?region=${region}`)
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      setTrending(data.trends || [])
     } catch(e) { toast.error((e as Error).message) }
     setLoading(false)
   }
 
   async function useGenerated() {
     if (!result) return
-    const res = await fetch('/api/articles', { method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ ...result, title: result.title, category_id: catId||null, status:'draft', ai_generated: true }) })
+    const res = await fetch('/api/articles', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...result, title: result.title, category_id: catId||null, status: 'draft', ai_generated: true })
+    })
     const article = await res.json()
     if (res.ok) { toast.success('Saved as draft!'); router.push(`/admin/articles/${article.id}/edit`) }
     else toast.error(article.error)
@@ -118,12 +144,10 @@ setTrending(data.trends||[])
         <div className="grid lg:grid-cols-2 gap-6">
           <div className="card p-5 space-y-4">
             <h3 className="font-semibold text-ink-900">Article Generator</h3>
-
             <div>
               <label className="label">Title or Topic *</label>
               <input value={title} onChange={e=>setTitle(e.target.value)} className="input" placeholder="e.g. 'AI Revolution in Indian Healthcare 2025'"/>
             </div>
-
             <div>
               <label className="label">Category</label>
               <select value={catId} onChange={e=>setCatId(e.target.value)} className="input">
@@ -131,21 +155,16 @@ setTrending(data.trends||[])
                 {categories.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
-
-            {/* Language Selector */}
             <div>
               <label className="label">Content Language</label>
               <div className="grid grid-cols-5 gap-1.5">
                 {LANGUAGES.map(lang => (
-                  <button
-                    key={lang.code}
-                    onClick={() => setLanguage(lang.code)}
+                  <button key={lang.code} onClick={() => setLanguage(lang.code)}
                     className={`flex flex-col items-center justify-center px-2 py-2 rounded-lg border text-center transition-all ${
                       language === lang.code
                         ? 'border-accent bg-accent/10 text-accent'
                         : 'border-ink-100 hover:border-ink-300 text-ink-600'
-                    }`}
-                  >
+                    }`}>
                     <span className="text-xs font-medium leading-tight">{lang.native}</span>
                     <span className="text-[10px] text-ink-400 mt-0.5">{lang.name}</span>
                   </button>
@@ -157,7 +176,6 @@ setTrending(data.trends||[])
                 </p>
               )}
             </div>
-
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="label">Target Words</label>
@@ -172,11 +190,11 @@ setTrending(data.trends||[])
                 </select>
               </div>
             </div>
-
             <div>
               <label className="label">Seed Keywords</label>
               <div className="flex gap-2 mb-2">
-                <input value={kwInput} onChange={e=>setKwInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();addKw()}}}
+                <input value={kwInput} onChange={e=>setKwInput(e.target.value)}
+                  onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();addKw()}}}
                   className="input flex-1" placeholder="Add keyword + Enter"/>
                 <button onClick={addKw} className="btn-secondary btn-sm">+</button>
               </div>
@@ -188,7 +206,6 @@ setTrending(data.trends||[])
                 ))}
               </div>
             </div>
-
             <button onClick={generate} disabled={loading} className="btn-primary w-full justify-center py-2.5">
               {loading
                 ? <span className="flex items-center gap-2"><span className="animate-spin">⟳</span>Generating in {selectedLang?.native}…</span>
@@ -202,9 +219,7 @@ setTrending(data.trends||[])
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="font-semibold text-ink-900">Generated Article</h3>
-                  {result.language_name && (
-                    <span className="text-xs text-accent">{result.language_name as string}</span>
-                  )}
+                  {result.language_name && <span className="text-xs text-accent">{result.language_name as string}</span>}
                 </div>
                 <button onClick={useGenerated} className="btn-primary btn-sm">Save as Draft →</button>
               </div>
@@ -249,7 +264,7 @@ setTrending(data.trends||[])
             <p className="text-sm text-ink-500">Generate 8 Google Discover-optimized headlines for any topic.</p>
             <div>
               <label className="label">News Topic or Story</label>
-              <textarea value={hlTopic} onChange={e=>setHlTopic(e.target.value)} rows={3} className="input resize-none" placeholder="e.g. 'India's GDP growth Q3 2025 beats expectations'"/>
+              <textarea value={hlTopic} onChange={e=>setHlTopic(e.target.value)} rows={3} className="input resize-none" placeholder="e.g. 'India GDP growth Q3 2025 beats expectations'"/>
             </div>
             <button onClick={generateHeadlines} disabled={loading} className="btn-primary w-full justify-center">
               {loading?'Generating Headlines…':'Generate 8 Headlines'}
@@ -279,7 +294,7 @@ setTrending(data.trends||[])
             <div className="flex items-center gap-4 flex-wrap">
               <h3 className="font-semibold text-ink-900">Trending Topic Detector</h3>
               <select value={region} onChange={e=>setRegion(e.target.value)} className="input w-40">
-                {['India','US','UAE','Global','UK','Singapore'].map(r=><option key={r} value={r}>{r}</option>)}
+                {['India','United States','United Kingdom','Global'].map(r=><option key={r} value={r}>{r}</option>)}
               </select>
               <button onClick={fetchTrending} disabled={loading} className="btn-primary">
                 {loading?'Detecting…':'Detect Trends'}
@@ -289,18 +304,26 @@ setTrending(data.trends||[])
           {trending.length>0 && (
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {trending.map((t,i)=>(
-  <div key={i} className="card p-4 hover:shadow-md transition-shadow">
-    <div className="flex items-center justify-between mb-2">
-      <span className="badge bg-accent/10 text-accent">{t.category || 'News'}</span>
-      <span className="text-xs text-ink-300">{(t as Record<string,string>).flag || ''} {(t as Record<string,string>).region || ''}</span>
-    </div>
-    <h4 className="font-display font-semibold text-ink-900 text-sm leading-snug mb-2">{t.title}</h4>
-    <p className="text-xs text-ink-500 leading-relaxed mb-3">{(t as Record<string,string>).description || t.summary || ''}</p>
-    <button onClick={()=>{setTitle(t.title);setKeywords([]);setTab('generate');toast.success('Trend loaded!')}} className="btn-secondary btn-sm w-full justify-center">
-      Write Article →
-    </button>
-  </div>
-))}
+                <div key={i} className="card p-4 hover:shadow-md transition-shadow">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="badge bg-accent/10 text-accent">{t.category || 'News'}</span>
+                    <span className="text-xs text-ink-300">{t.flag || ''} {t.region || ''}</span>
+                  </div>
+                  <h4 className="font-display font-semibold text-ink-900 text-sm leading-snug mb-2">{t.title}</h4>
+                  <p className="text-xs text-ink-500 leading-relaxed mb-3">{t.description || t.summary || ''}</p>
+                  <button
+                    onClick={()=>{setTitle(t.title);setKeywords([]);setTab('generate');toast.success('Trend loaded!')}}
+                    className="btn-secondary btn-sm w-full justify-center">
+                    Write Article →
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          {!loading && trending.length === 0 && (
+            <div className="text-center py-12 text-ink-300">
+              <p className="text-4xl mb-2">📡</p>
+              <p>Click Detect Trends to fetch real-time topics</p>
             </div>
           )}
         </div>
