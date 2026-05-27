@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
   const wc = wordCount(content)
   const rt = readingTime(content)
   const { score } = computeSeoScore(rest)
-  const slug = rest.slug || (rest.title ? slugify(rest.title) : `article-${Date.now()}`)
+  const slug = rest.slug || (rest.title ? `${slugify(rest.title)}-${Date.now()}` : `article-${Date.now()}`)
 
   const payload = {
     title: rest.title || 'Untitled',
