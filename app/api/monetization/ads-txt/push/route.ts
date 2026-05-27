@@ -50,11 +50,17 @@ export async function POST(req: NextRequest) {
       // Use WordPress REST API to update ads.txt via custom endpoint
       // Most sites support this via Simple Ads.txt plugin or custom endpoint
       // We'll use the WP filesystem approach via a custom REST route
-      const res = await fetch(`${base}/wp-json/trendingverse/v1/ads-txt`, {
-        method: 'POST',
-        headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: adsTxtContent }),
-      })
+     const res = await fetch(`${base}/wp-json/trendingverse/v1/ads-txt`, {
+  method: 'POST',
+  headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' },
+  body: JSON.stringify({ content: adsTxtContent }),
+})
+
+if (!res.ok) {
+  const errText = await res.text()
+  results.push({ site: site.name, success: false, error: `${res.status}: ${errText.slice(0, 100)}` })
+  continue
+}
 
       if (res.ok) {
         results.push({ site: site.name, success: true })
