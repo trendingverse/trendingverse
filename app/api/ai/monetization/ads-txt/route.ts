@@ -11,8 +11,8 @@ export async function GET() {
     .select('*')
     .eq('is_active', true)
     .order('domain')
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json(data || [])
+  if (error) return NextResponse.json({ error: error.message, details: error }, { status: 500 })
+return NextResponse.json(data, { status: 201 })
 }
 
 // POST — add new entry
