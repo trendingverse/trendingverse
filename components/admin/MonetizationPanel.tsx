@@ -235,8 +235,23 @@ export function MonetizationPanel({ isAdmin = false }: { isAdmin?: boolean }) {
                 <>
                   <button onClick={() => setShowTxtForm(!showTxtForm)} className="btn-secondary btn-sm">+ Add entry</button>
                   <button onClick={pushAdsTxt} disabled={pushing} className="btn-primary btn-sm">
-                    {pushing ? '⟳ Pushing...' : '📤 Push to all sites'}
-                  </button>
+  {pushing ? '⟳ Pushing...' : '📤 Push to all sites'}
+</button>
+<button onClick={() => {
+  const lines = ['# TrendingVerse CMS ads.txt', `# Updated: ${new Date().toISOString().split('T')[0]}`, '']
+  adsTxt.forEach(e => {
+    const parts = [e.domain, e.publisher_id, e.relationship]
+    if (e.certification_authority_id) parts.push(e.certification_authority_id)
+    lines.push(parts.join(', '))
+  })
+  const blob = new Blob([lines.join('\n')], { type: 'text/plain' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url; a.download = 'ads.txt'; a.click()
+  URL.revokeObjectURL(url)
+}} className="btn-secondary btn-sm">
+  ⬇ Download ads.txt
+</button>
                 </>
               )}
             </div>
