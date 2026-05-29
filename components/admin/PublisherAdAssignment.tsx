@@ -43,7 +43,7 @@ export function PublisherAdAssignment() {
     const [adRes, pubRes, assignRes] = await Promise.all([
       fetch('/api/monetization/ad-units'),
       fetch('/api/admin/publishers'),
-      fetch('/api/monetization/publisher-ads?publisher_id=all'),
+      fetch('/api/monetization/publisher-ads'),
     ])
     if (adRes.ok) setAdUnits(await adRes.json())
     if (pubRes.ok) {
