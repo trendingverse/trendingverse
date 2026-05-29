@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user || user.email !== ADMIN_EMAIL) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  const { site_ids } = await req.json() // optional: push to specific sites only
+  const { site_ids } = await req.json()
   const admin = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
   // Get all ads.txt entries
@@ -28,54 +28,85 @@ export async function POST(req: NextRequest) {
     })
   ].join('\n')
 
-  // Get all publisher sites
-  let sitesQuery = admin.from('sites').select('id, site_url, wp_username, wp_app_password, name').eq('is_active', true)
+  // Get all active publisher sites
+  let sitesQuery = admin.from('sites')
+    .select('id, name, site_url, wp_username, wp_app_password')
+    .eq('is_active', true)
   if (site_ids?.length) sitesQuery = sitesQuery.in('id', site_ids)
 
   const { data: sites } = await sitesQuery
   if (!sites?.length) return NextResponse.json({ error: 'No active sites found' }, { status: 400 })
 
-  const results: { site: string; success: boolean; error?: string }[] = []
+  const results: { site: string; success: boolean; method?: string; error?: string }[] = []
 
   for (const site of sites) {
     if (!site.wp_username || !site.wp_app_password) {
-      results.push({ site: site.name, success: false, error: 'No WP credentials' })
+      results.push({ site: site.name, success: false, error: 'No WordPress credentials' })
       continue
     }
 
+    const base = site.site_url.replace(/\/$/, '')
+    const auth = Buffer.from(`${site.wp_username}:${site.wp_app_password}`).toString('base64')
+
+    // Method 1: Try TrendingVerse custom plugin
     try {
-      const base = site.site_url.replace(/\/$/, '')
-      const auth = Buffer.from(`${site.wp_username}:${site.wp_app_password}`).toString('base64')
-
-      // Use WordPress REST API to update ads.txt via custom endpoint
-      // Most sites support this via Simple Ads.txt plugin or custom endpoint
-      // We'll use the WP filesystem approach via a custom REST route
-     const res = await fetch(`${base}/wp-json/trendingverse/v1/ads-txt`, {
-  method: 'POST',
-  headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' },
-  body: JSON.stringify({ content: adsTxtContent }),
-})
-
-if (!res.ok) {
-  const errText = await res.text()
-  results.push({ site: site.name, success: false, error: `${res.status}: ${errText.slice(0, 100)}` })
-  continue
-}
-
+      const res = await fetch(`${base}/wp-json/trendingverse/v1/ads-txt`, {
+        method: 'POST',
+        headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: adsTxtContent }),
+      })
       if (res.ok) {
-        results.push({ site: site.name, success: true })
-      } else {
-        // Fallback: create/update ads.txt as a WordPress option
-        const optRes = await fetch(`${base}/wp-json/wp/v2/settings`, {
-          method: 'POST',
-          headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 'trendingverse_ads_txt': adsTxtContent }),
-        })
-        results.push({ site: site.name, success: optRes.ok, error: optRes.ok ? undefined : 'Manual upload required' })
-           }
-    } catch (e) {
-      results.push({ site: site.name, success: false, error: (e as Error).message })
-    }
+        results.push({ site: site.name, success: true, method: 'trendingverse-plugin' })
+        continue
+      }
+    } catch { /* try next method */ }
+
+    // Method 2: Try 10up Ads.txt Manager plugin
+    // This plugin stores ads.txt content in wp_options via REST API settings endpoint
+    try {
+      const res = await fetch(`${base}/wp-json/wp/v2/settings`, {
+        method: 'POST',
+        headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ adstxtmanager_ads_txt_content: adsTxtContent }),
+      })
+      if (res.ok) {
+        results.push({ site: site.name, success: true, method: '10up-ads-txt-manager' })
+        continue
+      }
+    } catch { /* try next method */ }
+
+    // Method 3: Try updating via WordPress options API directly
+    try {
+      const res = await fetch(`${base}/wp-json/wp/v2/settings`, {
+        method: 'POST',
+        headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ads_txt: adsTxtContent }),
+      })
+      if (res.ok) {
+        results.push({ site: site.name, success: true, method: 'wp-settings' })
+        continue
+      }
+    } catch { /* try next method */ }
+
+    // Method 4: Try Rank Math SEO ads.txt endpoint
+    try {
+      const res = await fetch(`${base}/wp-json/rankmath/v1/updateAdsTxt`, {
+        method: 'POST',
+        headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: adsTxtContent }),
+      })
+      if (res.ok) {
+        results.push({ site: site.name, success: true, method: 'rankmath' })
+        continue
+      }
+    } catch { /* try next method */ }
+
+    // All methods failed
+    results.push({
+      site: site.name,
+      success: false,
+      error: 'Could not update ads.txt automatically. Please install the TrendingVerse Ads.txt Manager plugin or update manually.'
+    })
   }
 
   return NextResponse.json({
