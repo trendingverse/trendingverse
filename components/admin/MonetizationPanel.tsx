@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
+import { PublisherAdAssignment } from '@/components/admin/PublisherAdAssignment'
 
 interface AdUnit {
   id: string; name: string; ad_type: 'gam' | 'direct'; position: string
@@ -31,7 +32,7 @@ const SIZES = [
 ]
 
 export function MonetizationPanel({ isAdmin = false }: { isAdmin?: boolean }) {
-  const [tab, setTab] = useState<'ad_units' | 'ads_txt' | 'revenue'>('ad_units')
+  const [tab, setTab] = useState<'ad_units' | 'assign' | 'ads_txt' | 'revenue'>('ad_units')
 
   // Ad units state
   const [adUnits, setAdUnits] = useState<AdUnit[]>([])
@@ -108,18 +109,18 @@ export function MonetizationPanel({ isAdmin = false }: { isAdmin?: boolean }) {
   }
 
   const tabs = [
-  { key: 'ad_units', label: '📢 Ad Units' },
-  { key: 'assign', label: '🎯 Assign to Publishers' },
-  { key: 'ads_txt', label: '📄 ads.txt' },
-  { key: 'revenue', label: '💰 Revenue' },
-] as const
+    { key: 'ad_units', label: '📢 Ad Units' },
+    ...(isAdmin ? [{ key: 'assign', label: '🎯 Assign to Publishers' }] : []),
+    { key: 'ads_txt', label: '📄 ads.txt' },
+    { key: 'revenue', label: '💰 Revenue' },
+  ] as { key: 'ad_units' | 'assign' | 'ads_txt' | 'revenue'; label: string }[]
 
   return (
     <div className="space-y-5">
-      <div className="flex gap-1 p-1 bg-ink-100 rounded-xl w-fit">
+      <div className="flex gap-1 p-1 bg-ink-100 rounded-xl w-fit overflow-x-auto">
         {tabs.map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
-            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${tab === t.key ? 'bg-white shadow text-ink-900' : 'text-ink-500 hover:text-ink-700'}`}>
+            className={`px-4 py-2 text-sm font-medium rounded-lg whitespace-nowrap transition-colors ${tab === t.key ? 'bg-white shadow text-ink-900' : 'text-ink-500 hover:text-ink-700'}`}>
             {t.label}
           </button>
         ))}
@@ -223,6 +224,9 @@ export function MonetizationPanel({ isAdmin = false }: { isAdmin?: boolean }) {
         </div>
       )}
 
+      {/* ASSIGN TO PUBLISHERS — admin only */}
+      {tab === 'assign' && isAdmin && <PublisherAdAssignment />}
+
       {/* ADS.TXT */}
       {tab === 'ads_txt' && (
         <div className="space-y-4">
@@ -231,28 +235,28 @@ export function MonetizationPanel({ isAdmin = false }: { isAdmin?: boolean }) {
               <h3 className="font-semibold text-ink-900">ads.txt Manager</h3>
               <p className="text-xs text-ink-400">Manage demand partner declarations — push to all publisher sites at once</p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               {isAdmin && (
                 <>
                   <button onClick={() => setShowTxtForm(!showTxtForm)} className="btn-secondary btn-sm">+ Add entry</button>
                   <button onClick={pushAdsTxt} disabled={pushing} className="btn-primary btn-sm">
-  {pushing ? '⟳ Pushing...' : '📤 Push to all sites'}
-</button>
-<button onClick={() => {
-  const lines = ['# TrendingVerse CMS ads.txt', `# Updated: ${new Date().toISOString().split('T')[0]}`, '']
-  adsTxt.forEach(e => {
-    const parts = [e.domain, e.publisher_id, e.relationship]
-    if (e.certification_authority_id) parts.push(e.certification_authority_id)
-    lines.push(parts.join(', '))
-  })
-  const blob = new Blob([lines.join('\n')], { type: 'text/plain' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url; a.download = 'ads.txt'; a.click()
-  URL.revokeObjectURL(url)
-}} className="btn-secondary btn-sm">
-  ⬇ Download ads.txt
-</button>
+                    {pushing ? '⟳ Pushing...' : '📤 Push to all sites'}
+                  </button>
+                  <button onClick={() => {
+                    const lines = ['# TrendingVerse CMS ads.txt', `# Updated: ${new Date().toISOString().split('T')[0]}`, '']
+                    adsTxt.forEach(e => {
+                      const parts = [e.domain, e.publisher_id, e.relationship]
+                      if (e.certification_authority_id) parts.push(e.certification_authority_id)
+                      lines.push(parts.join(', '))
+                    })
+                    const blob = new Blob([lines.join('\n')], { type: 'text/plain' })
+                    const url = URL.createObjectURL(blob)
+                    const a = document.createElement('a')
+                    a.href = url; a.download = 'ads.txt'; a.click()
+                    URL.revokeObjectURL(url)
+                  }} className="btn-secondary btn-sm">
+                    ⬇ Download ads.txt
+                  </button>
                 </>
               )}
             </div>
@@ -293,7 +297,6 @@ export function MonetizationPanel({ isAdmin = false }: { isAdmin?: boolean }) {
             </div>
           )}
 
-          {/* ads.txt preview */}
           <div className="card p-4">
             <p className="text-xs font-medium text-ink-500 mb-3">CURRENT ads.txt ({adsTxt.length} entries)</p>
             <div className="bg-ink-950 rounded-xl p-4 font-mono text-xs text-green-400 max-h-48 overflow-y-auto">
