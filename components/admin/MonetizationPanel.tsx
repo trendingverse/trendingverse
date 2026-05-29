@@ -108,10 +108,11 @@ export function MonetizationPanel({ isAdmin = false }: { isAdmin?: boolean }) {
   }
 
   const tabs = [
-    { key: 'ad_units', label: '📢 Ad Units' },
-    { key: 'ads_txt', label: '📄 ads.txt' },
-    { key: 'revenue', label: '💰 Revenue' },
-  ] as const
+  { key: 'ad_units', label: '📢 Ad Units' },
+  { key: 'assign', label: '🎯 Assign to Publishers' },
+  { key: 'ads_txt', label: '📄 ads.txt' },
+  { key: 'revenue', label: '💰 Revenue' },
+] as const
 
   return (
     <div className="space-y-5">
