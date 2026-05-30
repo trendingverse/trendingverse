@@ -6,7 +6,7 @@ interface Props { articles: Article[] }
 
 export function WordPressPublisher({ articles }: Props) {
   const [selectedId, setSelectedId] = useState('')
-  const [wpUrl, setWpUrl] = useState('https://trendingverse.online')
+  const [wpUrl, setWpUrl] = useState('')
   const [wpUser, setWpUser] = useState('')
   const [wpPass, setWpPass] = useState('')
   const [autoImage, setAutoImage] = useState(true)
