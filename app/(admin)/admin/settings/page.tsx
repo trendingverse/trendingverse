@@ -27,11 +27,11 @@ export default async function SettingsPage() {
         <h1 className="font-display text-2xl font-bold text-ink-950">⚙ Settings</h1>
         <p className="text-sm text-ink-400 mt-1">Your site settings, integrations and API keys</p>
       </div>
-      <SettingsPanel
-        initialSettings={userSettings?.settings || {}}
-        initialSites={sites || []}
-        userEmail={user.email || ''}
-      />
+<SettingsPanel
+  settings={userSettings?.settings || {}}
+  subscribers={[]}
+  campaigns={[]}
+/>
     </div>
   )
 }
