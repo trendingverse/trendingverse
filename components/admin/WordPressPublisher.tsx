@@ -25,6 +25,9 @@ export function WordPressPublisher({ articles }: Props) {
   async function publish() {
     if (!selectedId) return alert('Please select an article')
     if (!wpUrl || !wpUser || !wpPass) return alert('Please fill in WordPress credentials')
+      // Auto-fix HTTP to HTTPS
+  const normalizedUrl = wpUrl.replace(/^http:\/\//i, 'https://')
+  if (normalizedUrl !== wpUrl) setWpUrl(normalizedUrl)
     setLog([])
     setPreviewImg('')
     setWpLink('')
