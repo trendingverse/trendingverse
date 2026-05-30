@@ -98,7 +98,18 @@ const stripped = raw
   const start = stripped.indexOf('{')
   const end = stripped.lastIndexOf('}')
   if (start === -1 || end <= start) {
-    throw new Error(`Claude returned non-JSON. Raw: ${raw.slice(0, 150)}`)
+    // Last attempt — find JSON after any text
+const jsonMatch = raw.match(/\{[\s\S]*"title"[\s\S]*\}/)
+if (jsonMatch) {
+  try { return JSON.parse(jsonMatch[0]) } catch { /* continue */ }
+  try {
+    const unicoded = jsonMatch[0].replace(/[\u0080-\uFFFF]/g, c =>
+      '\\u' + ('0000' + c.charCodeAt(0).toString(16)).slice(-4)
+    )
+    return JSON.parse(unicoded)
+  } catch { /* continue */ }
+}
+throw new Error(`Claude returned non-JSON. Raw: ${raw.slice(0, 150)}`)
   }
   const extracted = stripped.slice(start, end + 1)
 
