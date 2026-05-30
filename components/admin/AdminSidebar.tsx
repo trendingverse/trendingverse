@@ -3,7 +3,7 @@ import { usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
 
-const nav = [
+const baseNav = [
   { label: 'Overview', items: [
     { href: '/admin', label: 'Dashboard', icon: '◉' },
   ]},
@@ -24,17 +24,22 @@ const nav = [
     { href: '/admin/analytics', label: 'Analytics', icon: '📊' },
     { href: '/admin/settings', label: 'Settings', icon: '⚙' },
   ]},
-  { label: 'Admin', items: [
-    { href: '/admin/publishers', label: 'Publishers', icon: '👥' },
-  ]},
 ]
 
-export function AdminSidebar() {
+const adminNav = {
+  label: 'Admin',
+  items: [
+    { href: '/admin/publishers', label: 'Publishers', icon: '👥' },
+  ]
+}
+
+export function AdminSidebar({ isAdmin = false }: { isAdmin?: boolean }) {
   const path = usePathname()
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
 
-  // Close mobile menu on route change
+  const nav = isAdmin ? [...baseNav, adminNav] : baseNav
+
   useEffect(() => { setMobileOpen(false) }, [path])
 
   const SidebarContent = () => (
@@ -98,7 +103,6 @@ export function AdminSidebar() {
 
   return (
     <>
-      {/* Mobile menu button */}
       <button
         onClick={() => setMobileOpen(!mobileOpen)}
         className="lg:hidden fixed top-3 left-3 z-50 w-9 h-9 rounded-xl bg-white border border-ink-100 shadow flex items-center justify-center text-ink-700"
@@ -106,20 +110,14 @@ export function AdminSidebar() {
         {mobileOpen ? '✕' : '☰'}
       </button>
 
-      {/* Mobile overlay */}
       {mobileOpen && (
-        <div
-          className="lg:hidden fixed inset-0 bg-black/30 z-40"
-          onClick={() => setMobileOpen(false)}
-        />
+        <div className="lg:hidden fixed inset-0 bg-black/30 z-40" onClick={() => setMobileOpen(false)} />
       )}
 
-      {/* Mobile sidebar */}
       <aside className={`lg:hidden fixed top-0 left-0 h-full w-56 bg-white border-r border-ink-100 flex flex-col z-50 transform transition-transform ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <SidebarContent />
       </aside>
 
-      {/* Desktop sidebar */}
       <aside className={`hidden lg:flex flex-col bg-white border-r border-ink-100 overflow-y-auto transition-all duration-200 ${collapsed ? 'w-14' : 'w-56'} shrink-0`}>
         <SidebarContent />
       </aside>
