@@ -107,7 +107,7 @@ export function WordPressPublisher({ articles }: Props) {
           <span className="text-2xl">🚀</span>
           <div>
             <h2 className="font-semibold text-ink-900">Push to WordPress</h2>
-            <p className="text-xs text-ink-400">Auto-fetch photo + publish to trendingverse.online with duplicate protection</p>
+            <p className="text-xs text-ink-400">Auto-fetch photo + publish to your WordPress site with duplicate protection</p>
           </div>
         </div>
         <button onClick={() => setOpen(!open)}
