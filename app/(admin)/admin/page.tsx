@@ -8,8 +8,8 @@ export default async function AdminDashboard() {
   if (!user) redirect('/login')
 
   const [{ count: total }, { count: published }] = await Promise.all([
-    supabase.from('articles').select('*', { count: 'exact', head: true }),
-    supabase.from('articles').select('*', { count: 'exact', head: true }).eq('status', 'published'),
+    supabase.from('articles').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
+    supabase.from('articles').select('*', { count: 'exact', head: true }).eq('user_id', user.id).eq('status', 'published'),
   ])
 
   return (
