@@ -25,9 +25,13 @@ export function WordPressPublisher({ articles }: Props) {
   async function publish() {
     if (!selectedId) return alert('Please select an article')
     if (!wpUrl || !wpUser || !wpPass) return alert('Please fill in WordPress credentials')
-      // Auto-fix HTTP to HTTPS
-  const normalizedUrl = wpUrl.replace(/^http:\/\//i, 'https://')
-  if (normalizedUrl !== wpUrl) setWpUrl(normalizedUrl)
+
+    // Normalize URL — force HTTPS, remove trailing slash
+    const finalUrl = wpUrl
+      .replace(/^http:\/\//i, 'https://')
+      .replace(/\/$/, '')
+    setWpUrl(finalUrl)
+
     setLog([])
     setPreviewImg('')
     setWpLink('')
@@ -46,7 +50,7 @@ export function WordPressPublisher({ articles }: Props) {
             title: selectedArticle?.title || '',
             content: selectedArticle?.content || '',
             article_id: selectedId,
-            wp_url: wpUrl,
+            wp_url: finalUrl,
             wp_username: wpUser,
             wp_password: wpPass,
           }),
@@ -74,7 +78,7 @@ export function WordPressPublisher({ articles }: Props) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           article_id: selectedId,
-          wp_url: wpUrl,
+          wp_url: finalUrl,
           wp_username: wpUser,
           wp_password: wpPass,
           featured_media: wpMediaId,
@@ -134,20 +138,25 @@ export function WordPressPublisher({ articles }: Props) {
           <div className="grid grid-cols-3 gap-3">
             <div>
               <label className="text-xs font-medium text-ink-500 block mb-1">WORDPRESS URL</label>
-              <input className="input w-full" value={wpUrl} onChange={e => setWpUrl(e.target.value)} />
+              <input className="input w-full" value={wpUrl}
+                onChange={e => setWpUrl(e.target.value)}
+                placeholder="https://yoursite.com" />
             </div>
             <div>
               <label className="text-xs font-medium text-ink-500 block mb-1">USERNAME</label>
-              <input className="input w-full" value={wpUser} onChange={e => setWpUser(e.target.value)} placeholder="admin" />
+              <input className="input w-full" value={wpUser}
+                onChange={e => setWpUser(e.target.value)} placeholder="admin" />
             </div>
             <div>
               <label className="text-xs font-medium text-ink-500 block mb-1">APPLICATION PASSWORD</label>
-              <input className="input w-full" type="password" value={wpPass} onChange={e => setWpPass(e.target.value)} placeholder="xxxx xxxx xxxx xxxx" />
+              <input className="input w-full" type="password" value={wpPass}
+                onChange={e => setWpPass(e.target.value)} placeholder="xxxx xxxx xxxx xxxx" />
             </div>
           </div>
 
           <div className="flex items-center gap-3 p-3 bg-ink-50 rounded-xl">
-            <input type="checkbox" id="auto_img" checked={autoImage} onChange={e => setAutoImage(e.target.checked)} className="w-4 h-4 accent-blue-600" />
+            <input type="checkbox" id="auto_img" checked={autoImage}
+              onChange={e => setAutoImage(e.target.checked)} className="w-4 h-4 accent-blue-600" />
             <label htmlFor="auto_img" className="text-sm text-ink-700 cursor-pointer">
               Auto-fetch relevant editorial photo from Pexels (free)
             </label>
