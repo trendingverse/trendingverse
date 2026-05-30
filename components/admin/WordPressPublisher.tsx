@@ -26,10 +26,8 @@ export function WordPressPublisher({ articles }: Props) {
     if (!selectedId) return alert('Please select an article')
     if (!wpUrl || !wpUser || !wpPass) return alert('Please fill in WordPress credentials')
 
-    // Normalize URL — force HTTPS, remove trailing slash
-    const finalUrl = wpUrl
-      .replace(/^http:\/\//i, 'https://')
-      .replace(/\/$/, '')
+    // Only remove trailing slash — do NOT force HTTPS (some sites use HTTP only)
+    const finalUrl = wpUrl.replace(/\/$/, '')
     setWpUrl(finalUrl)
 
     setLog([])
@@ -140,7 +138,7 @@ export function WordPressPublisher({ articles }: Props) {
               <label className="text-xs font-medium text-ink-500 block mb-1">WORDPRESS URL</label>
               <input className="input w-full" value={wpUrl}
                 onChange={e => setWpUrl(e.target.value)}
-                placeholder="https://yoursite.com" />
+                placeholder="http://yoursite.com" />
             </div>
             <div>
               <label className="text-xs font-medium text-ink-500 block mb-1">USERNAME</label>
