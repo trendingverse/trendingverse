@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { AdminSidebar } from '@/components/admin/AdminSidebar'
+import { AdminHeader } from '@/components/admin/AdminHeader'
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'khan.khan.yusuf@gmail.com'
 
@@ -14,11 +15,14 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   return (
     <div className="flex h-screen overflow-hidden bg-surface-3">
       <AdminSidebar isAdmin={isAdmin} />
-      <main className="flex-1 overflow-y-auto">
-        <div className="p-6 max-w-7xl mx-auto">
-          {children}
-        </div>
-      </main>
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <AdminHeader email={user.email || ''} />
+        <main className="flex-1 overflow-y-auto">
+          <div className="p-6 max-w-7xl mx-auto">
+            {children}
+          </div>
+        </main>
+      </div>
     </div>
   )
 }
