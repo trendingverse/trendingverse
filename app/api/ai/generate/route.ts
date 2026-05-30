@@ -86,10 +86,10 @@ async function generateWithClaude(prompt: string, apiKey: string): Promise<Recor
   const raw = (data.content?.[0]?.text || '').trim()
 
   // Step 1: Remove ALL markdown fences (handles ```json, ```, ``` json etc)
-  const stripped = raw
-    .replace(/^`{3,}(?:json)?\s*/im, '')
-    .replace(/`{3,}\s*$/im, '')
-    .trim()
+const stripped = raw
+  .replace(/^[\s]*`{3,}[\s]*(?:json)?[\s]*/i, '')
+  .replace(/[\s]*`{3,}[\s]*$/i, '')
+  .trim()
 
   // Step 2: Direct parse
   try { return JSON.parse(stripped) } catch { /* continue */ }
