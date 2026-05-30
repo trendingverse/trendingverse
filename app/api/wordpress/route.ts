@@ -133,6 +133,8 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    console.log('WP base URL:', base)
+console.log('Auth header:', auth.slice(0, 10) + '...')
     // Duplicate check
     const [slugCheck, titleCheck] = await Promise.all([
       fetch(`${base}/wp-json/wp/v2/posts?slug=${encodeURIComponent(article.slug)}&status=any`, { headers: { Authorization: `Basic ${auth}` } }),
