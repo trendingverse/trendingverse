@@ -1,131 +1,91 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
 
 export async function POST(req: NextRequest) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const { title, content, wp_url, wp_username, wp_password } = await req.json()
 
-  const { title, content, article_id, wp_url, wp_username, wp_password } = await req.json()
   const pexelsKey = process.env.PEXELS_API_KEY
+  if (!pexelsKey) return NextResponse.json({ error: 'PEXELS_API_KEY not set' }, { status: 500 })
 
-  if (!pexelsKey) {
-    return NextResponse.json({ error: 'PEXELS_API_KEY not set in Vercel environment variables' }, { status: 500 })
-  }
-
-  // Extract best search keywords from title
-  const stopWords = new Set(['a','an','the','and','or','but','in','on','at','to','for','of','with','by','from','is','are','was','were','has','have','had','will','would','could','should','this','that','these','those','after','before','about','how','why','what','when','where','who'])
-  const keywords = title
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, '')
+  // Extract keywords from title — ASCII only, remove non-Latin characters
+  const cleanTitle = (title || '').replace(/[^\x00-\x7F]/g, ' ').trim()
+  const keywords = cleanTitle
     .split(' ')
-    .filter((w: string) => w.length > 3 && !stopWords.has(w))
+    .filter((w: string) => w.length > 3)
     .slice(0, 3)
-    .join(' ')
-
-  const searchQuery = keywords || title.split(' ').slice(0, 3).join(' ')
+    .join(' ') || 'news article india'
 
   try {
-    // Search Pexels for relevant editorial photos
-    const searchRes = await fetch(
-      `https://api.pexels.com/v1/search?query=${encodeURIComponent(searchQuery)}&per_page=5&orientation=landscape&size=large`,
+    // Search Pexels
+    const pexelsRes = await fetch(
+      `https://api.pexels.com/v1/search?query=${encodeURIComponent(keywords)}&per_page=3&orientation=landscape&size=large`,
       { headers: { Authorization: pexelsKey } }
     )
 
-    if (!searchRes.ok) {
-      return NextResponse.json({ error: 'Pexels API error: ' + searchRes.statusText }, { status: searchRes.status })
+    if (!pexelsRes.ok) {
+      return NextResponse.json({ error: 'Pexels search failed', success: false })
     }
 
-    const searchData = await searchRes.json()
-    const photos = searchData.photos || []
+    const pexelsData = await pexelsRes.json()
+    const photo = pexelsData.photos?.[0]
 
-    if (photos.length === 0) {
-      // Try broader search with first word
-      const fallbackQuery = title.split(' ')[0]
-      const fallbackRes = await fetch(
-        `https://api.pexels.com/v1/search?query=${encodeURIComponent(fallbackQuery)}&per_page=5&orientation=landscape`,
-        { headers: { Authorization: pexelsKey } }
-      )
-      const fallbackData = await fallbackRes.json()
-      if (!fallbackData.photos?.length) {
-        return NextResponse.json({ error: 'No images found for this topic on Pexels' }, { status: 404 })
-      }
-      photos.push(...fallbackData.photos)
+    if (!photo) {
+      return NextResponse.json({ error: 'No photos found', success: false })
     }
 
-    // Pick the best photo (first result, landscape, large)
-    const photo = photos[0]
-    const imageUrl = photo.src.large2x || photo.src.large || photo.src.original
-    const photographer = photo.photographer
-    const pexelsUrl = photo.url
-
-    // Download the image
+    // Download image
+    const imageUrl = photo.src.large || photo.src.original
     const imgRes = await fetch(imageUrl)
-    if (!imgRes.ok) {
-      return NextResponse.json({ error: 'Failed to download image from Pexels' }, { status: 500 })
-    }
+    if (!imgRes.ok) return NextResponse.json({ error: 'Failed to download image', success: false })
+
     const imgBuffer = Buffer.from(await imgRes.arrayBuffer())
-    const mimeType = imgRes.headers.get('content-type') || 'image/jpeg'
-    const ext = mimeType.includes('png') ? 'png' : 'jpg'
 
-    let wpMediaId: number | null = null
-    let wpMediaUrl: string | null = null
-
-    // Upload to WordPress media library
+    // Upload to WordPress — use ONLY ASCII filename, never use title or Kannada text
     if (wp_url && wp_username && wp_password) {
       const base = wp_url.replace(/\/$/, '')
       const auth = Buffer.from(`${wp_username}:${wp_password}`).toString('base64')
-      const filename = `${searchQuery.replace(/\s+/g, '-')}-${Date.now()}.${ext}`
+
+      // Safe ASCII-only filename using timestamp
+      const safeFilename = `trendingverse-${Date.now()}.jpg`
 
       const uploadRes = await fetch(`${base}/wp-json/wp/v2/media`, {
         method: 'POST',
         headers: {
           Authorization: `Basic ${auth}`,
-          'Content-Type': mimeType,
-          'Content-Disposition': `attachment; filename="${filename}"`,
+          'Content-Type': 'image/jpeg',
+          'Content-Disposition': `attachment; filename="${safeFilename}"`,
         },
         body: imgBuffer,
       })
 
       if (uploadRes.ok) {
-        const mediaData = await uploadRes.json()
-        wpMediaId = mediaData.id
-        wpMediaUrl = mediaData.source_url
-
-        // Set alt text and caption with photographer credit
-        if (wpMediaId) {
-          await fetch(`${base}/wp-json/wp/v2/media/${wpMediaId}`, {
-            method: 'POST',
-            headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              alt_text: title,
-              caption: `Photo by ${photographer} on Pexels`,
-              description: `Source: ${pexelsUrl}`,
-            }),
-          })
-        }
+        const media = await uploadRes.json()
+        return NextResponse.json({
+          success: true,
+          wp_media_id: media.id,
+          image_url: imageUrl,
+          search_query: keywords,
+          photographer: photo.photographer,
+        })
       }
-    }
 
-    // Save to Supabase article
-    if (article_id && wpMediaUrl) {
-      await supabase.from('articles').update({
-        cover_image_url: wpMediaUrl,
-        cover_image_alt: title,
-      }).eq('id', article_id)
+      const uploadErr = await uploadRes.json().catch(() => ({}))
+      return NextResponse.json({
+        success: false,
+        error: uploadErr.message || `Upload failed: ${uploadRes.status}`,
+        image_url: imageUrl,
+        search_query: keywords,
+        photographer: photo.photographer,
+      })
     }
 
     return NextResponse.json({
       success: true,
       image_url: imageUrl,
-      wp_media_id: wpMediaId,
-      wp_media_url: wpMediaUrl,
-      photographer,
-      pexels_url: pexelsUrl,
-      search_query: searchQuery,
+      search_query: keywords,
+      photographer: photo.photographer,
     })
 
   } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 500 })
+    return NextResponse.json({ error: (e as Error).message, success: false })
   }
 }
