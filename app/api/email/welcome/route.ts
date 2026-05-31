@@ -229,7 +229,11 @@ async function sendEmail(to: string, subject: string, html: string) {
 }
 
 export async function POST(req: NextRequest) {
-  const { user_id, email, full_name, plan } = await req.json()
+  const { user_id, email, full_name, plan, subject_override, html_override } = await req.json()
+if (subject_override && html_override) {
+  const sent = await sendEmail(email, subject_override, html_override)
+  return NextResponse.json({ success: sent })
+}
   if (!email) return NextResponse.json({ error: 'Email required' }, { status: 400 })
 
   const results = await Promise.allSettled([
