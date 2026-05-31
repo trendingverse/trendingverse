@@ -64,12 +64,8 @@ export async function GET(req: NextRequest) {
   const isAdmin = user.email === ADMIN_EMAIL
   const { searchParams } = new URL(req.url)
   const period = searchParams.get('period') || '7'
-  const debug = searchParams.get('debug') === '1'
-
-  const end = new Date()
-  const start = new Date(Date.now() - parseInt(period) * 24 * 60 * 60 * 1000)
-  const startDate = start.toISOString().split('T')[0]
-  const endDate = end.toISOString().split('T')[0]
+const startDate = searchParams.get('start') || new Date(Date.now() - parseInt(period) * 86400000).toISOString().split('T')[0]
+const endDate = searchParams.get('end') || new Date().toISOString().split('T')[0]
 
   const admin = createServiceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
