@@ -85,7 +85,7 @@ export async function GET(req: NextRequest) {
         domain?: string; impressions?: number; clicks?: number
         revenue?: number; cpm?: number; ctr?: number
       }) => {
-        const domain = (d.domain || '').replace(/^https?:\/\//, '').replace(/\/$/, '')
+        const domain = String(d.domain || '').replace(/^https?:\/\//, '').replace(/\/$/, '')
         const publisherInfo = domainPublisherMap[domain] || { siteName: domain, revenueSharePct: 70 }
         const grossRevenue = d.revenue || 0
         const publisherEarnings = grossRevenue * (publisherInfo.revenueSharePct / 100)
@@ -162,7 +162,7 @@ export async function GET(req: NextRequest) {
       )
 
       const matchedStats = (domainStats.items || []).filter((d: { domain?: string }) => {
-        const adsterraDomain = (d.domain || '').replace(/^https?:\/\//, '').replace(/\/$/, '').toLowerCase()
+        const adsterraDomain = String(d.domain || '').replace(/^https?:\/\//, '').replace(/\/$/, '').toLowerCase()
         return publisherDomains.some(pd => adsterraDomain.includes(pd) || pd.includes(adsterraDomain))
       })
 
