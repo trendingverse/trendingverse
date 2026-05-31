@@ -108,13 +108,12 @@ export function MonetizationPanel({ isAdmin = false }: { isAdmin?: boolean }) {
     else toast.error('Failed to add report')
   }
 
-  const tabs = [
-    { key: 'ad_units', label: '📢 Ad Units' },
-    ...(isAdmin ? [{ key: 'assign', label: '🎯 Assign to Publishers' }] : []),
-    { key: 'ads_txt', label: '📄 ads.txt' },
-    { key: 'revenue', label: '💰 Revenue' },
-  ] as { key: 'ad_units' | 'assign' | 'ads_txt' | 'revenue'; label: string }[]
-
+ const tabs = isAdmin ? [
+  { key: 'ad_units', label: '📢 Ad Units' },
+  { key: 'assign', label: '🎯 Assign to Publishers' },
+  { key: 'ads_txt', label: '📄 ads.txt' },
+  { key: 'revenue', label: '💰 Revenue' },
+] : [] as { key: 'ad_units' | 'assign' | 'ads_txt' | 'revenue'; label: string }[]
   return (
     <div className="space-y-5">
       <div className="flex gap-1 p-1 bg-ink-100 rounded-xl w-fit overflow-x-auto">
