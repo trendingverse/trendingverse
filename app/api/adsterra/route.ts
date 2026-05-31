@@ -16,6 +16,16 @@ async function fetchAdsterra(endpoint: string, apiKey: string) {
   return res.json()
 }
 
+function parseItem(item: Record<string, unknown>) {
+  // Adsterra may use 'impressions' or 'views' or 'hits'
+  const impressions = Number(item.impressions ?? item.views ?? item.hits ?? 0)
+  const clicks = Number(item.clicks ?? 0)
+  const ctr = parseFloat(String(item.ctr ?? 0))
+  const cpm = parseFloat(String(item.cpm ?? 0))
+  const revenue = parseFloat(String(item.revenue ?? 0))
+  return { impressions, clicks, ctr, cpm, revenue }
+}
+
 export async function GET(req: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -40,72 +50,65 @@ export async function GET(req: NextRequest) {
 
   try {
     if (isAdmin) {
-      // ── ADMIN: full data — all domains, all metrics ──────────────
       const [dateStats, domainStats] = await Promise.all([
         fetchAdsterra(`stats.json?start_date=${startDate}&finish_date=${endDate}&group_by=date`, apiKey),
         fetchAdsterra(`stats.json?start_date=${startDate}&finish_date=${endDate}&group_by=domain`, apiKey),
       ])
 
-      // Map domains to publishers
       const { data: sites } = await admin
         .from('sites')
-        .select('site_url, name, user_id, user_profiles(plan)')
+        .select('site_url, name, user_id')
 
       const { data: publisherAds } = await admin
         .from('publisher_ads')
         .select('publisher_id, revenue_share_pct, sites(site_url)')
 
-      // Build domain → publisher map
       const domainPublisherMap: Record<string, { siteName: string; revenueSharePct: number }> = {}
       for (const site of sites || []) {
         const domain = String(site.site_url || '').replace(/^https?:\/\//, '').replace(/\/$/, '')
         const pa = (publisherAds || []).find((p: { sites: unknown }) => {
-  const siteUrl = (p.sites as { site_url?: string } | null)?.site_url || ''
-  return siteUrl.replace(/^https?:\/\//, '').replace(/\/$/, '') === domain
-})
+          const siteUrl = (p.sites as { site_url?: string } | null)?.site_url || ''
+          return String(siteUrl).replace(/^https?:\/\//, '').replace(/\/$/, '') === domain
+        })
         domainPublisherMap[domain] = {
           siteName: site.name || domain,
           revenueSharePct: pa?.revenue_share_pct || 70,
         }
       }
 
-     const chartData = items.map((item: Record<string, unknown>) => ({
-  date: String(item.date || ''),
-  impressions: Number(item.impressions || item.views || item.hits || 0),
-        clicks: item.clicks || 0,
-        ctr: parseFloat((item.ctr || 0).toFixed(2)),
-        cpm: parseFloat((item.cpm || 0).toFixed(4)),
-        revenue: parseFloat((item.revenue || 0).toFixed(4)),
+      const items: Record<string, unknown>[] = dateStats.items || []
+
+      const chartData = items.map(item => ({
+        date: String(item.date || ''),
+        ...parseItem(item),
       }))
 
-      const domains = (domainStats.items || []).map((d: {
-        domain?: string; impressions?: number; clicks?: number
-        revenue?: number; cpm?: number; ctr?: number
-      }) => {
+      const totals = chartData.reduce((acc, d) => ({
+        impressions: acc.impressions + d.impressions,
+        clicks: acc.clicks + d.clicks,
+        revenue: acc.revenue + d.revenue,
+      }), { impressions: 0, clicks: 0, revenue: 0 })
+
+      const domains = (domainStats.items || []).map((d: Record<string, unknown>) => {
         const domain = String(d.domain || '').replace(/^https?:\/\//, '').replace(/\/$/, '')
         const publisherInfo = domainPublisherMap[domain] || { siteName: domain, revenueSharePct: 70 }
-        const grossRevenue = d.revenue || 0
+        const parsed = parseItem(d)
+        const grossRevenue = parsed.revenue
         const publisherEarnings = grossRevenue * (publisherInfo.revenueSharePct / 100)
         const platformEarnings = grossRevenue * ((100 - publisherInfo.revenueSharePct) / 100)
         return {
           domain: String(d.domain || 'Unknown'),
           site_name: publisherInfo.siteName,
-          impressions: d.impressions || 0,
-          clicks: d.clicks || 0,
-          ctr: parseFloat((d.ctr || 0).toFixed(2)),
-          cpm: parseFloat((d.cpm || 0).toFixed(4)),
+          impressions: parsed.impressions,
+          clicks: parsed.clicks,
+          ctr: parseFloat(parsed.ctr.toFixed(2)),
+          cpm: parseFloat(parsed.cpm.toFixed(4)),
           gross_revenue: parseFloat(grossRevenue.toFixed(4)),
           publisher_earnings: parseFloat(publisherEarnings.toFixed(4)),
           platform_earnings: parseFloat(platformEarnings.toFixed(4)),
           revenue_share_pct: publisherInfo.revenueSharePct,
         }
-      }).sort((a: { gross_revenue: number }, b: { gross_revenue: number }) => b.gross_revenue - a.gross_revenue)
-
-    if (items.length > 0) console.log('Adsterra item fields:', Object.keys(items[0]))
-        impressions: acc.impressions + d.impressions,
-        clicks: acc.clicks + d.clicks,
-        revenue: acc.revenue + d.revenue,
-      }), { impressions: 0, clicks: 0, revenue: 0 })
+      }).sort((a, b) => b.gross_revenue - a.gross_revenue)
 
       return NextResponse.json({
         role: 'admin',
@@ -115,18 +118,17 @@ export async function GET(req: NextRequest) {
           clicks: totals.clicks,
           revenue_usd: parseFloat(totals.revenue.toFixed(4)),
           revenue_inr: parseFloat((totals.revenue * 83).toFixed(2)),
-          publisher_earnings_usd: parseFloat(domains.reduce((s: number, d: { publisher_earnings: number }) => s + d.publisher_earnings, 0).toFixed(4)),
-          platform_earnings_usd: parseFloat(domains.reduce((s: number, d: { platform_earnings: number }) => s + d.platform_earnings, 0).toFixed(4)),
+          publisher_earnings_usd: parseFloat(domains.reduce((s, d) => s + d.publisher_earnings, 0).toFixed(4)),
+          platform_earnings_usd: parseFloat(domains.reduce((s, d) => s + d.platform_earnings, 0).toFixed(4)),
           cpm: totals.impressions > 0 ? parseFloat(((totals.revenue / totals.impressions) * 1000).toFixed(4)) : 0,
           ctr: totals.impressions > 0 ? parseFloat(((totals.clicks / totals.impressions) * 100).toFixed(2)) : 0,
         },
         chartData,
-        domains, // admin sees domain names and full breakdown
+        domains,
         network: 'Adsterra',
       })
 
     } else {
-      // ── PUBLISHER: only their own site's metrics, no domain/advertiser names ──
       const { data: publisherSites } = await admin
         .from('sites')
         .select('site_url, name')
@@ -137,7 +139,6 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ role: 'publisher', no_site: true })
       }
 
-      // Get their revenue share
       const { data: publisherAd } = await admin
         .from('publisher_ads')
         .select('revenue_share_pct')
@@ -147,51 +148,43 @@ export async function GET(req: NextRequest) {
 
       const revenueSharePct = publisherAd?.revenue_share_pct || 70
 
-      // Fetch domain stats and filter for publisher's sites only
-      const domainStats = await fetchAdsterra(
-        `stats.json?start_date=${startDate}&finish_date=${endDate}&group_by=domain`,
-        apiKey
-      )
+      const [domainStats, dateStats] = await Promise.all([
+        fetchAdsterra(`stats.json?start_date=${startDate}&finish_date=${endDate}&group_by=domain`, apiKey),
+        fetchAdsterra(`stats.json?start_date=${startDate}&finish_date=${endDate}&group_by=date`, apiKey),
+      ])
 
-      // Match publisher's sites against Adsterra domains
       const publisherDomains = (publisherSites || []).map(s =>
-        (s.site_url || '').replace(/^https?:\/\//, '').replace(/\/$/, '').toLowerCase()
+        String(s.site_url || '').replace(/^https?:\/\//, '').replace(/\/$/, '').toLowerCase()
       )
 
-      const matchedStats = (domainStats.items || []).filter((d: { domain?: string }) => {
+      const matchedStats = (domainStats.items || []).filter((d: Record<string, unknown>) => {
         const adsterraDomain = String(d.domain || '').replace(/^https?:\/\//, '').replace(/\/$/, '').toLowerCase()
         return publisherDomains.some(pd => adsterraDomain.includes(pd) || pd.includes(adsterraDomain))
       })
 
-      // Aggregate publisher's stats
-      const publisherTotals = matchedStats.reduce((acc: {
-        impressions: number; clicks: number; revenue: number
-      }, d: { impressions?: number; clicks?: number; revenue?: number }) => ({
-        impressions: acc.impressions + (d.impressions || 0),
-        clicks: acc.clicks + (d.clicks || 0),
-        revenue: acc.revenue + (d.revenue || 0),
-      }), { impressions: 0, clicks: 0, revenue: 0 })
+      const publisherTotals = matchedStats.reduce((acc: { impressions: number; clicks: number; revenue: number }, d: Record<string, unknown>) => {
+        const parsed = parseItem(d)
+        return {
+          impressions: acc.impressions + parsed.impressions,
+          clicks: acc.clicks + parsed.clicks,
+          revenue: acc.revenue + parsed.revenue,
+        }
+      }, { impressions: 0, clicks: 0, revenue: 0 })
 
       const grossRevenue = publisherTotals.revenue
       const publisherEarnings = grossRevenue * (revenueSharePct / 100)
 
-      // Daily chart for publisher (no domain names)
-      const dateStats = await fetchAdsterra(
-        `stats.json?start_date=${startDate}&finish_date=${endDate}&group_by=date`,
-        apiKey
-      )
-
-      const chartData = (dateStats.items || []).map((item: {
-        date?: string; impressions?: number; clicks?: number; revenue?: number
-      }) => ({
-        date: item.date || '',
-        impressions: item.impressions || 0,
-        clicks: item.clicks || 0,
-        // Scale to publisher's share of total traffic
-        earnings: grossRevenue > 0
-          ? parseFloat(((item.revenue || 0) * (revenueSharePct / 100)).toFixed(4))
-          : 0,
-      }))
+      const chartData = (dateStats.items || []).map((item: Record<string, unknown>) => {
+        const parsed = parseItem(item)
+        return {
+          date: String(item.date || ''),
+          impressions: parsed.impressions,
+          clicks: parsed.clicks,
+          earnings: grossRevenue > 0
+            ? parseFloat((parsed.revenue * (revenueSharePct / 100)).toFixed(4))
+            : 0,
+        }
+      })
 
       return NextResponse.json({
         role: 'publisher',
@@ -203,15 +196,10 @@ export async function GET(req: NextRequest) {
           gross_revenue_usd: parseFloat(grossRevenue.toFixed(4)),
           your_earnings_usd: parseFloat(publisherEarnings.toFixed(4)),
           your_earnings_inr: parseFloat((publisherEarnings * 83).toFixed(2)),
-          cpm: publisherTotals.impressions > 0
-            ? parseFloat(((grossRevenue / publisherTotals.impressions) * 1000).toFixed(4))
-            : 0,
-          ctr: publisherTotals.impressions > 0
-            ? parseFloat(((publisherTotals.clicks / publisherTotals.impressions) * 100).toFixed(2))
-            : 0,
+          cpm: publisherTotals.impressions > 0 ? parseFloat(((grossRevenue / publisherTotals.impressions) * 1000).toFixed(4)) : 0,
+          ctr: publisherTotals.impressions > 0 ? parseFloat(((publisherTotals.clicks / publisherTotals.impressions) * 100).toFixed(2)) : 0,
         },
         chartData,
-        // No domain names shown to publishers
         network: 'Ad Network',
       })
     }
