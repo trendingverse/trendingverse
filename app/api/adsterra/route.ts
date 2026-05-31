@@ -26,10 +26,12 @@ async function fetchDomainMap(apiKey: string): Promise<Record<string, string>> {
     if (!res.ok) return {}
     const data = await res.json()
     const map: Record<string, string> = {}
-    for (const d of data.items || data || []) {
-      // Map both id and domain variations
-      if (d.id) map[String(d.id)] = d.url || d.domain || d.name || String(d.id)
-      if (d.domain_id) map[String(d.domain_id)] = d.url || d.domain || d.name || String(d.domain_id)
+    const items = data.items || data.domains || data || []
+    for (const d of Array.isArray(items) ? items : []) {
+      const id = String(d.id ?? d.domain_id ?? '')
+      // Try every possible URL field
+      const url = d.url ?? d.site_url ?? d.domain ?? d.name ?? d.website ?? ''
+      if (id && url) map[id] = String(url).replace(/^https?:\/\//, '').replace(/\/$/, '')
     }
     return map
   } catch { return {} }
