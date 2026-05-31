@@ -91,7 +91,7 @@ export async function GET(req: NextRequest) {
         const domainsRaw = await fetchAdsterra('domains.json', apiKey).catch(e => ({ error: e.message }))
   return NextResponse.json({
 
-        return NextResponse.json({
+       
           debug: true,
           domainMap,
           dateStats_first: dateStats.items?.[0],
