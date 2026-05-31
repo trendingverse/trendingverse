@@ -6,20 +6,20 @@ interface Totals {
   revenue_usd?: number; revenue_inr?: number
   publisher_earnings_usd?: number; platform_earnings_usd?: number
   your_earnings_usd?: number; your_earnings_inr?: number
-  gross_revenue_usd?: number
 }
 interface ChartPoint {
   date: string; impressions: number; clicks: number
-  revenue?: number; earnings?: number
+  revenue?: number; earnings?: number; ctr?: number; cpm?: number
 }
 interface DomainRow {
   domain: string; site_name: string; impressions: number; clicks: number
   ctr: number; cpm: number; gross_revenue: number
   publisher_earnings: number; platform_earnings: number; revenue_share_pct: number
 }
-interface StatCard {
-  label: string; value: string; icon: string; color: string
-}
+interface StatCard { label: string; value: string; icon: string; color: string }
+
+function today() { return new Date().toISOString().split('T')[0] }
+function daysAgo(n: number) { return new Date(Date.now() - n * 86400000).toISOString().split('T')[0] }
 
 export function AdsterraDashboard({ isAdmin = false }: { isAdmin?: boolean }) {
   const [data, setData] = useState<{
@@ -29,15 +29,28 @@ export function AdsterraDashboard({ isAdmin = false }: { isAdmin?: boolean }) {
     revenue_share_pct?: number
   } | null>(null)
   const [loading, setLoading] = useState(true)
-  const [period, setPeriod] = useState('7')
   const [activeTab, setActiveTab] = useState<'overview' | 'domains'>('overview')
 
-  useEffect(() => { fetchData() }, [period])
+  // Date selection
+  const [dateMode, setDateMode] = useState<'preset' | 'custom'>('preset')
+  const [preset, setPreset] = useState('7')
+  const [customStart, setCustomStart] = useState(daysAgo(7))
+  const [customEnd, setCustomEnd] = useState(today())
+
+  // Export
+  const [showExport, setShowExport] = useState(false)
+  const [exportEmail, setExportEmail] = useState('')
+  const [sendingEmail, setSendingEmail] = useState(false)
+
+  useEffect(() => { fetchData() }, [preset, dateMode === 'preset' ? preset : customStart + customEnd])
 
   async function fetchData() {
     setLoading(true)
     try {
-      const res = await fetch(`/api/adsterra?period=${period}`)
+      const url = dateMode === 'custom'
+        ? `/api/adsterra?start=${customStart}&end=${customEnd}`
+        : `/api/adsterra?period=${preset}`
+      const res = await fetch(url)
       const d = await res.json()
       setData(d)
     } catch (e) {
@@ -45,6 +58,105 @@ export function AdsterraDashboard({ isAdmin = false }: { isAdmin?: boolean }) {
     } finally {
       setLoading(false)
     }
+  }
+
+  // CSV export
+  function exportCSV() {
+    if (!data?.chartData?.length) return
+    const headers = isAdmin
+      ? ['Date', 'Impressions', 'Clicks', 'CTR%', 'CPM', 'Revenue USD']
+      : ['Date', 'Impressions', 'Clicks', 'Earnings USD']
+    const rows = data.chartData.map(d => isAdmin
+      ? [d.date, d.impressions, d.clicks, d.ctr ?? '', d.cpm ?? '', d.revenue ?? '']
+      : [d.date, d.impressions, d.clicks, d.earnings ?? '']
+    )
+    const csv = [headers, ...rows].map(r => r.join(',')).join('\n')
+    download(csv, 'text/csv', `adsterra-report-${customStart || daysAgo(parseInt(preset))}-to-${customEnd || today()}.csv`)
+  }
+
+  // Excel export (TSV that Excel opens)
+  function exportExcel() {
+    if (!data?.chartData?.length) return
+    const headers = isAdmin
+      ? ['Date', 'Impressions', 'Clicks', 'CTR%', 'CPM', 'Revenue USD']
+      : ['Date', 'Impressions', 'Clicks', 'Earnings USD']
+    const rows = data.chartData.map(d => isAdmin
+      ? [d.date, d.impressions, d.clicks, d.ctr ?? '', d.cpm ?? '', d.revenue ?? '']
+      : [d.date, d.impressions, d.clicks, d.earnings ?? '']
+    )
+    const tsv = [headers, ...rows].map(r => r.join('\t')).join('\n')
+    download(tsv, 'application/vnd.ms-excel', `adsterra-report.xls`)
+  }
+
+  // PDF export (simple print)
+  function exportPDF() {
+    window.print()
+  }
+
+  function download(content: string, type: string, filename: string) {
+    const blob = new Blob([content], { type })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = filename; a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  async function sendEmailReport() {
+    if (!exportEmail) return
+    setSendingEmail(true)
+    try {
+      // Build report content
+      const totals = data?.totals
+      const period = data?.period
+      const html = `
+        <h2>TrendingVerse Ad Revenue Report</h2>
+        <p>Period: ${period?.startDate} → ${period?.endDate}</p>
+        <table border="1" cellpadding="8" style="border-collapse:collapse;width:100%">
+          <tr style="background:#f3f4f6">
+            <th>Metric</th><th>Value</th>
+          </tr>
+          <tr><td>Impressions</td><td>${totals?.impressions?.toLocaleString()}</td></tr>
+          <tr><td>Clicks</td><td>${totals?.clicks?.toLocaleString()}</td></tr>
+          <tr><td>CTR</td><td>${totals?.ctr}%</td></tr>
+          <tr><td>eCPM</td><td>$${totals?.cpm}</td></tr>
+          ${isAdmin ? `
+          <tr><td>Total Revenue (USD)</td><td>$${totals?.revenue_usd}</td></tr>
+          <tr><td>Publisher Payouts</td><td>$${totals?.publisher_earnings_usd}</td></tr>
+          <tr><td>Platform Earnings</td><td>$${totals?.platform_earnings_usd}</td></tr>
+          ` : `
+          <tr><td>Your Earnings (USD)</td><td>$${totals?.your_earnings_usd}</td></tr>
+          <tr><td>Your Earnings (INR)</td><td>₹${totals?.your_earnings_inr}</td></tr>
+          `}
+        </table>
+        <br/>
+        <h3>Daily Breakdown</h3>
+        <table border="1" cellpadding="6" style="border-collapse:collapse;width:100%">
+          <tr style="background:#f3f4f6">
+            <th>Date</th><th>Impressions</th><th>Clicks</th>${isAdmin ? '<th>Revenue</th>' : '<th>Earnings</th>'}
+          </tr>
+          ${(data?.chartData || []).map(d => `
+          <tr>
+            <td>${d.date}</td>
+            <td>${d.impressions}</td>
+            <td>${d.clicks}</td>
+            <td>${isAdmin ? '$' + (d.revenue ?? 0) : '$' + (d.earnings ?? 0)}</td>
+          </tr>`).join('')}
+        </table>
+      `
+      await fetch('/api/email/welcome', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: exportEmail,
+          subject_override: `TrendingVerse Revenue Report: ${period?.startDate} → ${period?.endDate}`,
+          html_override: html,
+        }),
+      })
+      alert(`Report sent to ${exportEmail}`)
+      setShowExport(false)
+      setExportEmail('')
+    } catch { alert('Failed to send email') }
+    setSendingEmail(false)
   }
 
   if (loading) return (
@@ -95,30 +207,100 @@ export function AdsterraDashboard({ isAdmin = false }: { isAdmin?: boolean }) {
 
   return (
     <div className="space-y-5">
-      {/* Header */}
+      {/* Header with date controls */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2">
           <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
           <span className="text-xs text-green-600 font-medium">
             {isPublisher ? 'Your Ad Revenue' : 'Adsterra Network Revenue'}
           </span>
-          <span className="text-xs text-ink-400">· {data?.period?.startDate} → {data?.period?.endDate}</span>
+          {data?.period && (
+            <span className="text-xs text-ink-400">· {data.period.startDate} → {data.period.endDate}</span>
+          )}
           {isPublisher && data?.revenue_share_pct && (
             <span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full">
               Your share: {data.revenue_share_pct}%
             </span>
           )}
         </div>
-        <div className="flex gap-2">
-          <select className="input text-xs w-32" value={period} onChange={e => setPeriod(e.target.value)}>
-            <option value="7">Last 7 days</option>
-            <option value="14">Last 14 days</option>
-            <option value="30">Last 30 days</option>
-            <option value="90">Last 90 days</option>
-          </select>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Date mode toggle */}
+          <div className="flex gap-1 p-0.5 bg-ink-100 rounded-lg">
+            <button onClick={() => setDateMode('preset')}
+              className={`px-2 py-1 text-xs rounded-md transition-colors ${dateMode === 'preset' ? 'bg-white shadow text-ink-900' : 'text-ink-500'}`}>
+              Preset
+            </button>
+            <button onClick={() => setDateMode('custom')}
+              className={`px-2 py-1 text-xs rounded-md transition-colors ${dateMode === 'custom' ? 'bg-white shadow text-ink-900' : 'text-ink-500'}`}>
+              Custom
+            </button>
+          </div>
+
+          {dateMode === 'preset' ? (
+            <select className="input text-xs w-32" value={preset} onChange={e => setPreset(e.target.value)}>
+              <option value="7">Last 7 days</option>
+              <option value="14">Last 14 days</option>
+              <option value="30">Last 30 days</option>
+              <option value="60">Last 60 days</option>
+              <option value="90">Last 90 days</option>
+            </select>
+          ) : (
+            <div className="flex items-center gap-1">
+              <input type="date" className="input text-xs w-36" value={customStart}
+                max={customEnd} onChange={e => setCustomStart(e.target.value)} />
+              <span className="text-xs text-ink-400">→</span>
+              <input type="date" className="input text-xs w-36" value={customEnd}
+                min={customStart} max={today()} onChange={e => setCustomEnd(e.target.value)} />
+              <button onClick={fetchData} className="text-xs px-3 py-1.5 bg-accent text-white rounded-lg hover:bg-accent/90">
+                Apply
+              </button>
+            </div>
+          )}
+
           <button onClick={fetchData} className="text-xs px-3 py-1.5 bg-ink-100 rounded-lg hover:bg-ink-200">
-            ↻ Refresh
+            ↻
           </button>
+
+          {/* Export button */}
+          <div className="relative">
+            <button onClick={() => setShowExport(!showExport)}
+              className="text-xs px-3 py-1.5 bg-ink-900 text-white rounded-lg hover:bg-ink-800 flex items-center gap-1">
+              ⬇ Export
+            </button>
+            {showExport && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setShowExport(false)} />
+                <div className="absolute right-0 top-9 w-56 bg-white border border-ink-100 rounded-xl shadow-lg z-20 overflow-hidden">
+                  <div className="p-2 space-y-1">
+                    <button onClick={() => { exportCSV(); setShowExport(false) }}
+                      className="w-full text-left px-3 py-2 text-xs text-ink-700 hover:bg-ink-50 rounded-lg flex items-center gap-2">
+                      📄 Download CSV
+                    </button>
+                    <button onClick={() => { exportExcel(); setShowExport(false) }}
+                      className="w-full text-left px-3 py-2 text-xs text-ink-700 hover:bg-ink-50 rounded-lg flex items-center gap-2">
+                      📊 Download Excel (.xls)
+                    </button>
+                    <button onClick={() => { exportPDF(); setShowExport(false) }}
+                      className="w-full text-left px-3 py-2 text-xs text-ink-700 hover:bg-ink-50 rounded-lg flex items-center gap-2">
+                      🖨 Print / Save as PDF
+                    </button>
+                    <div className="border-t border-ink-100 pt-2 mt-2">
+                      <p className="text-xs text-ink-400 px-3 mb-1">Send via email</p>
+                      <div className="px-3 pb-2 space-y-2">
+                        <input type="email" className="input text-xs w-full" placeholder="email@example.com"
+                          value={exportEmail} onChange={e => setExportEmail(e.target.value)} />
+                        <button onClick={sendEmailReport} disabled={!exportEmail || sendingEmail}
+                          className="w-full text-xs py-1.5 bg-accent text-white rounded-lg disabled:opacity-50">
+                          {sendingEmail ? 'Sending...' : '📧 Send Report'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
@@ -155,7 +337,7 @@ export function AdsterraDashboard({ isAdmin = false }: { isAdmin?: boolean }) {
       {activeTab === 'overview' && (
         <div className="card p-5">
           <h3 className="font-semibold text-ink-900 mb-4">
-            {isPublisher ? 'Your Earnings' : 'Network Revenue'} — last {period} days
+            {isPublisher ? 'Your Earnings' : 'Network Revenue'} — {data?.period?.startDate} to {data?.period?.endDate}
           </h3>
           {chartData.length === 0 ? (
             <p className="text-center py-8 text-ink-300 text-sm">No data for this period</p>
@@ -166,20 +348,18 @@ export function AdsterraDashboard({ isAdmin = false }: { isAdmin?: boolean }) {
                   const val = d.earnings ?? d.revenue ?? 0
                   return (
                     <div key={i} className="flex-1 group relative">
-                      <div className="absolute -top-12 left-1/2 -translate-x-1/2 bg-ink-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10">
-                        {d.date.slice(5)} · ${val.toFixed(4)}
+                      <div className="absolute -top-14 left-1/2 -translate-x-1/2 bg-ink-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10">
+                        {d.date}<br/>{d.impressions} imp · {d.clicks} clicks · ${val.toFixed(4)}
                       </div>
-                      <div
-                        className="w-full bg-green-400 hover:bg-green-500 rounded-t transition-colors"
-                        style={{ height: `${Math.max(2, (val / maxVal) * 100)}%` }}
-                      />
+                      <div className="w-full bg-green-400 hover:bg-green-500 rounded-t transition-colors"
+                        style={{ height: `${Math.max(2, (val / maxVal) * 100)}%` }} />
                     </div>
                   )
                 })}
               </div>
               <div className="flex justify-between text-xs text-ink-300">
-                <span>{chartData[0]?.date.slice(5)}</span>
-                <span>{chartData[chartData.length - 1]?.date.slice(5)}</span>
+                <span>{chartData[0]?.date}</span>
+                <span>{chartData[chartData.length - 1]?.date}</span>
               </div>
             </>
           )}
@@ -191,7 +371,6 @@ export function AdsterraDashboard({ isAdmin = false }: { isAdmin?: boolean }) {
         <div className="card overflow-hidden">
           <div className="p-4 border-b border-ink-100">
             <h3 className="font-semibold text-ink-900">Revenue by Publisher Site</h3>
-            <p className="text-xs text-ink-400 mt-1">Gross revenue, publisher payout and platform earnings per site</p>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -207,7 +386,7 @@ export function AdsterraDashboard({ isAdmin = false }: { isAdmin?: boolean }) {
               </tr></thead>
               <tbody>
                 {domains.length === 0 && (
-                  <tr><td colSpan={8} className="text-center py-8 text-ink-300 text-sm">No domain data for this period</td></tr>
+                  <tr><td colSpan={8} className="text-center py-8 text-ink-300 text-sm">No domain data</td></tr>
                 )}
                 {domains.map((d, i) => (
                   <tr key={i} className="border-b border-ink-50 hover:bg-ink-50/50">
@@ -219,7 +398,7 @@ export function AdsterraDashboard({ isAdmin = false }: { isAdmin?: boolean }) {
                     <td className="px-4 py-3 text-xs text-right">{d.clicks.toLocaleString()}</td>
                     <td className="px-4 py-3 text-xs text-right">{d.ctr}%</td>
                     <td className="px-4 py-3 text-xs text-right text-amber-600">${d.cpm.toFixed(4)}</td>
-                    <td className="px-4 py-3 text-xs text-right font-medium text-ink-900">${d.gross_revenue.toFixed(4)}</td>
+                    <td className="px-4 py-3 text-xs text-right font-medium">${d.gross_revenue.toFixed(4)}</td>
                     <td className="px-4 py-3 text-xs text-right font-medium text-green-600">
                       ${d.publisher_earnings.toFixed(4)}
                       <span className="text-ink-400 font-normal ml-1">({d.revenue_share_pct}%)</span>
