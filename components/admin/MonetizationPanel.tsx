@@ -125,8 +125,8 @@ export function MonetizationPanel({ isAdmin = false }: { isAdmin?: boolean }) {
         ))}
       </div>
 
-      {/* AD UNITS */}
-      {tab === 'ad_units' && (
+     {/* AD UNITS — admin only */}
+{tab === 'ad_units' && isAdmin && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
@@ -227,7 +227,7 @@ export function MonetizationPanel({ isAdmin = false }: { isAdmin?: boolean }) {
       {tab === 'assign' && isAdmin && <PublisherAdAssignment />}
 
       {/* ADS.TXT */}
-      {tab === 'ads_txt' && (
+      {tab === 'ads_txt' && isAdmin && (
         <div className="space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div>
@@ -317,7 +317,7 @@ export function MonetizationPanel({ isAdmin = false }: { isAdmin?: boolean }) {
       )}
 
       {/* REVENUE */}
-      {tab === 'revenue' && (
+      {tab === 'revenue' && isAdmin && (
         <div className="space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div>
