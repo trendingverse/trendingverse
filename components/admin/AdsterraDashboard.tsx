@@ -17,6 +17,9 @@ interface DomainRow {
   ctr: number; cpm: number; gross_revenue: number
   publisher_earnings: number; platform_earnings: number; revenue_share_pct: number
 }
+interface StatCard {
+  label: string; value: string; icon: string; color: string
+}
 
 export function AdsterraDashboard({ isAdmin = false }: { isAdmin?: boolean }) {
   const [data, setData] = useState<{
@@ -68,6 +71,28 @@ export function AdsterraDashboard({ isAdmin = false }: { isAdmin?: boolean }) {
   const isPublisher = data?.role === 'publisher'
   const maxVal = Math.max(...chartData.map(d => d.revenue || d.earnings || 0), 0.001)
 
+  const publisherCards: StatCard[] = totals ? [
+    { label: 'Your Earnings (USD)', value: `$${totals.your_earnings_usd?.toFixed(4) || '0.0000'}`, icon: '💰', color: 'text-green-600' },
+    { label: 'Your Earnings (INR)', value: `₹${totals.your_earnings_inr?.toFixed(2) || '0.00'}`, icon: '₹', color: 'text-emerald-600' },
+    { label: 'Impressions', value: totals.impressions.toLocaleString(), icon: '👁', color: 'text-blue-600' },
+    { label: 'Clicks', value: totals.clicks.toLocaleString(), icon: '👆', color: 'text-violet-600' },
+    { label: 'eCPM', value: `$${totals.cpm.toFixed(4)}`, icon: '📊', color: 'text-amber-600' },
+    { label: 'CTR', value: `${totals.ctr}%`, icon: '📈', color: totals.ctr > 1 ? 'text-green-600' : 'text-amber-500' },
+  ] : []
+
+  const adminCards: StatCard[] = totals ? [
+    { label: 'Total Revenue (USD)', value: `$${totals.revenue_usd?.toFixed(4) || '0.0000'}`, icon: '💰', color: 'text-green-600' },
+    { label: 'Publisher Payouts', value: `$${totals.publisher_earnings_usd?.toFixed(4) || '0.0000'}`, icon: '👤', color: 'text-blue-600' },
+    { label: 'Platform Earnings', value: `$${totals.platform_earnings_usd?.toFixed(4) || '0.0000'}`, icon: '🏢', color: 'text-violet-600' },
+    { label: 'Total Revenue (INR)', value: `₹${totals.revenue_inr?.toFixed(2) || '0.00'}`, icon: '₹', color: 'text-emerald-600' },
+    { label: 'Impressions', value: totals.impressions.toLocaleString(), icon: '👁', color: 'text-ink-900' },
+    { label: 'Clicks', value: totals.clicks.toLocaleString(), icon: '👆', color: 'text-ink-900' },
+    { label: 'Network eCPM', value: `$${totals.cpm.toFixed(4)}`, icon: '📊', color: 'text-amber-600' },
+    { label: 'Network CTR', value: `${totals.ctr}%`, icon: '📈', color: totals.ctr > 1 ? 'text-green-600' : 'text-amber-500' },
+  ] : []
+
+  const statCards = isPublisher ? publisherCards : adminCards
+
   return (
     <div className="space-y-5">
       {/* Header */}
@@ -98,25 +123,9 @@ export function AdsterraDashboard({ isAdmin = false }: { isAdmin?: boolean }) {
       </div>
 
       {/* Stat cards */}
-      {totals && (
+      {statCards.length > 0 && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {isPublisher ? [
-            { label: 'Your Earnings (USD)', value: `$${totals.your_earnings_usd?.toFixed(4) || '0.0000'}`, icon: '💰', color: 'text-green-600' },
-            { label: 'Your Earnings (INR)', value: `₹${totals.your_earnings_inr?.toFixed(2) || '0.00'}`, icon: '₹', color: 'text-emerald-600' },
-            { label: 'Impressions', value: totals.impressions.toLocaleString(), icon: '👁', color: 'text-blue-600' },
-            { label: 'Clicks', value: totals.clicks.toLocaleString(), icon: '👆', color: 'text-violet-600' },
-            { label: 'eCPM', value: `$${totals.cpm.toFixed(4)}`, icon: '📊', color: 'text-amber-600' },
-            { label: 'CTR', value: `${totals.ctr}%`, icon: '📈', color: totals.ctr > 1 ? 'text-green-600' : 'text-amber-500' },
-          ] : [
-            { label: 'Total Revenue (USD)', value: `$${totals.revenue_usd?.toFixed(4) || '0.0000'}`, icon: '💰', color: 'text-green-600' },
-            { label: 'Publisher Payouts', value: `$${totals.publisher_earnings_usd?.toFixed(4) || '0.0000'}`, icon: '👤', color: 'text-blue-600' },
-            { label: 'Platform Earnings', value: `$${totals.platform_earnings_usd?.toFixed(4) || '0.0000'}`, icon: '🏢', color: 'text-violet-600' },
-            { label: 'Total Revenue (INR)', value: `₹${totals.revenue_inr?.toFixed(2) || '0.00'}`, icon: '₹', color: 'text-emerald-600' },
-            { label: 'Impressions', value: totals.impressions.toLocaleString(), icon: '👁', color: 'text-ink-900' },
-            { label: 'Clicks', value: totals.clicks.toLocaleString(), icon: '👆', color: 'text-ink-900' },
-            { label: 'Network eCPM', value: `$${totals.cpm.toFixed(4)}`, icon: '📊', color: 'text-amber-600' },
-            { label: 'Network CTR', value: `${totals.ctr}%`, icon: '📈', color: totals.ctr > 1 ? 'text-green-600' : 'text-amber-500' },
-          ].map(s => (
+          {statCards.map(s => (
             <div key={s.label} className="card p-4">
               <div className="flex items-center justify-between mb-1">
                 <span className="text-xs text-ink-400">{s.label}</span>
@@ -128,7 +137,7 @@ export function AdsterraDashboard({ isAdmin = false }: { isAdmin?: boolean }) {
         </div>
       )}
 
-      {/* Tabs — admin only sees domain tab */}
+      {/* Tabs */}
       <div className="flex gap-1 p-1 bg-ink-100 rounded-xl w-fit">
         <button onClick={() => setActiveTab('overview')}
           className={`px-3 py-2 text-xs font-medium rounded-lg transition-colors ${activeTab === 'overview' ? 'bg-white shadow text-ink-900' : 'text-ink-500'}`}>
