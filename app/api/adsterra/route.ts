@@ -69,12 +69,9 @@ export async function GET(req: NextRequest) {
         }
       }
 
-      const chartData = (dateStats.items || []).map((item: {
-        date?: string; impressions?: number; clicks?: number
-        ctr?: number; cpm?: number; revenue?: number
-      }) => ({
-        date: item.date || '',
-        impressions: item.impressions || 0,
+     const chartData = items.map((item: Record<string, unknown>) => ({
+  date: String(item.date || ''),
+  impressions: Number(item.impressions || item.views || item.hits || 0),
         clicks: item.clicks || 0,
         ctr: parseFloat((item.ctr || 0).toFixed(2)),
         cpm: parseFloat((item.cpm || 0).toFixed(4)),
@@ -104,7 +101,7 @@ export async function GET(req: NextRequest) {
         }
       }).sort((a: { gross_revenue: number }, b: { gross_revenue: number }) => b.gross_revenue - a.gross_revenue)
 
-      const totals = chartData.reduce((acc: { impressions: number; clicks: number; revenue: number }, d: { impressions: number; clicks: number; revenue: number }) => ({
+    if (items.length > 0) console.log('Adsterra item fields:', Object.keys(items[0]))
         impressions: acc.impressions + d.impressions,
         clicks: acc.clicks + d.clicks,
         revenue: acc.revenue + d.revenue,
