@@ -37,9 +37,9 @@ async function fetchDomainMap(apiKey: string): Promise<Record<string, string>> {
 
 function parseItem(item: Record<string, unknown>) {
   // Adsterra uses various field names — try all possibilities
-  const impressions = Number(
-    item.impressions ?? item.views ?? item.ad_impressions ?? item.banner_impressions ?? 0
-  )
+ const impressions = Number(
+  item.impression ?? item.impressions ?? item.views ?? 0
+)
   const clicks = Number(item.clicks ?? 0)
   const ctr = parseFloat(String(item.ctr ?? 0))
   const cpm = parseFloat(String(item.cpm ?? 0))
