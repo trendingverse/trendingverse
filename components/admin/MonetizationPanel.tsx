@@ -32,7 +32,7 @@ const SIZES = [
 ]
 
 export function MonetizationPanel({ isAdmin = false }: { isAdmin?: boolean }) {
-  const [tab, setTab] = useState<'ad_units' | 'assign' | 'ads_txt' | 'revenue'>('ad_units')
+  const [tab, setTab] = useState<string>('ad_units')
 
   // Ad units state
   const [adUnits, setAdUnits] = useState<AdUnit[]>([])
