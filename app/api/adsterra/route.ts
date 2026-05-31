@@ -51,7 +51,7 @@ export async function GET(req: NextRequest) {
   try {
     if (isAdmin) {
       const [dateStats, domainStats] = await Promise.all([
-        fetchAdsterra(`stats.json?start_date=${startDate}&finish_date=${endDate}&group_by=date`, apiKey),
+        fetchAdsterra(`stats.json?start_date=${startDate}&finish_date=${endDate}&group_by%5B%5D=date`, apiKey),
         fetchAdsterra(`stats.json?start_date=${startDate}&finish_date=${endDate}&group_by=domain`, apiKey),
       ])
 
@@ -150,7 +150,7 @@ export async function GET(req: NextRequest) {
 
       const [domainStats, dateStats] = await Promise.all([
         fetchAdsterra(`stats.json?start_date=${startDate}&finish_date=${endDate}&group_by=domain`, apiKey),
-        fetchAdsterra(`stats.json?start_date=${startDate}&finish_date=${endDate}&group_by=date`, apiKey),
+        fetchAdsterra(`stats.json?start_date=${startDate}&finish_date=${endDate}&group_by%5B%5D=date`, apiKey),
       ])
 
       const publisherDomains = (publisherSites || []).map(s =>
