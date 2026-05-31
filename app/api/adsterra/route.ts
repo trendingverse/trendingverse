@@ -58,7 +58,7 @@ export async function GET(req: NextRequest) {
       // Build domain → publisher map
       const domainPublisherMap: Record<string, { siteName: string; revenueSharePct: number }> = {}
       for (const site of sites || []) {
-        const domain = (site.site_url || '').replace(/^https?:\/\//, '').replace(/\/$/, '')
+        const domain = String(site.site_url || '').replace(/^https?:\/\//, '').replace(/\/$/, '')
         const pa = (publisherAds || []).find((p: { sites: unknown }) => {
   const siteUrl = (p.sites as { site_url?: string } | null)?.site_url || ''
   return siteUrl.replace(/^https?:\/\//, '').replace(/\/$/, '') === domain
@@ -91,7 +91,7 @@ export async function GET(req: NextRequest) {
         const publisherEarnings = grossRevenue * (publisherInfo.revenueSharePct / 100)
         const platformEarnings = grossRevenue * ((100 - publisherInfo.revenueSharePct) / 100)
         return {
-          domain: d.domain || 'Unknown',
+          domain: String(d.domain || 'Unknown'),
           site_name: publisherInfo.siteName,
           impressions: d.impressions || 0,
           clicks: d.clicks || 0,
