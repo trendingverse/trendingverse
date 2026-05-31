@@ -42,9 +42,7 @@ export default async function AnalyticsPage() {
         </Suspense>
       </div>
       {/* Adsterra Revenue */}
-<div className="border-t border-ink-100 pt-8">
-  <div className="mb-5">
-    <h2 className="font-display text-xl font-bold text-ink-950">💰 Adsterra Revenue</h2>
+
     <p className="text-sm text-ink-400 mt-1">Live revenue, impressions, CTR and eCPM from Adsterra</p>
   </div>
   <AdsterraDashboard />
