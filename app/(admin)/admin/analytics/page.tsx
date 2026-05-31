@@ -4,7 +4,6 @@ import { AnalyticsDashboard } from '@/components/admin/AnalyticsDashboard'
 import { GSCDashboard } from '@/components/admin/GSCDashboard'
 import { GA4Dashboard } from '@/components/admin/GA4Dashboard'
 import { Suspense } from 'react'
-import { AdsterraDashboard } from '@/components/admin/AdsterraDashboard'
 
 export default async function AnalyticsPage() {
   const supabase = await createClient()
@@ -13,7 +12,6 @@ export default async function AnalyticsPage() {
 
   return (
     <div className="space-y-10">
-      {/* Platform analytics */}
       <div>
         <h1 className="font-display text-2xl font-bold text-ink-950">📊 Analytics</h1>
         <p className="text-sm text-ink-400 mt-1">Performance overview, cron history and usage stats</p>
@@ -41,12 +39,6 @@ export default async function AnalyticsPage() {
           <GA4Dashboard />
         </Suspense>
       </div>
-      {/* Adsterra Revenue */}
-
-    <p className="text-sm text-ink-400 mt-1">Live revenue, impressions, CTR and eCPM from Adsterra</p>
-  </div>
-  <AdsterraDashboard />
-</div>
     </div>
   )
 }
