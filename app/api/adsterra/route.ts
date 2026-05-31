@@ -88,6 +88,9 @@ export async function GET(req: NextRequest) {
 
       // Debug mode — return raw data
       if (debug) {
+        const domainsRaw = await fetchAdsterra('domains.json', apiKey).catch(e => ({ error: e.message }))
+  return NextResponse.json({
+
         return NextResponse.json({
           debug: true,
           domainMap,
