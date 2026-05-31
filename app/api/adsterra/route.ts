@@ -59,9 +59,10 @@ export async function GET(req: NextRequest) {
       const domainPublisherMap: Record<string, { siteName: string; revenueSharePct: number }> = {}
       for (const site of sites || []) {
         const domain = (site.site_url || '').replace(/^https?:\/\//, '').replace(/\/$/, '')
-        const pa = (publisherAds || []).find((p: { sites: { site_url: string } | null }) =>
-          p.sites?.site_url?.replace(/^https?:\/\//, '').replace(/\/$/, '') === domain
-        )
+        const pa = (publisherAds || []).find((p: { sites: unknown }) => {
+  const siteUrl = (p.sites as { site_url?: string } | null)?.site_url || ''
+  return siteUrl.replace(/^https?:\/\//, '').replace(/\/$/, '') === domain
+})
         domainPublisherMap[domain] = {
           siteName: site.name || domain,
           revenueSharePct: pa?.revenue_share_pct || 70,
