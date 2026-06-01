@@ -89,10 +89,66 @@ export function AdsterraDashboard({ isAdmin = false }: { isAdmin?: boolean }) {
   }
 
   // PDF export (simple print)
-  function exportPDF() {
-    window.print()
-  }
+function exportPDF() {
+  const period = data?.period
+  const totals = data?.totals
+  const rows = (data?.chartData || []).map(d =>
+    `<tr>
+      <td>${d.date}</td>
+      <td>${d.impressions}</td>
+      <td>${d.clicks}</td>
+      <td>${d.ctr ?? 0}%</td>
+      <td>$${(d.revenue ?? d.earnings ?? 0).toFixed(4)}</td>
+    </tr>`
+  ).join('')
 
+  const html = `<!DOCTYPE html><html><head><title>Revenue Report</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 32px; color: #111; }
+    h1 { font-size: 22px; margin-bottom: 4px; }
+    p { color: #666; font-size: 13px; margin-bottom: 24px; }
+    .stats { display: grid; grid-template-columns: repeat(4,1fr); gap: 16px; margin-bottom: 24px; }
+    .stat { border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; }
+    .stat-label { font-size: 11px; color: #9ca3af; margin-bottom: 4px; }
+    .stat-value { font-size: 20px; font-weight: 700; color: #111; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th { background: #f9fafb; text-align: left; padding: 8px 12px; border-bottom: 2px solid #e5e7eb; font-size: 11px; color: #6b7280; text-transform: uppercase; }
+    td { padding: 8px 12px; border-bottom: 1px solid #f3f4f6; }
+    tr:hover td { background: #f9fafb; }
+    .footer { margin-top: 32px; font-size: 11px; color: #9ca3af; text-align: center; }
+  </style></head><body>
+  <h1>TrendingVerse — Ad Revenue Report</h1>
+  <p>Period: ${period?.startDate} → ${period?.endDate} &nbsp;|&nbsp; Generated: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST</p>
+  <div class="stats">
+    <div class="stat"><div class="stat-label">Impressions</div><div class="stat-value">${totals?.impressions?.toLocaleString()}</div></div>
+    <div class="stat"><div class="stat-label">Clicks</div><div class="stat-value">${totals?.clicks?.toLocaleString()}</div></div>
+    <div class="stat"><div class="stat-label">CTR</div><div class="stat-value">${totals?.ctr}%</div></div>
+    <div class="stat"><div class="stat-label">eCPM</div><div class="stat-value">$${totals?.cpm}</div></div>
+    ${isAdmin ? `
+    <div class="stat"><div class="stat-label">Total Revenue</div><div class="stat-value" style="color:#16a34a">$${totals?.revenue_usd}</div></div>
+    <div class="stat"><div class="stat-label">Publisher Payouts</div><div class="stat-value" style="color:#2563eb">$${totals?.publisher_earnings_usd}</div></div>
+    <div class="stat"><div class="stat-label">Platform Earnings</div><div class="stat-value" style="color:#7c3aed">$${totals?.platform_earnings_usd}</div></div>
+    <div class="stat"><div class="stat-label">Revenue (INR)</div><div class="stat-value">₹${totals?.revenue_inr}</div></div>
+    ` : `
+    <div class="stat"><div class="stat-label">Your Earnings (USD)</div><div class="stat-value" style="color:#16a34a">$${totals?.your_earnings_usd}</div></div>
+    <div class="stat"><div class="stat-label">Your Earnings (INR)</div><div class="stat-value" style="color:#059669">₹${totals?.your_earnings_inr}</div></div>
+    `}
+  </div>
+  <table>
+    <thead><tr><th>Date</th><th>Impressions</th><th>Clicks</th><th>CTR</th><th>${isAdmin ? 'Revenue' : 'Earnings'}</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>
+  <div class="footer">TrendingVerse CMS · trendingverse.vercel.app</div>
+  </body></html>`
+
+  const win = window.open('', '_blank')
+  if (win) {
+    win.document.write(html)
+    win.document.close()
+    win.focus()
+    setTimeout(() => { win.print(); win.close() }, 500)
+  }
+}
   function download(content: string, type: string, filename: string) {
     const blob = new Blob([content], { type })
     const url = URL.createObjectURL(blob)
