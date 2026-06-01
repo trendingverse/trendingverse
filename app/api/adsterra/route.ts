@@ -63,7 +63,6 @@ export async function GET(req: NextRequest) {
         })
       }
 
-      // Load all sites with adsterra_domain_id
       const { data: sites } = await admin
         .from('sites')
         .select('site_url, name, user_id, adsterra_domain_id')
@@ -109,13 +108,11 @@ export async function GET(req: NextRequest) {
 
       const domains = (domainStats.items || []).map((d: Record<string, unknown>) => {
         const rawId = String(d.domain ?? d.domain_id ?? d.id ?? 'Unknown')
-        // Use adsterra_domain_id mapping
         const siteInfo = domainIdMap[rawId] || { siteName: rawId, siteUrl: rawId, revenueSharePct: 70 }
         const parsed = parseItem(d)
         const grossRevenue = parsed.revenue
         const publisherEarnings = grossRevenue * (siteInfo.revenueSharePct / 100)
         const platformEarnings = grossRevenue - publisherEarnings
-
         return {
           domain: siteInfo.siteUrl || rawId,
           site_name: siteInfo.siteName,
@@ -150,7 +147,6 @@ export async function GET(req: NextRequest) {
 
     } else {
       // ── PUBLISHER VIEW ──────────────────────────────────────────
-      // Fetch publisher's sites with adsterra_domain_id
       const { data: publisherSites } = await admin
         .from('sites')
         .select('site_url, name, adsterra_domain_id')
@@ -161,7 +157,6 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ role: 'publisher', no_site: true })
       }
 
-      // Get revenue share for this publisher
       const { data: publisherAd } = await admin
         .from('publisher_ads')
         .select('revenue_share_pct')
@@ -183,7 +178,7 @@ export async function GET(req: NextRequest) {
         fetchAdsterra(`stats.json?start_date=${startDate}&finish_date=${endDate}&group_by=date`, apiKey),
       ])
 
-      // Match domain stats using adsterra_domain_id — exact match, no guessing
+      // Match only this publisher's domains using adsterra_domain_id
       const matchedStats = (domainStats.items || []).filter((d: Record<string, unknown>) => {
         const rawId = String(d.domain ?? d.domain_id ?? d.id ?? '')
         return publisherAdsterraDomainIds.has(rawId)
@@ -203,13 +198,22 @@ export async function GET(req: NextRequest) {
       const grossRevenue = publisherTotals.revenue
       const publisherEarnings = grossRevenue * (revenueSharePct / 100)
 
+      // Calculate publisher's share ratio from full network
+      const fullNetworkImpressions = (dateStats.items || []).reduce(
+        (s: number, d: Record<string, unknown>) => s + Number(parseItem(d).impressions), 0
+      )
+      const shareRatio = fullNetworkImpressions > 0
+        ? publisherTotals.impressions / fullNetworkImpressions
+        : 0
+
+      // Scale daily stats proportionally to publisher's share
       const chartData = (dateStats.items || []).map((item: Record<string, unknown>) => {
         const parsed = parseItem(item)
         return {
           date: parsed.date,
-          impressions: parsed.impressions,
-          clicks: parsed.clicks,
-          earnings: parseFloat((parsed.revenue * (revenueSharePct / 100)).toFixed(4)),
+          impressions: Math.round(parsed.impressions * shareRatio),
+          clicks: Math.round(parsed.clicks * shareRatio),
+          earnings: parseFloat((parsed.revenue * shareRatio * (revenueSharePct / 100)).toFixed(4)),
         }
       })
 
