@@ -63,15 +63,15 @@ export function AdsterraDashboard({ isAdmin = false }: { isAdmin?: boolean }) {
   // CSV export
   function exportCSV() {
     if (!data?.chartData?.length) return
-    const headers = isAdmin
-      ? ['Date', 'Impressions', 'Clicks', 'CTR%', 'CPM', 'Revenue USD']
-      : ['Date', 'Impressions', 'Clicks', 'Earnings USD']
-    const rows = data.chartData.map(d => isAdmin
+    const headers = isAdmin && !isPublisher
+  ? ['Date', 'Impressions', 'Clicks', 'CTR%', 'CPM', 'Revenue USD']
+  : ['Date', 'Impressions', 'Clicks', 'Earnings USD']
+    const rows = data.chartData.map(d => isAdmin && !isPublisher
       ? [d.date, d.impressions, d.clicks, d.ctr ?? '', d.cpm ?? '', d.revenue ?? '']
       : [d.date, d.impressions, d.clicks, d.earnings ?? '']
     )
     const csv = [headers, ...rows].map(r => r.join(',')).join('\n')
-    download(csv, 'text/csv', `adsterra-report-${customStart || daysAgo(parseInt(preset))}-to-${customEnd || today()}.csv`)
+    download(csv, 'text/csv', `trendingverse-revenue-${data?.period?.startDate || daysAgo(parseInt(preset))}-to-${data?.period?.endDate || today()}.csv`)
   }
 
   // Excel export (TSV that Excel opens)
@@ -80,12 +80,12 @@ export function AdsterraDashboard({ isAdmin = false }: { isAdmin?: boolean }) {
     const headers = isAdmin
       ? ['Date', 'Impressions', 'Clicks', 'CTR%', 'CPM', 'Revenue USD']
       : ['Date', 'Impressions', 'Clicks', 'Earnings USD']
-    const rows = data.chartData.map(d => isAdmin
+    const rows = data.chartData.map(d => isAdmin && !isPublisher
       ? [d.date, d.impressions, d.clicks, d.ctr ?? '', d.cpm ?? '', d.revenue ?? '']
       : [d.date, d.impressions, d.clicks, d.earnings ?? '']
     )
     const tsv = [headers, ...rows].map(r => r.join('\t')).join('\n')
-    download(tsv, 'application/vnd.ms-excel', `adsterra-report.xls`)
+    download(tsv, 'application/vnd.ms-excel', `trendingverse-revenue-${data?.period?.startDate || daysAgo(parseInt(preset))}-to-${data?.period?.endDate || today()}.xls`)
   }
 
   // PDF export (simple print)
