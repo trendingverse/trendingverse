@@ -24,25 +24,29 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid API key' }, { status: 401 })
   }
 
-  // Find the site
-  const cleanUrl = (siteUrl || '').replace(/\/$/, '')
+  // Normalize URL — strip protocol and trailing slash
+  const bare = (siteUrl || '').replace(/^https?:\/\//, '').replace(/\/$/, '')
+  const httpUrl  = `http://${bare}`
+  const httpsUrl = `https://${bare}`
+
+  // Match site by both http and https variants
   const { data: site } = await admin
     .from('sites')
     .select('id, name, site_url')
-   .eq('user_id', profile.id)
-.ilike('site_url', `%${cleanUrl.replace(/^https?:\/\//, '')}%`)
+    .eq('user_id', profile.id)
+    .in('site_url', [httpUrl, httpsUrl, bare])
     .single()
 
   if (!site) {
     return NextResponse.json({
       publisher: profile.id,
-site: null,
+      site: null,
       ads: [],
-      message: 'No site found matching this URL — please add your site in TrendingVerse CMS Settings'
+      message: `No site found for ${siteUrl} — please add your site in TrendingVerse CMS Settings`,
     })
   }
 
-  // Fetch active ad assignments for this publisher + site
+  // Fetch active ad assignments for this publisher + site only
   const { data: assignments } = await admin
     .from('publisher_ads')
     .select(`
@@ -52,7 +56,6 @@ site: null,
       revenue_share_pct,
       ad_units (
         id,
-        name,
         ad_type,
         position,
         ad_code,
@@ -67,24 +70,23 @@ site: null,
     .eq('is_enabled', true)
 
   const ads = (assignments || []).map(a => {
-  const unit = Array.isArray(a.ad_units) ? a.ad_units[0] : a.ad_units
-  return {
-    id: unit?.id,
-    name: unit?.name,
-    ad_type: unit?.ad_type,
-    position: unit?.position,
-    ad_code: unit?.ad_code,
-    gam_network_code: unit?.gam_network_code,
-    gam_unit_path: unit?.gam_unit_path,
-    size_width: unit?.size_width,
-    size_height: unit?.size_height,
-    is_enabled: a.is_enabled,
-    inject_after_paragraph: a.inject_after_paragraph,
-    revenue_share_pct: a.revenue_share_pct,
-  }
-})
+    const unit = Array.isArray(a.ad_units) ? a.ad_units[0] : a.ad_units
+    return {
+      id: unit?.id,
+      ad_type: unit?.ad_type,
+      position: unit?.position,
+      ad_code: unit?.ad_code,
+      gam_network_code: unit?.gam_network_code,
+      gam_unit_path: unit?.gam_unit_path,
+      size_width: unit?.size_width,
+      size_height: unit?.size_height,
+      is_enabled: a.is_enabled,
+      inject_after_paragraph: a.inject_after_paragraph,
+      revenue_share_pct: a.revenue_share_pct,
+    }
+  })
 
- return NextResponse.json({
+  return NextResponse.json({
     publisher: profile.id,
     site: { id: site.id, name: site.name, url: site.site_url },
     ads,
