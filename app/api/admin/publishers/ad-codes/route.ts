@@ -66,20 +66,23 @@ export async function GET(req: NextRequest) {
     .eq('site_id', site.id)
     .eq('is_enabled', true)
 
-  const ads = (assignments || []).map(a => ({
-    id: a.ad_units?.id,
-    name: a.ad_units?.name,
-    ad_type: a.ad_units?.ad_type,
-    position: a.ad_units?.position,
-    ad_code: a.ad_units?.ad_code,
-    gam_network_code: a.ad_units?.gam_network_code,
-    gam_unit_path: a.ad_units?.gam_unit_path,
-    size_width: a.ad_units?.size_width,
-    size_height: a.ad_units?.size_height,
+  const ads = (assignments || []).map(a => {
+  const unit = Array.isArray(a.ad_units) ? a.ad_units[0] : a.ad_units
+  return {
+    id: unit?.id,
+    name: unit?.name,
+    ad_type: unit?.ad_type,
+    position: unit?.position,
+    ad_code: unit?.ad_code,
+    gam_network_code: unit?.gam_network_code,
+    gam_unit_path: unit?.gam_unit_path,
+    size_width: unit?.size_width,
+    size_height: unit?.size_height,
     is_enabled: a.is_enabled,
     inject_after_paragraph: a.inject_after_paragraph,
     revenue_share_pct: a.revenue_share_pct,
-  }))
+  }
+})
 
   return NextResponse.json({
     publisher: profile.user_id,
