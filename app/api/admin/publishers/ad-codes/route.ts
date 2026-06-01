@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
   // Look up publisher by API key
   const { data: profile } = await admin
     .from('user_profiles')
-    .select('user_id, plan, byoak_keys')
+    .select('id, plan')
     .eq('publisher_api_key', key)
     .single()
 
@@ -29,14 +29,14 @@ export async function GET(req: NextRequest) {
   const { data: site } = await admin
     .from('sites')
     .select('id, name, site_url')
-    .eq('user_id', profile.user_id)
-    .ilike('site_url', `%${cleanUrl.replace(/^https?:\/\//, '')}%`)
+   .eq('user_id', profile.id)
+.ilike('site_url', `%${cleanUrl.replace(/^https?:\/\//, '')}%`)
     .single()
 
   if (!site) {
     return NextResponse.json({
-      publisher: profile.user_id,
-      site: null,
+      publisher: profile.id,
+site: null,
       ads: [],
       message: 'No site found matching this URL — please add your site in TrendingVerse CMS Settings'
     })
@@ -62,7 +62,7 @@ export async function GET(req: NextRequest) {
         size_height
       )
     `)
-    .eq('publisher_id', profile.user_id)
+    .eq('publisher_id', profile.id)
     .eq('site_id', site.id)
     .eq('is_enabled', true)
 
@@ -84,8 +84,8 @@ export async function GET(req: NextRequest) {
   }
 })
 
-  return NextResponse.json({
-    publisher: profile.user_id,
+ return NextResponse.json({
+    publisher: profile.id,
     site: { id: site.id, name: site.name, url: site.site_url },
     ads,
     cached_until: new Date(Date.now() + 3600000).toISOString(),
