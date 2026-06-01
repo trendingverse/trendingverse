@@ -12,10 +12,29 @@ export function APIKeysPanel() {
   const [keys, setKeys] = useState({ gemini_key: '', openai_key: '', claude_key: '', preferred_model: 'gemini', plan: 'free', has_gemini: false, has_openai: false, has_claude: false })
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState<string | null>(null)
+  const [publisherKey, setPublisherKey] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+  const [loadingKey, setLoadingKey] = useState(true)
 
   useEffect(() => {
     fetch('/api/user/keys').then(r => r.json()).then(setKeys)
+    // Load publisher API key
+    fetch('/api/user/publisher-key')
+      .then(r => r.json())
+      .then(data => {
+        setPublisherKey(data.publisher_api_key || null)
+        setLoadingKey(false)
+      })
+      .catch(() => setLoadingKey(false))
   }, [])
+
+  async function copyKey() {
+    if (!publisherKey) return
+    await navigator.clipboard.writeText(publisherKey)
+    setCopied(true)
+    toast.success('API key copied!')
+    setTimeout(() => setCopied(false), 2000)
+  }
 
   async function save() {
     setSaving(true)
@@ -33,7 +52,6 @@ export function APIKeysPanel() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       toast.success('API keys saved!')
-      // Refresh to show masked keys
       fetch('/api/user/keys').then(r => r.json()).then(setKeys)
     } catch (e) {
       toast.error((e as Error).message)
@@ -85,9 +103,46 @@ export function APIKeysPanel() {
 
   return (
     <div className="space-y-6">
+
+      {/* Publisher API Key — shown to all users */}
+      <div className="card p-5 border-2 border-accent/20">
+        <div className="flex items-center gap-2 mb-3">
+          <span className="text-lg">🔌</span>
+          <div>
+            <h3 className="font-semibold text-ink-900 text-sm">TrendingVerse Publisher API Key</h3>
+            <p className="text-xs text-ink-400">Use this key in the TrendingVerse Ads WordPress plugin to connect your site</p>
+          </div>
+        </div>
+
+        {loadingKey ? (
+          <div className="h-10 bg-ink-50 rounded-xl animate-pulse" />
+        ) : publisherKey ? (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <div className="flex-1 bg-ink-50 border border-ink-100 rounded-xl px-4 py-2.5 font-mono text-xs text-ink-700 overflow-hidden">
+                {publisherKey}
+              </div>
+              <button onClick={copyKey}
+                className={`shrink-0 px-4 py-2.5 rounded-xl text-xs font-medium transition-colors ${copied ? 'bg-green-500 text-white' : 'bg-accent text-white hover:bg-accent/90'}`}>
+                {copied ? '✓ Copied!' : 'Copy'}
+              </button>
+            </div>
+            <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl">
+              <p className="text-xs text-amber-700">
+                <strong>How to use:</strong> Install TrendingVerse Ads plugin on your WordPress site → go to Settings → TrendingVerse Ads → paste this key → Save & Connect
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="p-3 bg-ink-50 rounded-xl text-xs text-ink-500">
+            Publisher key not generated yet. Contact support at support@trendingverse.online
+          </div>
+        )}
+      </div>
+
       {/* Info banner */}
       <div className="p-4 bg-blue-50 border border-blue-100 rounded-xl">
-        <h3 className="font-semibold text-blue-900 text-sm mb-1">🔑 Bring Your Own API Key</h3>
+        <h3 className="font-semibold text-blue-900 text-sm mb-1">🔑 Bring Your Own AI API Key</h3>
         <p className="text-xs text-blue-700">
           Add your own API keys to get unlimited article generation — no quota limits, no interruptions.
           Your keys are encrypted and stored securely. We never use them for anything else.
@@ -151,8 +206,7 @@ export function APIKeysPanel() {
         ))}
       </div>
 
-      <button onClick={save} disabled={saving}
-        className="btn-primary w-full justify-center py-2.5">
+      <button onClick={save} disabled={saving} className="btn-primary w-full justify-center py-2.5">
         {saving ? '⟳ Saving...' : '💾 Save API Keys'}
       </button>
 
