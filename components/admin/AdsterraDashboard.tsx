@@ -405,11 +405,11 @@ const maxVal = isPublisherView
             <>
               <div className="flex items-end gap-0.5 h-32 mb-2">
                 {chartData.map((d, i) => {
-                  const val = d.earnings ?? d.revenue ?? 0
+                  const val = isPublisherView ? (d.impressions || 0) : (d.earnings ?? d.revenue ?? 0)
                   return (
                     <div key={i} className="flex-1 group relative">
                       <div className="absolute -top-14 left-1/2 -translate-x-1/2 bg-ink-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10">
-                        {d.date}<br/>{d.impressions} imp · {d.clicks} clicks · ${val.toFixed(4)}
+                        {d.date}<br/>{d.impressions} imp · {d.clicks} clicks{!isPublisherView ? ` · $${val.toFixed(4)}` : ''}
                       </div>
                       <div className="w-full bg-green-400 hover:bg-green-500 rounded-t transition-colors"
                         style={{ height: `${Math.max(2, (val / maxVal) * 100)}%` }} />
