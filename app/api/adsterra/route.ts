@@ -198,24 +198,33 @@ export async function GET(req: NextRequest) {
       const grossRevenue = publisherTotals.revenue
       const publisherEarnings = grossRevenue * (revenueSharePct / 100)
 
-      // Calculate publisher's share ratio from full network
-      const fullNetworkImpressions = (dateStats.items || []).reduce(
-        (s: number, d: Record<string, unknown>) => s + Number(parseItem(d).impressions), 0
-      )
-      const shareRatio = fullNetworkImpressions > 0
-        ? publisherTotals.impressions / fullNetworkImpressions
-        : 0
+      // Fetch publisher's domain stats grouped by date for accurate daily breakdown
+const publisherDateStats = await fetchAdsterra(
+  `stats.json?start_date=${startDate}&finish_date=${endDate}&group_by=date&domain=${Array.from(publisherAdsterraDomainIds).join(',')}`,
+  apiKey
+)
 
-      // Scale daily stats proportionally to publisher's share
-      const chartData = (dateStats.items || []).map((item: Record<string, unknown>) => {
-        const parsed = parseItem(item)
-        return {
-          date: parsed.date,
-          impressions: Math.round(parsed.impressions * shareRatio),
-          clicks: Math.round(parsed.clicks * shareRatio),
-          earnings: parseFloat((parsed.revenue * shareRatio * (revenueSharePct / 100)).toFixed(4)),
-        }
-      })
+// Use domain-filtered date stats if available, else scale from network
+const dailyItems: Record<string, unknown>[] = publisherDateStats.items?.length
+  ? publisherDateStats.items
+  : (dateStats.items || [])
+
+const fullNetworkImpressions = (dateStats.items || []).reduce(
+  (s: number, d: Record<string, unknown>) => s + Number(parseItem(d).impressions), 0
+)
+const shareRatio = fullNetworkImpressions > 0 && !publisherDateStats.items?.length
+  ? publisherTotals.impressions / fullNetworkImpressions
+  : 1
+
+const chartData = dailyItems.map((item: Record<string, unknown>) => {
+  const parsed = parseItem(item)
+  return {
+    date: parsed.date,
+    impressions: Math.round(parsed.impressions * shareRatio),
+    clicks: Math.round(parsed.clicks * shareRatio),
+    earnings: parseFloat((parsed.revenue * shareRatio * (revenueSharePct / 100)).toFixed(4)),
+  }
+})
 
       return NextResponse.json({
         role: 'publisher',
