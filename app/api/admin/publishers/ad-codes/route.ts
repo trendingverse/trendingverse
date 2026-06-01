@@ -85,6 +85,24 @@ export async function GET(req: NextRequest) {
       revenue_share_pct: a.revenue_share_pct,
     }
   })
+  // Block restricted ad categories from being served
+const BLOCKED_KEYWORDS = [
+  'casino', 'gambling', 'bet', 'poker', 'slots', 'lottery',
+  'adult', 'xxx', 'porn', 'sex',
+  'one-vv5163.com', 'tobacco', 'cigarette'
+]
+
+const safeAds = ads.filter(ad => {
+  const code = (ad.ad_code || '').toLowerCase()
+  return !BLOCKED_KEYWORDS.some(keyword => code.includes(keyword))
+})
+
+return NextResponse.json({
+  publisher: profile.id,
+  site: { id: site.id, name: site.name, url: site.site_url },
+  ads: safeAds,
+  cached_until: new Date(Date.now() + 3600000).toISOString(),
+})
 
   return NextResponse.json({
     publisher: profile.id,
