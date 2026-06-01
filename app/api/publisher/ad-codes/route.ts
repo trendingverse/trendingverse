@@ -70,7 +70,7 @@ const ads = (assignments || []).map(a => {
   const unit = Array.isArray(a.ad_units) ? a.ad_units[0] : a.ad_units
   return {
     id: unit?.id,
-    name: unit?.name,
+ 
     ad_type: unit?.ad_type,
     position: unit?.position,
     ad_code: unit?.ad_code,
