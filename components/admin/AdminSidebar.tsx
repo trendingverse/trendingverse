@@ -11,6 +11,7 @@ const baseNav = [
     { href: '/admin/articles', label: 'Articles', icon: '▤' },
     { href: '/admin/categories', label: 'Categories', icon: '◼' },
     { href: '/admin/media', label: 'Media', icon: '◧' },
+    { href: '/admin/paste-enrich', label: 'Paste & Enrich', icon: '📋' },
   ]},
   { label: 'AI & SEO', items: [
     { href: '/admin/ai-writer', label: 'AI Writer', icon: '✦' },
