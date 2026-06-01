@@ -237,7 +237,11 @@ function exportPDF() {
 
   const { totals, chartData = [], domains = [] } = data || {}
   const isPublisher = data?.role === 'publisher'
-  const maxVal = Math.max(...chartData.map(d => d.revenue || d.earnings || 0), 0.001)
+// For publishers use impressions as bar metric since earnings may be near-zero
+const isPublisherView = data?.role === 'publisher'
+const maxVal = isPublisherView
+  ? Math.max(...chartData.map(d => d.impressions || 0), 1)
+  : Math.max(...chartData.map(d => d.revenue || d.earnings || 0), 0.001)
 
   const publisherCards: StatCard[] = totals ? [
     { label: 'Your Earnings (USD)', value: `$${totals.your_earnings_usd?.toFixed(4) || '0.0000'}`, icon: '💰', color: 'text-green-600' },
