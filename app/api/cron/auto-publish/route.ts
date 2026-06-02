@@ -282,6 +282,7 @@ export async function GET(req: NextRequest) {
       keywords: article.keywords || [],
       status: 'published',
       ai_generated: true,
+      source: 'cron',
       author_name: 'TrendingVerse AI',
       word_count: (article.content || '').replace(/<[^>]+>/g, '').split(' ').length,
       reading_time_min: article.reading_time || 4,
