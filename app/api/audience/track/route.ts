@@ -35,7 +35,23 @@ function getOS(ua: string): string {
   return 'Other'
 }
 
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 200,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'POST, PUT, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+    },
+  })
+}
+
 export async function POST(req: NextRequest) {
+  const corsHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'POST, PUT, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+  }
   const body = await req.json().catch(() => ({}))
   const { fingerprint, event_type, site_url, page_url, page_title, category, value, referrer } = body
 
@@ -112,11 +128,16 @@ export async function POST(req: NextRequest) {
     })
   }
 
-  return NextResponse.json({ ok: true })
+  return NextResponse.json({ ok: true }, { headers: corsHeaders })
 }
 
 // Lead capture
 export async function PUT(req: NextRequest) {
+  const corsHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'POST, PUT, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+  }
   const body = await req.json().catch(() => ({}))
   const { fingerprint, email, name, phone, city, gender, age_range, interests, source_site, source_page } = body
 
