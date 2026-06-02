@@ -13,7 +13,7 @@ interface CronLog {
 interface Article {
   id: string; title: string; status: string; view_count: number
   seo_score: number; published_at: string; ai_generated: boolean
-  created_at: string; slug?: string
+  created_at: string; slug?: string; source?: string
 }
 interface ChartPoint { date: string; count: number; human: number; cron: number }
 
@@ -23,6 +23,7 @@ export function AnalyticsDashboard() {
     allArticles: Article[]; cronLogs: CronLog[]
     cronStats: { success: number; failed: number; skipped: number }
     plan: string; articlesUsedToday: number; planLimit: number
+    isAdmin?: boolean
   } | null>(null)
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'all' | 'human' | 'cron'>('all')
@@ -40,29 +41,29 @@ export function AnalyticsDashboard() {
   )
   if (!data) return <div className="text-red-500">Failed to load analytics</div>
 
-  const { stats, chartData, allArticles, cronLogs, cronStats, plan, articlesUsedToday, planLimit } = data
+  const { stats, chartData, allArticles, cronLogs, cronStats, plan, articlesUsedToday, planLimit, isAdmin } = data
   const usagePct = Math.min(100, Math.round((articlesUsedToday / planLimit) * 100))
   const maxCount = Math.max(...chartData.map(d => d.count), 1)
 
-const filteredArticles = (allArticles || []).filter(a => {
-  if (activeTab === 'human') return (a as any).source !== 'cron'
-  if (activeTab === 'cron')  return (a as any).source === 'cron'
-  return true
-})
+  const filteredArticles = (allArticles || []).filter(a => {
+    if (activeTab === 'human') return a.source !== 'cron'
+    if (activeTab === 'cron')  return a.source === 'cron'
+    return true
+  })
   const displayedArticles = showAllArticles ? filteredArticles : filteredArticles.slice(0, 10)
 
   return (
     <div className="space-y-6">
 
- {/* Cron history — admin only since cron runs on admin account */}
-{(data.isAdmin) && <div className="card p-5">
+      {/* Plan usage */}
+      <div className="card p-5">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-3">
             <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${plan === 'pro' ? 'bg-amber-100 text-amber-700' : 'bg-ink-100 text-ink-600'}`}>
               {plan} plan
             </span>
             <span className="text-sm text-ink-500">
-              {articlesUsedToday} / {['pro','byoak','agency'].includes(plan) ? '∞' : planLimit} articles today
+              {articlesUsedToday} / {['pro','byoak','agency','growth'].includes(plan) ? '∞' : planLimit} articles today
             </span>
           </div>
           {plan === 'free' && (
@@ -88,8 +89,8 @@ const filteredArticles = (allArticles || []).filter(a => {
           { label: 'AI Generated',     value: stats.aiArticles,        icon: '✦',  color: 'text-violet-600' },
           { label: 'Today',            value: stats.articlesToday,     icon: '☀',  color: 'text-blue-600' },
           { label: 'This Week',        value: stats.articlesThisWeek,  icon: '📅', color: 'text-teal-600' },
-          { label: 'Cron Success',     value: cronStats.success,        icon: '⚡', color: 'text-green-600' },
-          { label: 'Cron Failed',      value: cronStats.failed,         icon: '⚠', color: 'text-red-500' },
+          { label: 'Cron Success',     value: cronStats.success,       icon: '⚡', color: 'text-green-600' },
+          { label: 'Cron Failed',      value: cronStats.failed,        icon: '⚠', color: 'text-red-500' },
         ].map(s => (
           <div key={s.label} className="card p-4">
             <div className="flex items-center justify-between mb-1">
@@ -140,7 +141,6 @@ const filteredArticles = (allArticles || []).filter(a => {
               <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-ink-900 text-white text-xs px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap pointer-events-none z-10">
                 {d.date.slice(5)}: {d.human}👤 {d.cron}⚡
               </div>
-              {/* Stacked bar — cron on top */}
               <div className="w-full flex flex-col justify-end" style={{ height: `${Math.max(2, (d.count / maxCount) * 100)}%` }}>
                 {d.cron > 0 && (
                   <div className="w-full bg-violet-400 hover:bg-violet-500 rounded-t transition-all"
@@ -167,8 +167,8 @@ const filteredArticles = (allArticles || []).filter(a => {
           <div className="flex gap-1 p-0.5 bg-ink-100 rounded-lg">
             {([
               { key: 'all',   label: `All (${allArticles?.length || 0})` },
-           { key: 'human', label: `👤 Human (${(allArticles || []).filter(a => (a as any).source !== 'cron').length})` },
-{ key: 'cron',  label: `⚡ Cron (${(allArticles || []).filter(a => (a as any).source === 'cron').length})` },
+              { key: 'human', label: `👤 Human (${(allArticles || []).filter(a => a.source !== 'cron').length})` },
+              { key: 'cron',  label: `⚡ Cron (${(allArticles || []).filter(a => a.source === 'cron').length})` },
             ] as const).map(t => (
               <button key={t.key} onClick={() => { setActiveTab(t.key); setShowAllArticles(false) }}
                 className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${activeTab === t.key ? 'bg-white shadow text-ink-900' : 'text-ink-500'}`}>
@@ -197,9 +197,9 @@ const filteredArticles = (allArticles || []).filter(a => {
                 </td>
                 <td className="px-3 py-2.5 text-center">
                   <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                    (a as any).source === 'cron' ? 'bg-violet-100 text-violet-700' : 'bg-blue-100 text-blue-700'
+                    a.source === 'cron' ? 'bg-violet-100 text-violet-700' : 'bg-blue-100 text-blue-700'
                   }`}>
-                    {(a as any).source === 'cron' ? '⚡ Cron' : '👤 Human'}
+                    {a.source === 'cron' ? '⚡ Cron' : '👤 Human'}
                   </span>
                 </td>
                 <td className="px-3 py-2.5 text-center">
@@ -226,46 +226,48 @@ const filteredArticles = (allArticles || []).filter(a => {
         )}
       </div>
 
-      {/* Cron history */}
-      <div className="card p-5">
-        <h3 className="font-semibold text-ink-900 mb-1">Auto-publish Cron History</h3>
-        <p className="text-xs text-ink-400 mb-4">Runs daily at ~9:00 AM IST — fetches trending topic, generates &amp; publishes automatically</p>
-        <div className="space-y-2">
-          {cronLogs.length === 0 && <p className="text-sm text-ink-300">No cron runs yet</p>}
-          {cronLogs.map(log => (
-            <div key={log.id} className={`flex items-start gap-3 p-3 rounded-xl border ${
-              log.status === 'success' ? 'bg-green-50 border-green-100' :
-              log.status === 'failed'  ? 'bg-red-50 border-red-100' :
-              'bg-amber-50 border-amber-100'
-            }`}>
-              <span className={`mt-0.5 font-bold ${
-                log.status === 'success' ? 'text-green-500' :
-                log.status === 'failed'  ? 'text-red-500' : 'text-amber-500'
+      {/* Cron history — admin only */}
+      {isAdmin && (
+        <div className="card p-5">
+          <h3 className="font-semibold text-ink-900 mb-1">Auto-publish Cron History</h3>
+          <p className="text-xs text-ink-400 mb-4">Runs daily at ~9:00 AM IST — fetches trending topic, generates &amp; publishes automatically</p>
+          <div className="space-y-2">
+            {cronLogs.length === 0 && <p className="text-sm text-ink-300">No cron runs yet</p>}
+            {cronLogs.map(log => (
+              <div key={log.id} className={`flex items-start gap-3 p-3 rounded-xl border ${
+                log.status === 'success' ? 'bg-green-50 border-green-100' :
+                log.status === 'failed'  ? 'bg-red-50 border-red-100' :
+                'bg-amber-50 border-amber-100'
               }`}>
-                {log.status === 'success' ? '✓' : log.status === 'failed' ? '✗' : '⊘'}
-              </span>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-                  <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${
-                    log.status === 'success' ? 'bg-green-100 text-green-700' :
-                    log.status === 'failed'  ? 'bg-red-100 text-red-700' :
-                    'bg-amber-100 text-amber-700'
-                  }`}>{log.status}</span>
-                  <span className="text-xs text-ink-400">
-                    {new Date(log.ran_at).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })} IST
-                  </span>
+                <span className={`mt-0.5 font-bold ${
+                  log.status === 'success' ? 'text-green-500' :
+                  log.status === 'failed'  ? 'text-red-500' : 'text-amber-500'
+                }`}>
+                  {log.status === 'success' ? '✓' : log.status === 'failed' ? '✗' : '⊘'}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                    <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${
+                      log.status === 'success' ? 'bg-green-100 text-green-700' :
+                      log.status === 'failed'  ? 'bg-red-100 text-red-700' :
+                      'bg-amber-100 text-amber-700'
+                    }`}>{log.status}</span>
+                    <span className="text-xs text-ink-400">
+                      {new Date(log.ran_at).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })} IST
+                    </span>
+                  </div>
+                  {log.title && <p className="text-xs font-medium text-ink-900 truncate">{log.title}</p>}
+                  {!log.title && log.error && <p className="text-xs text-red-600 truncate">{log.error}</p>}
+                  {log.wp_url && log.wp_url !== 'https://trendingverse.online' && (
+                    <a href={log.wp_url} target="_blank" rel="noopener noreferrer"
+                      className="text-xs text-blue-500 hover:underline">View live post →</a>
+                  )}
                 </div>
-                {log.title && <p className="text-xs font-medium text-ink-900 truncate">{log.title}</p>}
-                {!log.title && log.error && <p className="text-xs text-red-600 truncate">{log.error}</p>}
-                {log.wp_url && log.wp_url !== 'https://trendingverse.online' && (
-                  <a href={log.wp_url} target="_blank" rel="noopener noreferrer"
-                    className="text-xs text-blue-500 hover:underline">View live post →</a>
-                )}
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
     </div>
   )
