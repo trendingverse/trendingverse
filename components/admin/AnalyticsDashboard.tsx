@@ -135,17 +135,33 @@ export function AnalyticsDashboard() {
         {/* Recent articles */}
         <div className="card p-5">
           <h3 className="font-semibold text-ink-900 mb-4">Recent articles</h3>
-          <div className="space-y-3">
+          <div className="space-y-2">
             {recentArticles.length === 0 && <p className="text-sm text-ink-300">No articles yet</p>}
             {recentArticles.map(a => (
               <div key={a.id} className="flex items-center gap-3 p-3 bg-ink-50 rounded-xl">
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-ink-900 truncate">{a.title}</p>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <span className={`text-xs px-1.5 py-0.5 rounded-full ${a.status === 'published' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>{a.status}</span>
-                    {a.ai_generated && <span className="text-xs text-violet-500">AI</span>}
+                  <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                    <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${
+                      a.status === 'published' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+                    }`}>{a.status}</span>
+
+                    {/* Source badge — cron vs user */}
+                    <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${
+                      a.ai_generated
+                        ? 'bg-violet-100 text-violet-700'
+                        : 'bg-blue-100 text-blue-700'
+                    }`}>
+                      {a.ai_generated ? '⚡ Cron' : '👤 User'}
+                    </span>
+
                     <span className="text-xs text-ink-400">SEO: {a.seo_score}</span>
                     <span className="text-xs text-ink-400">{a.view_count} views</span>
+                    {a.published_at && (
+                      <span className="text-xs text-ink-300">
+                        {new Date(a.published_at).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -155,20 +171,44 @@ export function AnalyticsDashboard() {
 
         {/* Cron history */}
         <div className="card p-5">
-          <h3 className="font-semibold text-ink-900 mb-4">Auto-publish history</h3>
+          <h3 className="font-semibold text-ink-900 mb-1">Auto-publish cron history</h3>
+          <p className="text-xs text-ink-400 mb-4">Runs daily at ~9:00 AM IST — fetches trending topic, generates & publishes automatically</p>
           <div className="space-y-2">
             {cronLogs.length === 0 && <p className="text-sm text-ink-300">No cron runs yet</p>}
             {cronLogs.map(log => (
-              <div key={log.id} className="flex items-start gap-3 p-3 bg-ink-50 rounded-xl">
-                <span className={`mt-0.5 text-sm ${log.status === 'success' ? 'text-green-500' : log.status === 'failed' ? 'text-red-500' : 'text-amber-500'}`}>
+              <div key={log.id} className={`flex items-start gap-3 p-3 rounded-xl border ${
+                log.status === 'success' ? 'bg-green-50 border-green-100' :
+                log.status === 'failed'  ? 'bg-red-50 border-red-100' :
+                'bg-amber-50 border-amber-100'
+              }`}>
+                <span className={`mt-0.5 text-base font-bold ${
+                  log.status === 'success' ? 'text-green-500' :
+                  log.status === 'failed'  ? 'text-red-500' : 'text-amber-500'
+                }`}>
                   {log.status === 'success' ? '✓' : log.status === 'failed' ? '✗' : '⊘'}
                 </span>
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium text-ink-900 truncate">{log.title || log.error || 'Cron run'}</p>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <span className="text-xs text-ink-400">{new Date(log.ran_at).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
-                    {log.wp_url && <a href={log.wp_url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-500 hover:underline truncate">View post →</a>}
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${
+                      log.status === 'success' ? 'bg-green-100 text-green-700' :
+                      log.status === 'failed'  ? 'bg-red-100 text-red-700' :
+                      'bg-amber-100 text-amber-700'
+                    }`}>{log.status}</span>
+                    <span className="text-xs text-ink-400">
+                      {new Date(log.ran_at).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })} IST
+                    </span>
                   </div>
+                  {log.title ? (
+                    <p className="text-xs font-medium text-ink-900 truncate">{log.title}</p>
+                  ) : log.error ? (
+                    <p className="text-xs text-red-600 truncate">{log.error}</p>
+                  ) : null}
+                  {log.wp_url && log.wp_url !== 'https://trendingverse.online' && (
+                    <a href={log.wp_url} target="_blank" rel="noopener noreferrer"
+                      className="text-xs text-blue-500 hover:underline">
+                      View live post →
+                    </a>
+                  )}
                 </div>
               </div>
             ))}
