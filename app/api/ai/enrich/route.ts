@@ -20,11 +20,40 @@ export async function POST(req: NextRequest) {
   const wordCount = content.trim().split(/\s+/).filter(Boolean).length
   const readTime = Math.max(1, Math.ceil(wordCount / 200))
 
- const prompt = `You are an expert SEO specialist for Indian news publishers.
-CRITICAL: You MUST respond with ONLY a valid JSON object. No explanations, no markdown, no text before or after. Just the raw JSON.
-Even if the article is in Kannada, Hindi or any Indian language, your response must be JSON only with English values for SEO fields.
-Analyze this article and generate SEO metadata:
+  // Detect language from content + title
+  const sample = title + ' ' + content.slice(0, 500)
+  const isKannada   = /[\u0C80-\u0CFF]/.test(sample)
+  const isHindi     = /[\u0900-\u097F]/.test(sample)
+  const isTelugu    = /[\u0C00-\u0C7F]/.test(sample)
+  const isTamil     = /[\u0B80-\u0BFF]/.test(sample)
+  const isMalayalam = /[\u0D00-\u0D7F]/.test(sample)
+  const isMarathi   = /[\u0900-\u097F]/.test(sample) && /मराठी|महाराष्ट्र/.test(sample)
 
+  const detectedLang = isKannada ? 'Kannada'
+    : isMarathi   ? 'Marathi'
+    : isHindi     ? 'Hindi'
+    : isTelugu    ? 'Telugu'
+    : isTamil     ? 'Tamil'
+    : isMalayalam ? 'Malayalam'
+    : 'English'
+
+  const readTimeLabel = isKannada   ? `${readTime} ನಿಮಿಷ`
+    : isHindi     ? `${readTime} मिनट`
+    : isTelugu    ? `${readTime} నిమిషాలు`
+    : isTamil     ? `${readTime} நிமிடங்கள்`
+    : isMalayalam ? `${readTime} മിനിറ്റ്`
+    : `${readTime} min read`
+
+  const prompt = `You are an expert SEO specialist for Indian news publishers.
+
+CRITICAL RULES — follow all strictly:
+1. Respond with ONLY a valid JSON object. No markdown fences, no preamble, nothing else.
+2. The article is in ${detectedLang}. ALL text fields MUST be written in ${detectedLang}.
+3. Fields that MUST be in ${detectedLang}: seo_title, meta_description, focus_keyword, secondary_keywords, excerpt, discover_headline, discover_tags, readability_tips.
+4. The slug field MUST always be URL-safe English only (lowercase, hyphens, no special characters).
+5. Never switch to English for any text field if the article is not in English.
+
+Article details:
 Title: ${title}
 Category: ${category || 'General'}
 Content (first 1500 chars): ${content.slice(0, 1500)}
@@ -32,30 +61,19 @@ Word count: ${wordCount}
 
 Return this exact JSON structure:
 {
-  "seo_title": "SEO-optimized title under 60 characters with primary keyword",
-  "meta_description": "Compelling meta description 150-160 characters with call to action",
-  "focus_keyword": "primary keyword phrase (2-4 words)",
-  "secondary_keywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"],
-  "slug": "url-friendly-slug-from-title",
-  "excerpt": "2-3 sentence article summary for RSS and social sharing",
-  "discover_headline": "Google Discover optimized headline - curiosity-driven, under 70 chars",
-  "discover_tags": ["tag1", "tag2", "tag3", "tag4", "tag5"],
+  "seo_title": "SEO-optimized title in ${detectedLang} under 60 characters",
+  "meta_description": "Compelling meta description in ${detectedLang} 150-160 characters",
+  "focus_keyword": "primary keyword in ${detectedLang} (2-4 words)",
+  "secondary_keywords": ["keyword1 in ${detectedLang}", "keyword2", "keyword3", "keyword4", "keyword5"],
+  "slug": "url-friendly-english-slug-only",
+  "excerpt": "2-3 sentence summary in ${detectedLang} for RSS and social sharing",
+  "discover_headline": "Google Discover headline in ${detectedLang} under 70 chars",
+  "discover_tags": ["tag1 in ${detectedLang}", "tag2", "tag3", "tag4", "tag5"],
   "readability_score": 75,
-  "readability_tips": ["tip1 to improve readability", "tip2"],
+  "readability_tips": ["tip in ${detectedLang}", "tip2 in ${detectedLang}"],
   "word_count": ${wordCount},
-  "estimated_read_time": "${readTime} min read"
-}
-
-Rules:
-- LANGUAGE: Article is in ${detectedLang}. seo_title, meta_description, focus_keyword, secondary_keywords, excerpt, discover_headline, discover_tags, readability_tips MUST ALL be in ${detectedLang}. This is non-negotiable.
-- Only the slug must be in English (URL-safe, lowercase, hyphens only)
-- Focus keyword must appear naturally in SEO title
-- Meta description must be action-oriented
-- Discover headline should be curiosity-driven, under 70 characters
-- Tags should be trending topics relevant to this article in ${detectedLang}
-- Readability score: 0-100 based on sentence length, vocabulary, structure
-- Give 2-3 practical readability improvement tips in ${detectedLang}
-- estimated_read_time: "${readTime} ನಿಮಿಷ" for Kannada, "${readTime} मिनट" for Hindi, "${readTime} min read" for English
+  "estimated_read_time": "${readTimeLabel}"
+}`
 
   try {
     const geminiKey = process.env.GEMINI_API_KEY
@@ -66,9 +84,13 @@ Rules:
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-body: JSON.stringify({
-  system_instruction: { parts: [{ text: `You are a JSON-only API. Always respond with valid JSON and nothing else. Never use markdown code fences. When the article is in ${detectedLang}, ALL text fields must be in ${detectedLang} — never translate to English.` }] },
-  contents: [{ parts: [{ text: prompt }] }],
+        body: JSON.stringify({
+          system_instruction: {
+            parts: [{
+              text: `You are a JSON-only API. Always respond with valid JSON and nothing else. Never use markdown code fences. The article is in ${detectedLang} — ALL text fields in your response must be in ${detectedLang}. Never translate to English unless the article is in English.`
+            }]
+          },
+          contents: [{ parts: [{ text: prompt }] }],
           generationConfig: { temperature: 0.2, maxOutputTokens: 2048 },
         }),
       }
@@ -87,13 +109,11 @@ body: JSON.stringify({
     try {
       parsed = JSON.parse(cleaned)
     } catch {
-      // Try to extract JSON object
       const match = cleaned.match(/\{[\s\S]*\}/)
       if (match) parsed = JSON.parse(match[0])
       else throw new Error('Could not parse AI response as JSON')
     }
 
-    // Ensure slug is set
     if (!parsed.slug) parsed.slug = slugify(title) + '-' + Date.now()
 
     return NextResponse.json(parsed)
