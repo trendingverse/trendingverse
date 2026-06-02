@@ -40,10 +40,10 @@ export async function GET() {
     supabase.from('articles').select('*', { count: 'exact', head: true }).eq('user_id', user.id).gte('created_at', today),
     supabase.from('articles').select('*', { count: 'exact', head: true }).eq('user_id', user.id).gte('created_at', sevenDaysAgo),
     // Human = not ai_generated OR ai_generated false
-    supabase.from('articles').select('*', { count: 'exact', head: true }).eq('user_id', user.id).eq('status', 'published').eq('ai_generated', false),
-    // Cron = ai_generated true + published
-    supabase.from('articles').select('*', { count: 'exact', head: true }).eq('user_id', user.id).eq('status', 'published').eq('ai_generated', true),
-    supabase.from('articles').select('id,title,status,view_count,seo_score,published_at,ai_generated,created_at').eq('user_id', user.id).order('created_at', { ascending: false }).limit(5),
+
+   supabase.from('articles').select('*', { count: 'exact', head: true }).eq('user_id', user.id).eq('status', 'published').eq('source', 'human'),
+ // Cron = ai_generated true + published
+    supabase.from('articles').select('*', { count: 'exact', head: true }).eq('user_id', user.id).eq('status', 'published').eq('source', 'cron'),    supabase.from('articles').select('id,title,status,view_count,seo_score,published_at,ai_generated,created_at').eq('user_id', user.id).order('created_at', { ascending: false }).limit(5),
     supabase.from('user_profiles').select('plan,articles_used_today').eq('id', user.id).single(),
     supabase.from('articles').select('created_at,ai_generated').eq('user_id', user.id).gte('created_at', thirtyDaysAgo).order('created_at', { ascending: true }),
     // All articles for detailed list
