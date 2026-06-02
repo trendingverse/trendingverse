@@ -67,8 +67,8 @@ export async function GET() {
   for (const a of articlesByDay || []) {
     const key = a.created_at.split('T')[0]
     if (dayMap[key] !== undefined) {
-      if (a.ai_generated) dayMap[key].cron++
-      else dayMap[key].human++
+if ((a as any).source === 'cron') dayMap[key].cron++
+else dayMap[key].human++
     }
   }
   const chartData = Object.entries(dayMap).map(([date, counts]) => ({
