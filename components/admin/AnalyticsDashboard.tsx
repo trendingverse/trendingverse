@@ -54,8 +54,8 @@ const filteredArticles = (allArticles || []).filter(a => {
   return (
     <div className="space-y-6">
 
-      {/* Plan usage */}
-      <div className="card p-5">
+ {/* Cron history — admin only since cron runs on admin account */}
+{(data.isAdmin) && <div className="card p-5">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-3">
             <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${plan === 'pro' ? 'bg-amber-100 text-amber-700' : 'bg-ink-100 text-ink-600'}`}>
