@@ -20,23 +20,9 @@ export async function POST(req: NextRequest) {
   const wordCount = content.trim().split(/\s+/).filter(Boolean).length
   const readTime = Math.max(1, Math.ceil(wordCount / 200))
 
-const isKannada = /[\u0C80-\u0CFF]/.test(content + title)
-const isHindi = /[\u0900-\u097F]/.test(content + title)
-const isTelugu = /[\u0C00-\u0C7F]/.test(content + title)
-const isTamil = /[\u0B80-\u0BFF]/.test(content + title)
-const isMalayalam = /[\u0D00-\u0D7F]/.test(content + title)
-
-const detectedLang = isKannada ? 'Kannada' : isHindi ? 'Hindi' : isTelugu ? 'Telugu' :
-  isTamil ? 'Tamil' : isMalayalam ? 'Malayalam' : 'English'
-
 const prompt = `You are an expert SEO specialist for Indian news publishers.
-CRITICAL RULES:
-1. Respond with ONLY a valid JSON object. No markdown fences, no explanations, nothing else.
-2. The article is in ${detectedLang}. ALL text fields in your JSON (seo_title, meta_description, excerpt, discover_headline, focus_keyword, secondary_keywords, discover_tags, readability_tips) MUST be written in ${detectedLang}.
-3. The slug must always be URL-safe English (lowercase, hyphens only).
-4. readability_score must be a number between 0-100.
-5. Never switch to English unless the article is in English.
-
+CRITICAL: You MUST respond with ONLY a valid JSON object. No explanations, no markdown, no text before or after. Just the raw JSON.
+Even if the article is in Kannada, Hindi or any Indian language, your response must be JSON only with English values for SEO fields.
 Analyze this article and generate SEO metadata:
 
 Title: ${title}
