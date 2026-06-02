@@ -34,16 +34,16 @@
       value: value || '',
       referrer: document.referrer || '',
     };
-    // Use sendBeacon for reliability, fallback to fetch
     var data = JSON.stringify(payload);
-    if (navigator.sendBeacon) {
-      var blob = new Blob([data], { type: 'application/json' });
-      navigator.sendBeacon(API, blob);
-    } else {
-      fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: data, keepalive: true }).catch(function(){});
-    }
+    // Always use fetch with keepalive — sendBeacon doesn't support CORS headers
+    fetch(API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: data,
+      keepalive: true,
+      mode: 'cors',
+    }).catch(function(){});
   }
-
   // Track pageview on load
   document.addEventListener('DOMContentLoaded', function() {
     send('pageview');
