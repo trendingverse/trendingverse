@@ -24,6 +24,7 @@ const baseNav = [
   { label: 'System', items: [
     { href: '/admin/analytics', label: 'Analytics', icon: '📊' },
     { href: '/admin/settings', label: 'Settings', icon: '⚙' },
+    { href: '/admin/audience', label: 'Audience', icon: '👥' },
   ]},
 ]
 
