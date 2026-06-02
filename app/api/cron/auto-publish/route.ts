@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'khan.khan.yusuf@gmail.com'
+
 const LANGUAGES: Record<string, string> = {
   'en': 'English',
   'hi': 'Hindi (हिंदी)',
@@ -30,22 +32,17 @@ function slugify(text: string): string {
   return text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80)
 }
 
-// Drop-in replacement for getTrendingTopic function in auto-publish/route.ts
-
 async function getTrendingTopic(geminiKey: string, newsApiKey?: string, region = 'India') {
-  // NewsAPI free tier: use 'everything' endpoint with Indian sources for India trends
   if (newsApiKey) {
     try {
       let url = ''
       if (region === 'India') {
-        // Use 'everything' endpoint with Indian news sources — works on free tier
         url = `https://newsapi.org/v2/everything?sources=the-times-of-india,the-hindu,ndtv,india-today&pageSize=10&sortBy=publishedAt&apiKey=${newsApiKey}`
       } else if (region === 'UK') {
         url = `https://newsapi.org/v2/top-headlines?country=gb&pageSize=10&apiKey=${newsApiKey}`
       } else {
         url = `https://newsapi.org/v2/top-headlines?country=us&pageSize=10&apiKey=${newsApiKey}`
       }
-
       const res = await fetch(url, { cache: 'no-store' })
       if (res.ok) {
         const data = await res.json()
@@ -55,17 +52,12 @@ async function getTrendingTopic(geminiKey: string, newsApiKey?: string, region =
         if (articles.length > 0) {
           const pick = articles[Math.floor(Math.random() * Math.min(5, articles.length))]
           const title = pick.title.replace(/ [-|] [^-|]+$/, '').trim()
-          return {
-            title,
-            category: 'News',
-            keywords: title.split(' ').filter((w: string) => w.length > 4).slice(0, 5)
-          }
+          return { title, category: 'News', keywords: title.split(' ').filter((w: string) => w.length > 4).slice(0, 5) }
         }
       }
     } catch { /* fallback to Gemini */ }
   }
 
-  // Gemini trending detection — works for any region including India
   const today = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })
   try {
     const res = await fetch(
@@ -91,7 +83,6 @@ async function getTrendingTopic(geminiKey: string, newsApiKey?: string, region =
     }
   } catch { /* final fallback */ }
 
-  // Final fallback with region-specific defaults
   const defaults: Record<string, { title: string; category: string; keywords: string[] }> = {
     'India': { title: `India Business and Technology News ${new Date().getFullYear()}`, category: 'Business', keywords: ['india', 'business', 'technology', 'economy', 'news'] },
     'UK': { title: `UK Politics and Economy Update ${new Date().getFullYear()}`, category: 'Politics', keywords: ['uk', 'politics', 'economy', 'britain', 'news'] },
@@ -174,19 +165,31 @@ export async function GET(req: NextRequest) {
   const wpUsername = process.env.WP_USERNAME
   const wpPassword = process.env.WP_APP_PASSWORD
 
-  // Use service role client — no user session needed for cron
   const supabase = createServiceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   )
 
-  // Allow override via query params for testing
+  // Get admin user_id so cron logs are linked to admin account
+  const { data: adminUser } = await supabase
+    .from('user_profiles')
+    .select('id')
+    .eq('id', (
+      await supabase.auth.admin.listUsers()
+        .then(({ data }) => data?.users?.find(u => u.email === ADMIN_EMAIL)?.id || '')
+    ))
+    .single()
+
+  // Fallback — get admin directly from auth
+  const { data: { users } } = await supabase.auth.admin.listUsers()
+  const adminUserId = users?.find(u => u.email === ADMIN_EMAIL)?.id || null
+
   const url = new URL(req.url)
   const langParam = url.searchParams.get('lang') || 'en'
   const regionParam = url.searchParams.get('region') || 'India'
 
   if (!geminiKey) return NextResponse.json({ error: 'GEMINI_API_KEY not set' }, { status: 500 })
-  if (!wpUrl || !wpUsername || !wpPassword) return NextResponse.json({ error: 'WordPress credentials (WP_URL, WP_USERNAME, WP_APP_PASSWORD) not set in env vars' }, { status: 500 })
+  if (!wpUrl || !wpUsername || !wpPassword) return NextResponse.json({ error: 'WordPress credentials not set' }, { status: 500 })
 
   const wpBase = wpUrl.replace(/\/$/, '')
   const auth = Buffer.from(`${wpUsername}:${wpPassword}`).toString('base64')
@@ -195,26 +198,28 @@ export async function GET(req: NextRequest) {
   try {
     log.push(`Starting auto-publish | lang: ${langParam} | region: ${regionParam}`)
 
-    // Step 1: Trending topic
     log.push('Fetching trending topic...')
     const trend = await getTrendingTopic(geminiKey, newsApiKey, regionParam)
     log.push(`Topic: ${trend.title}`)
 
-    // Step 2: Duplicate check
     const slug = slugify(trend.title)
     const isDuplicate = await checkDuplicate(slug, trend.title, wpBase, auth)
     if (isDuplicate) {
       log.push(`Duplicate detected — skipping`)
-      await supabase.from('cron_logs').insert({ status: 'skipped', title: trend.title, wp_url: wpUrl, log })
+      await supabase.from('cron_logs').insert({
+        status: 'skipped',
+        title: trend.title,
+        wp_url: wpUrl,
+        log,
+        user_id: adminUserId,
+      })
       return NextResponse.json({ success: false, skipped: true, reason: 'duplicate', log })
     }
 
-    // Step 3: Generate article
     log.push(`Generating article in ${LANGUAGES[langParam] || 'English'}...`)
     const article = await generateArticle(trend.title, trend.keywords, trend.category, geminiKey, langParam)
     log.push(`Article: ${article.title}`)
 
-    // Step 4: Fetch image
     let wpMediaId: number | null = null
     if (pexelsKey) {
       log.push('Fetching photo from Pexels...')
@@ -240,13 +245,11 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Step 5: Get WP category
     const catRes = await fetch(`${wpBase}/wp-json/wp/v2/categories?per_page=100`, { headers: { Authorization: `Basic ${auth}` } })
     const wpCats = catRes.ok ? await catRes.json() : []
     const matched = wpCats.find((c: { name: string }) => c.name.toLowerCase() === (trend.category || 'news').toLowerCase())
     const categoryIds = matched ? [matched.id] : []
 
-    // Step 6: Publish to WordPress
     log.push('Publishing to WordPress...')
     const wpRes = await fetch(`${wpBase}/wp-json/wp/v2/posts`, {
       method: 'POST',
@@ -270,7 +273,7 @@ export async function GET(req: NextRequest) {
     if (!wpRes.ok) throw new Error(wpData.message || 'WordPress publish failed')
     log.push(`Published: ${wpData.link}`)
 
-    // Step 7: Save to Supabase (no user_id for cron runs)
+    // Save article with admin user_id + source cron
     await supabase.from('articles').insert({
       title: article.title,
       slug: slugify(article.title),
@@ -283,25 +286,35 @@ export async function GET(req: NextRequest) {
       status: 'published',
       ai_generated: true,
       source: 'cron',
+      user_id: adminUserId,
       author_name: 'TrendingVerse AI',
       word_count: (article.content || '').replace(/<[^>]+>/g, '').split(' ').length,
       reading_time_min: article.reading_time || 4,
       published_at: new Date().toISOString(),
     })
 
-    // Log the cron run
+    // Save cron log with admin user_id
     await supabase.from('cron_logs').insert({
       status: 'success',
       title: article.title,
       wp_url: wpData.link,
       log,
+      user_id: adminUserId,
     })
 
     return NextResponse.json({ success: true, title: article.title, wp_url: wpData.link, wp_post_id: wpData.id, language: LANGUAGES[langParam], log })
 
   } catch (e) {
     log.push(`Error: ${(e as Error).message}`)
-    try { await supabase.from('cron_logs').insert({ status: 'failed', error: (e as Error).message, wp_url: wpUrl, log }) } catch { /* ignore log errors */ }
+    try {
+      await supabase.from('cron_logs').insert({
+        status: 'failed',
+        error: (e as Error).message,
+        wp_url: wpUrl,
+        log,
+        user_id: adminUserId,
+      })
+    } catch { /* ignore log errors */ }
     return NextResponse.json({ success: false, error: (e as Error).message, log }, { status: 500 })
   }
 }
