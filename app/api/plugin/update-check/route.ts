@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 // Current plugin version hosted on your server
-const PLUGIN_VERSION = '1.0.2'
+const PLUGIN_VERSION = '1.0.3'
 const PLUGIN_SLUG = 'trendingverse-ads'
 const PLUGIN_FILE = 'trendingverse-ads/trendingverse-ads.php'
 const DOWNLOAD_URL = 'https://trendingverse.vercel.app/api/plugin/download'
