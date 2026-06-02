@@ -20,9 +20,10 @@ export async function POST(req: NextRequest) {
   const wordCount = content.trim().split(/\s+/).filter(Boolean).length
   const readTime = Math.max(1, Math.ceil(wordCount / 200))
 
-  const prompt = `You are an expert SEO specialist and content strategist for Indian news publishers.
-
-Analyze this article and generate comprehensive SEO metadata. Return ONLY valid JSON.
+ const prompt = `You are an expert SEO specialist for Indian news publishers.
+CRITICAL: You MUST respond with ONLY a valid JSON object. No explanations, no markdown, no text before or after. Just the raw JSON.
+Even if the article is in Kannada, Hindi or any Indian language, your response must be JSON only with English values for SEO fields.
+Analyze this article and generate SEO metadata:
 
 Title: ${title}
 Category: ${category || 'General'}
@@ -63,9 +64,10 @@ Rules:
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.3, maxOutputTokens: 1024 },
+    body: JSON.stringify({
+  system_instruction: { parts: [{ text: 'You are a JSON-only API. Always respond with valid JSON and nothing else. Never use markdown code fences.' }] },
+  contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.2, maxOutputTokens: 2048 },
         }),
       }
     )
