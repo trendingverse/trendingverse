@@ -105,13 +105,28 @@ Return this exact JSON structure:
       .replace(/[\s]*`{3,}[\s]*$/i, '')
       .trim()
 
-    let parsed
+   let parsed
     try {
       parsed = JSON.parse(cleaned)
     } catch {
       const match = cleaned.match(/\{[\s\S]*\}/)
-      if (match) parsed = JSON.parse(match[0])
-      else throw new Error('Could not parse AI response as JSON')
+      if (match) {
+        try {
+          parsed = JSON.parse(match[0])
+        } catch {
+          return NextResponse.json({
+            error: 'Could not parse AI response as JSON',
+            raw_response: raw.slice(0, 500),
+            cleaned_response: cleaned.slice(0, 500),
+          }, { status: 500 })
+        }
+      } else {
+        return NextResponse.json({
+          error: 'Could not parse AI response as JSON',
+          raw_response: raw.slice(0, 500),
+          cleaned_response: cleaned.slice(0, 500),
+        }, { status: 500 })
+      }
     }
 
     if (!parsed.slug) parsed.slug = slugify(title) + '-' + Date.now()
