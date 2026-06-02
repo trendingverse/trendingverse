@@ -35,11 +35,11 @@ export async function GET(req: NextRequest) {
     admin.from('audience_profiles').select('*', { count: 'exact', head: true }).eq('device_type', 'mobile'),
     admin.from('audience_profiles').select('*', { count: 'exact', head: true }).eq('device_type', 'desktop'),
 
-    // Top cities
-    admin.rpc('audience_top_cities').catch(() => ({ data: [] })),
+  // Top cities — raw query instead of RPC
+admin.from('audience_profiles').select('city').not('city', 'is', null).not('city', 'eq', ''),
 
-    // Top interests
-    admin.rpc('audience_top_interests').catch(() => ({ data: [] })),
+// Top interests — raw query
+admin.from('audience_profiles').select('interests').not('interests', 'is', null),
 
     // Device breakdown
     admin.from('audience_profiles').select('device_type').not('device_type', 'is', null),
