@@ -31,7 +31,7 @@ export async function GET() {
     supabase.from('articles').select('*', { count: 'exact', head: true }).eq('user_id', user.id).gte('created_at', today),
     supabase.from('articles').select('*', { count: 'exact', head: true }).eq('user_id', user.id).gte('created_at', sevenDaysAgo),
     supabase.from('articles').select('id,title,status,view_count,seo_score,published_at,ai_generated').eq('user_id', user.id).order('created_at', { ascending: false }).limit(5),
-    supabase.from('cron_logs').select('*').eq('user_id', user.id).order('ran_at', { ascending: false }).limit(10),
+    supabase.from('cron_logs').select('*').order('ran_at', { ascending: false }).limit(10),
     supabase.from('user_profiles').select('plan,articles_used_today,subscription_status').eq('id', user.id).single(),
     supabase.from('articles').select('created_at').eq('user_id', user.id).gte('created_at', thirtyDaysAgo).order('created_at', { ascending: true }),
   ])
