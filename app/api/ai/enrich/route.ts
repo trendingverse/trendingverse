@@ -47,13 +47,15 @@ Return this exact JSON structure:
 }
 
 Rules:
+- LANGUAGE: Article is in ${detectedLang}. seo_title, meta_description, focus_keyword, secondary_keywords, excerpt, discover_headline, discover_tags, readability_tips MUST ALL be in ${detectedLang}. This is non-negotiable.
+- Only the slug must be in English (URL-safe, lowercase, hyphens only)
 - Focus keyword must appear naturally in SEO title
 - Meta description must be action-oriented
-- Discover headline should be curiosity-driven
-- Tags should be trending Indian news topics relevant to this article
+- Discover headline should be curiosity-driven, under 70 characters
+- Tags should be trending topics relevant to this article in ${detectedLang}
 - Readability score: 0-100 based on sentence length, vocabulary, structure
-- Give 2-3 practical readability improvement tips
-- slug must be URL-safe (lowercase, hyphens only)`
+- Give 2-3 practical readability improvement tips in ${detectedLang}
+- estimated_read_time: "${readTime} ನಿಮಿಷ" for Kannada, "${readTime} मिनट" for Hindi, "${readTime} min read" for English
 
   try {
     const geminiKey = process.env.GEMINI_API_KEY
@@ -64,8 +66,8 @@ Rules:
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-  system_instruction: { parts: [{ text: 'You are a JSON-only API. Always respond with valid JSON and nothing else. Never use markdown code fences.' }] },
+body: JSON.stringify({
+  system_instruction: { parts: [{ text: `You are a JSON-only API. Always respond with valid JSON and nothing else. Never use markdown code fences. When the article is in ${detectedLang}, ALL text fields must be in ${detectedLang} — never translate to English.` }] },
   contents: [{ parts: [{ text: prompt }] }],
           generationConfig: { temperature: 0.2, maxOutputTokens: 2048 },
         }),
