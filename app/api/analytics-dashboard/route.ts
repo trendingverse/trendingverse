@@ -51,11 +51,18 @@ export async function GET() {
   ])
 
   // Cron logs — global, no user_id filter
-  const { data: cronLogs } = await admin
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'khan.khan.yusuf@gmail.com'
+const isAdmin = user.email === ADMIN_EMAIL
+
+const cronQuery = admin
     .from('cron_logs')
     .select('*')
     .order('ran_at', { ascending: false })
     .limit(15)
+
+const { data: cronLogs } = isAdmin
+    ? await cronQuery
+    : await cronQuery.eq('user_id', user.id)
 
   // Build chart data — split by human vs cron
   const dayMap: Record<string, { human: number; cron: number }> = {}
