@@ -21,64 +21,72 @@ export async function GET(req: NextRequest) {
     { count: totalLeads },
     { count: mobileUsers },
     { count: desktopUsers },
-  { data: citiesRaw },
-{ data: interestsRaw },
+    { data: citiesRaw },
+    { data: interestsRaw },
     { data: deviceBreakdown },
     { data: genderBreakdown },
     { data: ageBreakdown },
     { data: recentLeads },
     { data: dailyEvents },
-    { data: topSites },
+    { data: topSitesRaw },
   ] = await Promise.all([
     admin.from('audience_profiles').select('*', { count: 'exact', head: true }),
     admin.from('audience_leads').select('*', { count: 'exact', head: true }),
     admin.from('audience_profiles').select('*', { count: 'exact', head: true }).eq('device_type', 'mobile'),
     admin.from('audience_profiles').select('*', { count: 'exact', head: true }).eq('device_type', 'desktop'),
-
-  // Top cities — raw query instead of RPC
-admin.from('audience_profiles').select('city').not('city', 'is', null).not('city', 'eq', ''),
-
-// Top interests — raw query
-admin.from('audience_profiles').select('interests').not('interests', 'is', null),
-
-    // Device breakdown
+    admin.from('audience_profiles').select('city').not('city', 'is', null).not('city', 'eq', ''),
+    admin.from('audience_profiles').select('interests').not('interests', 'is', null),
     admin.from('audience_profiles').select('device_type').not('device_type', 'is', null),
-
-    // Gender breakdown
     admin.from('audience_profiles').select('gender').not('gender', 'is', null),
-
-    // Age breakdown
     admin.from('audience_profiles').select('age_range').not('age_range', 'is', null),
-
-    // Recent leads
     admin.from('audience_leads')
       .select('email, name, city, gender, age_range, source_site, created_at')
       .order('created_at', { ascending: false })
       .limit(20),
-
-    // Daily events last 30 days
     admin.from('audience_events')
       .select('created_at, event_type')
       .gte('created_at', new Date(Date.now() - 30 * 86400000).toISOString())
       .eq('event_type', 'pageview'),
-
-    // Top publisher sites
     admin.from('audience_events')
       .select('site_url')
       .eq('event_type', 'pageview'),
   ])
 
-  // Build aggregations from raw data
+  // Aggregate cities
+  const cityMap: Record<string, number> = {}
+  for (const r of citiesRaw || []) {
+    if (r.city) cityMap[r.city] = (cityMap[r.city] || 0) + 1
+  }
+  const topCities = Object.entries(cityMap)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10)
+    .map(([city, count]) => ({ city, count }))
+
+  // Aggregate interests
+  const interestMap: Record<string, number> = {}
+  for (const r of interestsRaw || []) {
+    for (const interest of (r.interests as string[]) || []) {
+      if (interest) interestMap[interest] = (interestMap[interest] || 0) + 1
+    }
+  }
+  const topInterests = Object.entries(interestMap)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10)
+    .map(([interest, count]) => ({ interest, count }))
+
+  // Device breakdown
   const deviceMap: Record<string, number> = {}
   for (const r of deviceBreakdown || []) {
     if (r.device_type) deviceMap[r.device_type] = (deviceMap[r.device_type] || 0) + 1
   }
 
+  // Gender breakdown
   const genderMap: Record<string, number> = {}
   for (const r of genderBreakdown || []) {
     if (r.gender) genderMap[r.gender] = (genderMap[r.gender] || 0) + 1
   }
 
+  // Age breakdown
   const ageMap: Record<string, number> = {}
   for (const r of ageBreakdown || []) {
     if (r.age_range) ageMap[r.age_range] = (ageMap[r.age_range] || 0) + 1
@@ -97,7 +105,7 @@ admin.from('audience_profiles').select('interests').not('interests', 'is', null)
 
   // Top sites
   const siteMap: Record<string, number> = {}
-  for (const e of topSites || []) {
+  for (const e of topSitesRaw || []) {
     if (e.site_url) siteMap[e.site_url] = (siteMap[e.site_url] || 0) + 1
   }
   const topSitesList = Object.entries(siteMap)
@@ -115,6 +123,8 @@ admin.from('audience_profiles').select('interests').not('interests', 'is', null)
     deviceBreakdown: deviceMap,
     genderBreakdown: genderMap,
     ageBreakdown: ageMap,
+    topCities,
+    topInterests,
     topSites: topSitesList,
     recentLeads: recentLeads || [],
     chartData: Object.entries(dayMap).map(([date, views]) => ({ date, views })),
