@@ -197,9 +197,9 @@ export function AnalyticsDashboard() {
                 </td>
                 <td className="px-3 py-2.5 text-center">
                   <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                    a.ai_generated ? 'bg-violet-100 text-violet-700' : 'bg-blue-100 text-blue-700'
+                    (a as any).source === 'cron' ? 'bg-violet-100 text-violet-700' : 'bg-blue-100 text-blue-700'
                   }`}>
-                    {a.ai_generated ? '⚡ Cron' : '👤 Human'}
+                    {(a as any).source === 'cron' ? '⚡ Cron' : '👤 Human'}
                   </span>
                 </td>
                 <td className="px-3 py-2.5 text-center">
