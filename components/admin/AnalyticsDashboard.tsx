@@ -44,11 +44,11 @@ export function AnalyticsDashboard() {
   const usagePct = Math.min(100, Math.round((articlesUsedToday / planLimit) * 100))
   const maxCount = Math.max(...chartData.map(d => d.count), 1)
 
-  const filteredArticles = (allArticles || []).filter(a => {
-    if (activeTab === 'human') return !a.ai_generated
-    if (activeTab === 'cron')  return a.ai_generated
-    return true
-  })
+const filteredArticles = (allArticles || []).filter(a => {
+  if (activeTab === 'human') return (a as any).source !== 'cron'
+  if (activeTab === 'cron')  return (a as any).source === 'cron'
+  return true
+})
   const displayedArticles = showAllArticles ? filteredArticles : filteredArticles.slice(0, 10)
 
   return (
@@ -167,8 +167,8 @@ export function AnalyticsDashboard() {
           <div className="flex gap-1 p-0.5 bg-ink-100 rounded-lg">
             {([
               { key: 'all',   label: `All (${allArticles?.length || 0})` },
-              { key: 'human', label: `👤 Human (${stats.humanPublished})` },
-              { key: 'cron',  label: `⚡ Cron (${stats.cronPublished})` },
+           { key: 'human', label: `👤 Human (${(allArticles || []).filter(a => (a as any).source !== 'cron').length})` },
+{ key: 'cron',  label: `⚡ Cron (${(allArticles || []).filter(a => (a as any).source === 'cron').length})` },
             ] as const).map(t => (
               <button key={t.key} onClick={() => { setActiveTab(t.key); setShowAllArticles(false) }}
                 className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${activeTab === t.key ? 'bg-white shadow text-ink-900' : 'text-ink-500'}`}>
