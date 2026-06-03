@@ -15,7 +15,7 @@ async function fetchAdsterra(endpoint: string, apiKey: string) {
     if (res.status === 503 || res.status === 502) {
       throw new Error('Monetisation details are temporarily unavailable. Please try again in a few minutes.')
     }
-    throw new Error(isHtml ? `Adsterra API error ${res.status} — service unavailable` : `Adsterra API ${res.status}: ${text.slice(0, 150)}`)
+    throw new Error(isHtml ? `AdNetwork API error ${res.status} — service unavailable` : `AdNetwork API ${res.status}: ${text.slice(0, 150)}`)
   }
   return res.json()
 }
