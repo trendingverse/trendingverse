@@ -18,14 +18,12 @@ const baseNav = [
     { href: '/admin/seo', label: 'SEO Engine', icon: '◈' },
     { href: '/admin/trends', label: 'Trends', icon: '🔥' },
   ]},
- { label: 'Revenue', items: [
+  { label: 'Revenue', items: [
     { href: '/admin/monetization', label: 'Monetization', icon: '◎' },
-    ...(isAdmin ? [{ href: '/admin/direct-ads', label: 'Direct Ads', icon: '🎯' }] : []),
   ]},
   { label: 'System', items: [
     { href: '/admin/analytics', label: 'Analytics', icon: '📊' },
     { href: '/admin/settings', label: 'Settings', icon: '⚙' },
-    ...(isAdmin ? [{ href: '/admin/audience', label: 'Audience', icon: '👥' }] : []),
   ]},
 ]
 
@@ -36,12 +34,26 @@ const adminNav = {
   ]
 }
 
+const adminExtraItems: Record<string, { href: string; label: string; icon: string }[]> = {
+  'Revenue': [{ href: '/admin/direct-ads', label: 'Direct Ads', icon: '🎯' }],
+  'System':  [{ href: '/admin/audience', label: 'Audience', icon: '👥' }],
+}
+
 export function AdminSidebar({ isAdmin = false }: { isAdmin?: boolean }) {
   const path = usePathname()
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
 
-  const nav = isAdmin ? [...baseNav, adminNav] : baseNav
+  // Build nav — inject admin-only items into existing sections
+  const nav = (() => {
+    const sections = baseNav.map(section => {
+      if (isAdmin && adminExtraItems[section.label]) {
+        return { ...section, items: [...section.items, ...adminExtraItems[section.label]] }
+      }
+      return section
+    })
+    return isAdmin ? [...sections, adminNav] : sections
+  })()
 
   useEffect(() => { setMobileOpen(false) }, [path])
 
