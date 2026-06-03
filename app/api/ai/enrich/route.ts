@@ -8,7 +8,32 @@ function slugify(text: string): string {
     .replace(/-+/g, '-')
     .slice(0, 80)
 }
+function formatContent(text: string): string {
+  // If content already has HTML tags, return as-is
+  if (/<[a-z][\s\S]*>/i.test(text)) return text
 
+  // Split by double newlines or single newlines into paragraphs
+  const paragraphs = text
+    .split(/\n{2,}|\n/)
+    .map(p => p.trim())
+    .filter(p => p.length > 0)
+
+  return paragraphs
+    .map(p => {
+      // Headings — lines that are short and don't end with punctuation
+      if (p.length < 80 && !/[.!?।॥]$/.test(p) && !p.startsWith('•') && !p.startsWith('-')) {
+        return `<h2>${p}</h2>`
+      }
+      // Bullet points
+      if (p.startsWith('•') || p.startsWith('-') || p.startsWith('*')) {
+        const items = p.split(/\n/).map(i => `<li>${i.replace(/^[•\-*]\s*/, '')}</li>`).join('')
+        return `<ul>${items}</ul>`
+      }
+      // Regular paragraph
+      return `<p>${p}</p>`
+    })
+    .join('\n')
+}
 export async function POST(req: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -131,7 +156,9 @@ Return this exact JSON structure:
 
     if (!parsed.slug) parsed.slug = slugify(title) + '-' + Date.now()
 
-    return NextResponse.json(parsed)
+    // Add formatted HTML content to response so it gets saved correctly
+parsed.formatted_content = formatContent(content)
+return NextResponse.json(parsed)
 
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 })
