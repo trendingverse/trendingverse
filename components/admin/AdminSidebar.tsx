@@ -18,14 +18,14 @@ const baseNav = [
     { href: '/admin/seo', label: 'SEO Engine', icon: '◈' },
     { href: '/admin/trends', label: 'Trends', icon: '🔥' },
   ]},
-  { label: 'Revenue', items: [
+ { label: 'Revenue', items: [
     { href: '/admin/monetization', label: 'Monetization', icon: '◎' },
-    { href: '/admin/direct-ads', label: 'Direct Ads', icon: '🎯' },
+    ...(isAdmin ? [{ href: '/admin/direct-ads', label: 'Direct Ads', icon: '🎯' }] : []),
   ]},
   { label: 'System', items: [
     { href: '/admin/analytics', label: 'Analytics', icon: '📊' },
     { href: '/admin/settings', label: 'Settings', icon: '⚙' },
-    { href: '/admin/audience', label: 'Audience', icon: '👥' },
+    ...(isAdmin ? [{ href: '/admin/audience', label: 'Audience', icon: '👥' }] : []),
   ]},
 ]
 
