@@ -86,7 +86,7 @@ export function TrendingTopicsPanel() {
         return
       }
       if (data.error) throw new Error(data.error)
-      setTrends(data.topics || [])
+      setTrends(data.topics || data.trends || [])
     } catch (e) {
       setError((e as Error).message)
     } finally {
