@@ -10,8 +10,12 @@ async function fetchAdsterra(endpoint: string, apiKey: string) {
     cache: 'no-store',
   })
   if (!res.ok) {
-    const err = await res.text()
-    throw new Error(`Adsterra API ${res.status}: ${err.slice(0, 150)}`)
+    const text = await res.text()
+    const isHtml = text.trim().startsWith('<')
+    if (res.status === 503 || res.status === 502) {
+      throw new Error('Monetisation details are temporarily unavailable. Please try again in a few minutes.')
+    }
+    throw new Error(isHtml ? `Adsterra API error ${res.status} — service unavailable` : `Adsterra API ${res.status}: ${text.slice(0, 150)}`)
   }
   return res.json()
 }
