@@ -20,6 +20,7 @@ const baseNav = [
   ]},
   { label: 'Revenue', items: [
     { href: '/admin/monetization', label: 'Monetization', icon: '◎' },
+    { href: '/admin/direct-ads', label: 'Direct Ads', icon: '🎯' },
   ]},
   { label: 'System', items: [
     { href: '/admin/analytics', label: 'Analytics', icon: '📊' },
