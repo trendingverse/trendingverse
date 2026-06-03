@@ -2,19 +2,28 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 
-async function refreshToken(refreshToken: string): Promise<string | null> {
-  const res = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      refresh_token: refreshToken,
-      client_id: process.env.GOOGLE_CLIENT_ID!,
-      client_secret: process.env.GOOGLE_CLIENT_SECRET!,
-      grant_type: 'refresh_token',
-    }),
-  })
-  const data = await res.json()
-  return res.ok ? data.access_token : null
+async function refreshAccessToken(refreshToken: string): Promise<{ access_token: string; expires_in: number } | null> {
+  try {
+    const res = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        refresh_token: refreshToken,
+        client_id: process.env.GOOGLE_CLIENT_ID!,
+        client_secret: process.env.GOOGLE_CLIENT_SECRET!,
+        grant_type: 'refresh_token',
+      }),
+    })
+    const data = await res.json()
+    if (!res.ok || !data.access_token) {
+      console.error('GSC token refresh failed:', data.error, data.error_description)
+      return null
+    }
+    return { access_token: data.access_token, expires_in: data.expires_in || 3600 }
+  } catch (e) {
+    console.error('GSC token refresh exception:', e)
+    return null
+  }
 }
 
 async function gscQuery(accessToken: string, siteUrl: string, payload: Record<string, unknown>) {
@@ -49,22 +58,44 @@ export async function GET(req: NextRequest) {
     .eq('id', user.id)
     .single()
 
-  if (!profile?.gsc_access_token) {
+  if (!profile?.gsc_access_token && !profile?.gsc_refresh_token) {
     return NextResponse.json({ connected: false })
   }
 
-  // Refresh token if expired
   let accessToken = profile.gsc_access_token
-  if (profile.gsc_token_expiry && new Date(profile.gsc_token_expiry) <= new Date()) {
+
+  // Refresh if expired OR no access token but refresh token exists
+  const isExpired = !profile.gsc_token_expiry || new Date(profile.gsc_token_expiry) <= new Date()
+  const needsRefresh = isExpired || !accessToken
+
+  if (needsRefresh) {
     if (!profile.gsc_refresh_token) {
-      return NextResponse.json({ connected: false, error: 'Token expired — please reconnect GSC' })
+      return NextResponse.json({
+        connected: false,
+        needs_reconnect: true,
+        error: 'Session expired — please reconnect Google Search Console',
+      })
     }
-    const newToken = await refreshToken(profile.gsc_refresh_token)
-    if (!newToken) return NextResponse.json({ connected: false, error: 'Token refresh failed — reconnect GSC' })
-    accessToken = newToken
+
+    const refreshed = await refreshAccessToken(profile.gsc_refresh_token)
+    if (!refreshed) {
+      // Clear invalid tokens so user reconnects cleanly
+      await admin.from('user_profiles').update({
+        gsc_access_token: null,
+        gsc_token_expiry: null,
+      }).eq('id', user.id)
+
+      return NextResponse.json({
+        connected: false,
+        needs_reconnect: true,
+        error: 'GSC session expired — please click Reconnect to re-authorise',
+      })
+    }
+
+    accessToken = refreshed.access_token
     await admin.from('user_profiles').update({
-      gsc_access_token: newToken,
-      gsc_token_expiry: new Date(Date.now() + 3600 * 1000).toISOString(),
+      gsc_access_token: accessToken,
+      gsc_token_expiry: new Date(Date.now() + refreshed.expires_in * 1000).toISOString(),
     }).eq('id', user.id)
   }
 
@@ -73,13 +104,38 @@ export async function GET(req: NextRequest) {
   const startDate = new Date(Date.now() - 28 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
 
   try {
+    // Test token validity with a lightweight request first
+    const testRes = await fetch(
+      `https://searchconsole.googleapis.com/webmasters/v3/sites/${encodeURIComponent(siteUrl)}`,
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    )
+
+    // If 401 even after refresh — need to reconnect
+    if (testRes.status === 401) {
+      await admin.from('user_profiles').update({
+        gsc_access_token: null,
+        gsc_token_expiry: null,
+      }).eq('id', user.id)
+      return NextResponse.json({
+        connected: false,
+        needs_reconnect: true,
+        error: 'GSC authorisation expired — please reconnect',
+      })
+    }
+
     const [overview, topPages, topQueries, discoverData] = await Promise.all([
       gscQuery(accessToken, siteUrl, { startDate, endDate, dimensions: ['date'], rowLimit: 28 }),
-      gscQuery(accessToken, siteUrl, { startDate, endDate, dimensions: ['page'], rowLimit: 10, orderBy: [{ fieldName: 'clicks', sortOrder: 'DESCENDING' }] }),
-      gscQuery(accessToken, siteUrl, { startDate, endDate, dimensions: ['query'], rowLimit: 10, orderBy: [{ fieldName: 'clicks', sortOrder: 'DESCENDING' }] }),
+      gscQuery(accessToken, siteUrl, {
+        startDate, endDate, dimensions: ['page'], rowLimit: 10,
+        orderBy: [{ fieldName: 'clicks', sortOrder: 'DESCENDING' }],
+      }),
+      gscQuery(accessToken, siteUrl, {
+        startDate, endDate, dimensions: ['query'], rowLimit: 10,
+        orderBy: [{ fieldName: 'clicks', sortOrder: 'DESCENDING' }],
+      }),
       gscQuery(accessToken, siteUrl, {
         startDate, endDate, dimensions: ['page'], rowLimit: 5,
-        dimensionFilterGroups: [{ filters: [{ dimension: 'searchType', operator: 'equals', expression: 'discover' }] }]
+        dimensionFilterGroups: [{ filters: [{ dimension: 'searchType', operator: 'equals', expression: 'discover' }] }],
       }).catch(() => ({ rows: [] })),
     ])
 
