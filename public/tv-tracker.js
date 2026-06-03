@@ -147,7 +147,7 @@
     var dismissed = localStorage.getItem('tv_bar_dismissed');
     if (dismissed && Date.now() < parseInt(dismissed)) return;
     var scrolled = window.scrollY / (document.body.scrollHeight - window.innerHeight);
-    if (scrolled > 0.6) showSubscribeBar();
+    if (scrolled > 0.3) showSubscribeBar();
   }, { passive: true });
 
   window.TV_TRACKER = { fingerprint: FP, send: send };
