@@ -68,8 +68,8 @@ export function PasteEnrich() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          title: enriched.seo_title || title,
-          content,
+  title: enriched.seo_title || title,
+  content: enriched.formatted_content || content,
           excerpt: enriched.excerpt,
           slug: enriched.slug,
           seo_title: enriched.seo_title,
