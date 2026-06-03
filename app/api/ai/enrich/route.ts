@@ -8,8 +8,17 @@ function slugify(text: string): string {
     .replace(/-+/g, '-')
     .slice(0, 80)
 }
+
+function basicFormat(text: string): string {
+  return text
+    .split(/\n{2,}|\n/)
+    .map(p => p.trim())
+    .filter(p => p.length > 0)
+    .map(p => `<p>${p}</p>`)
+    .join('\n')
+}
+
 async function formatContentWithAI(text: string, lang: string, geminiKey: string): Promise<string> {
-  // If already has HTML return as-is
   if (/<[a-z][\s\S]*>/i.test(text)) return text
 
   try {
@@ -54,39 +63,6 @@ ${text}`
   }
 }
 
-function basicFormat(text: string): string {
-  return text
-    .split(/\n{2,}|\n/)
-    .map(p => p.trim())
-    .filter(p => p.length > 0)
-    .map(p => `<p>${p}</p>`)
-    .join('\n')
-}
-  // If content already has HTML tags, return as-is
-  if (/<[a-z][\s\S]*>/i.test(text)) return text
-
-  // Split by double newlines or single newlines into paragraphs
-  const paragraphs = text
-    .split(/\n{2,}|\n/)
-    .map(p => p.trim())
-    .filter(p => p.length > 0)
-
-  return paragraphs
-    .map(p => {
-      // Headings — lines that are short and don't end with punctuation
-      if (p.length < 80 && !/[.!?।॥]$/.test(p) && !p.startsWith('•') && !p.startsWith('-')) {
-        return `<h2>${p}</h2>`
-      }
-      // Bullet points
-      if (p.startsWith('•') || p.startsWith('-') || p.startsWith('*')) {
-        const items = p.split(/\n/).map(i => `<li>${i.replace(/^[•\-*]\s*/, '')}</li>`).join('')
-        return `<ul>${items}</ul>`
-      }
-      // Regular paragraph
-      return `<p>${p}</p>`
-    })
-    .join('\n')
-}
 export async function POST(req: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -98,7 +74,6 @@ export async function POST(req: NextRequest) {
   const wordCount = content.trim().split(/\s+/).filter(Boolean).length
   const readTime = Math.max(1, Math.ceil(wordCount / 200))
 
-  // Detect language from content + title
   const sample = title + ' ' + content.slice(0, 500)
   const isKannada   = /[\u0C80-\u0CFF]/.test(sample)
   const isHindi     = /[\u0900-\u097F]/.test(sample)
@@ -157,33 +132,36 @@ Return this exact JSON structure:
     const geminiKey = process.env.GEMINI_API_KEY
     if (!geminiKey) throw new Error('GEMINI_API_KEY not set')
 
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          system_instruction: {
-            parts: [{
-              text: `You are a JSON-only API. Always respond with valid JSON and nothing else. Never use markdown code fences. The article is in ${detectedLang} — ALL text fields in your response must be in ${detectedLang}. Never translate to English unless the article is in English.`
-            }]
-          },
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.2, maxOutputTokens: 2048 },
-        }),
-      }
-    )
+    // Run SEO metadata generation and content formatting in parallel
+    const [seoRes, formattedContent] = await Promise.all([
+      fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            system_instruction: {
+              parts: [{
+                text: `You are a JSON-only API. Always respond with valid JSON and nothing else. Never use markdown code fences. The article is in ${detectedLang} — ALL text fields in your response must be in ${detectedLang}. Never translate to English unless the article is in English.`
+              }]
+            },
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { temperature: 0.2, maxOutputTokens: 2048 },
+          }),
+        }
+      ),
+      formatContentWithAI(content, detectedLang, geminiKey),
+    ])
 
-    const data = await res.json()
+    const data = await seoRes.json()
     const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
 
-    // Strip markdown fences
     const cleaned = raw
       .replace(/^[\s]*`{3,}[\s]*(?:json)?[\s]*/i, '')
       .replace(/[\s]*`{3,}[\s]*$/i, '')
       .trim()
 
-   let parsed
+    let parsed
     try {
       parsed = JSON.parse(cleaned)
     } catch {
@@ -208,10 +186,9 @@ Return this exact JSON structure:
     }
 
     if (!parsed.slug) parsed.slug = slugify(title) + '-' + Date.now()
+    parsed.formatted_content = formattedContent
 
-    // Add formatted HTML content to response so it gets saved correctly
-parsed.formatted_content = await formatContentWithAI(content, detectedLang, geminiKey)
-return NextResponse.json(parsed)
+    return NextResponse.json(parsed)
 
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 })
