@@ -15,6 +15,7 @@ interface EnrichedData {
   readability_tips: string[]
   word_count: number
   estimated_read_time: string
+  formatted_content?: string
 }
 
 export function PasteEnrich() {
