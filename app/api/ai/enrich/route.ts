@@ -8,7 +8,60 @@ function slugify(text: string): string {
     .replace(/-+/g, '-')
     .slice(0, 80)
 }
-function formatContent(text: string): string {
+async function formatContentWithAI(text: string, lang: string, geminiKey: string): Promise<string> {
+  // If already has HTML return as-is
+  if (/<[a-z][\s\S]*>/i.test(text)) return text
+
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          system_instruction: {
+            parts: [{ text: 'You are an HTML formatter. Return only valid HTML content. No markdown, no code fences, no explanations.' }]
+          },
+          contents: [{
+            parts: [{
+              text: `Format this ${lang} article as clean WordPress-ready HTML.
+
+Rules:
+- Wrap every paragraph in <p> tags
+- Convert section headings to <h2> tags
+- Convert any lists to <ul><li> tags
+- Keep ALL original text exactly as-is — do not translate, summarise or change any words
+- Do not add any new content
+- Return ONLY the HTML, nothing else
+
+Article content:
+${text}`
+            }]
+          }],
+          generationConfig: { temperature: 0.1, maxOutputTokens: 4096 },
+        }),
+      }
+    )
+    const data = await res.json()
+    const formatted = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+    const cleaned = formatted
+      .replace(/^[\s]*`{3,}[\s]*(?:html)?[\s]*/i, '')
+      .replace(/[\s]*`{3,}[\s]*$/i, '')
+      .trim()
+    return cleaned || basicFormat(text)
+  } catch {
+    return basicFormat(text)
+  }
+}
+
+function basicFormat(text: string): string {
+  return text
+    .split(/\n{2,}|\n/)
+    .map(p => p.trim())
+    .filter(p => p.length > 0)
+    .map(p => `<p>${p}</p>`)
+    .join('\n')
+}
   // If content already has HTML tags, return as-is
   if (/<[a-z][\s\S]*>/i.test(text)) return text
 
@@ -157,7 +210,7 @@ Return this exact JSON structure:
     if (!parsed.slug) parsed.slug = slugify(title) + '-' + Date.now()
 
     // Add formatted HTML content to response so it gets saved correctly
-parsed.formatted_content = formatContent(content)
+parsed.formatted_content = await formatContentWithAI(content, detectedLang, geminiKey)
 return NextResponse.json(parsed)
 
   } catch (e) {
