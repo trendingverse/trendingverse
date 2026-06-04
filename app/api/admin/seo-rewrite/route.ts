@@ -154,7 +154,7 @@ try {
         }).eq('post_id', r.id.toString())
         if (!error) saved++
       } else {
-        const { error } = await admin.from('seo_metadata').insert({
+        const { error, data } = await admin.from('seo_metadata').insert({
           post_id: r.id.toString(),
           discover_headline: r.discover_headline || '',
           seo_title: r.seo_title || '',
@@ -165,7 +165,8 @@ try {
           status: 'pending',
           updated_at: new Date().toISOString(),
         })
-        if (!error) saved++
+      if (!error) saved++
+        else return NextResponse.json({ insert_error: error, sample_record: { post_id: r.id.toString() } })
       }
     }
 
