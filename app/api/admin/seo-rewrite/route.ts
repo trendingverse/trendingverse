@@ -110,16 +110,26 @@ export async function GET(req: NextRequest) {
     const geminiKey = process.env.GEMINI_API_KEY!
     const limit = parseInt(searchParams.get('limit') || '20')
 
-    const raw = await wpGet(`/posts?per_page=${limit}&status=publish&_fields=id,title,excerpt&orderby=date&order=desc`)
-    if (!Array.isArray(raw) || raw.length === 0) {
+const raw: any[] = []
+    const perPage = 100
+    let page = 1
+    while (raw.length < limit) {
+      const batch = await wpGet(`/posts?per_page=${perPage}&page=${page}&status=publish&_fields=id,title,excerpt&orderby=date&order=desc`)
+      if (!Array.isArray(batch) || batch.length === 0) break
+      raw.push(...batch)
+      if (batch.length < perPage) break
+      page++
+    }
+    const posts = raw.slice(0, limit)
+    if (!posts.length) {
       return NextResponse.json({ error: 'No posts fetched from WordPress', analyzed: 0 })
     }
 
     const allResults: any[] = []
     const BATCH_SIZE = 10
 
-    for (let i = 0; i < raw.length; i += BATCH_SIZE) {
-      const chunk = raw.slice(i, i + BATCH_SIZE)
+for (let i = 0; i < posts.length; i += BATCH_SIZE) {
+      const chunk = posts.slice(i, i + BATCH_SIZE)
 try {
         const rewrites = await geminiRewrite(chunk, geminiKey)
         allResults.push(...rewrites)
