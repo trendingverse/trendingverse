@@ -219,9 +219,10 @@ try {
   }
 
   // ── STATUS ───────────────────────────────────────────────────
-  if (action === 'status') {
+ if (action === 'status') {
     const { data } = await admin.from('seo_metadata')
-      .select('*').order('created_at', { ascending: false }).limit(200)
+      .select('*').order('updated_at', { ascending: false }).limit(200)
+      .not('post_id', 'is', null)
     return NextResponse.json(data || [])
   }
 
