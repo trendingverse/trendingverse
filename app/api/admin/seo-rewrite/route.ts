@@ -129,9 +129,12 @@ for (let i = 0; i < posts.length; i += BATCH_SIZE) {
       const chunk = posts.slice(i, i + BATCH_SIZE)
 try {
         const rewrites = await geminiRewrite(chunk, geminiKey)
+        if (!rewrites.length) {
+          return NextResponse.json({ error: 'Gemini returned empty array for chunk ' + i, analyzed: 0, posts_sent: chunk.length, chunk_sample: chunk[0] })
+        }
         allResults.push(...rewrites)
       } catch (e) {
-        return NextResponse.json({ error: (e as Error).message, analyzed: 0 })
+        return NextResponse.json({ error: (e as Error).message, analyzed: 0, chunk_index: i })
       }
       if (i + BATCH_SIZE < raw.length) await new Promise(r => setTimeout(r, 1000))
     }
