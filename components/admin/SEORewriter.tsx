@@ -48,19 +48,32 @@ export function SEORewriter() {
     setLoading(false)
   }
 
-  async function runAnalysis() {
+ async function runAnalysis() {
     setAnalyzing(true)
-    toast.loading(`Analyzing ${analyzeLimit} articles with Gemini...`, { id: 'analyze' })
-    const res = await fetch(`/api/admin/seo-rewrite?action=analyze&limit=${analyzeLimit}`)
-    const data = await res.json()
-    toast.dismiss('analyze')
-    if (res.ok) {
-      toast.success(`${data.analyzed} articles analyzed!`)
-      loadSuggestions()
-    } else {
-      toast.error('Analysis failed: ' + (data.error || 'Unknown error'))
+    const BATCH = 5
+    const total = analyzeLimit
+    let totalSaved = 0
+    let totalAnalyzed = 0
+
+    for (let offset = 0; offset < total; offset += BATCH) {
+      const limit = Math.min(BATCH, total - offset)
+      toast.loading(`Analyzing articles ${offset + 1}–${offset + limit} of ${total}...`, { id: 'analyze' })
+      try {
+        const res = await fetch(`/api/admin/seo-rewrite?action=analyze&limit=${limit}&offset=${offset}`)
+        const data = await res.json()
+        if (data.analyzed) totalAnalyzed += data.analyzed
+        if (data.saved) totalSaved += data.saved
+      } catch (e) {
+        console.error('Batch failed at offset', offset)
+      }
+      // Wait 3s between batches
+      if (offset + BATCH < total) await new Promise(r => setTimeout(r, 3000))
     }
+
+    toast.dismiss('analyze')
+    toast.success(`Done! ${totalAnalyzed} analyzed, ${totalSaved} saved`)
     setAnalyzing(false)
+    loadSuggestions()
   }
 
   async function approveAll() {
