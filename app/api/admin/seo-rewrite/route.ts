@@ -134,20 +134,39 @@ export async function GET(req: NextRequest) {
     }
 
     // Save to Supabase
+    // Save to Supabase
     let saved = 0
     for (const r of allResults) {
-      const { error } = await admin.from('seo_metadata').upsert({
-        post_id: r.id.toString(),
-        discover_headline: r.discover_headline || '',
-        seo_title: r.seo_title || '',
-        meta_description: r.meta_description || '',
-        focus_keyword: r.focus_keyword || '',
-        score_before: r.seo_score_before || 0,
-        score_after: r.seo_score_after || 0,
-        status: 'pending',
-        updated_at: new Date().toISOString(),
-      }, { onConflict: 'post_id' })
-      if (!error) saved++
+      // Try update first, then insert
+      const { data: existing } = await admin
+        .from('seo_metadata').select('article_id').eq('post_id', r.id.toString()).single()
+
+      if (existing) {
+        const { error } = await admin.from('seo_metadata').update({
+          discover_headline: r.discover_headline || '',
+          seo_title: r.seo_title || '',
+          meta_description: r.meta_description || '',
+          focus_keyword: r.focus_keyword || '',
+          score_before: r.seo_score_before || 0,
+          score_after: r.seo_score_after || 0,
+          status: 'pending',
+          updated_at: new Date().toISOString(),
+        }).eq('post_id', r.id.toString())
+        if (!error) saved++
+      } else {
+        const { error } = await admin.from('seo_metadata').insert({
+          post_id: r.id.toString(),
+          discover_headline: r.discover_headline || '',
+          seo_title: r.seo_title || '',
+          meta_description: r.meta_description || '',
+          focus_keyword: r.focus_keyword || '',
+          score_before: r.seo_score_before || 0,
+          score_after: r.seo_score_after || 0,
+          status: 'pending',
+          updated_at: new Date().toISOString(),
+        })
+        if (!error) saved++
+      }
     }
 
     return NextResponse.json({ analyzed: allResults.length, saved, results: allResults })
