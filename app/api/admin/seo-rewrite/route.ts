@@ -143,7 +143,7 @@ export async function GET(req: NextRequest) {
         score_after: r.seo_score_after,
         status: 'pending',
         created_at: new Date().toISOString(),
-      }, { onConflict: 'post_id' }).catch(() => {})
+      }, { onConflict: 'post_id' })
     }
 
     return NextResponse.json({ analyzed: results.length, results })
