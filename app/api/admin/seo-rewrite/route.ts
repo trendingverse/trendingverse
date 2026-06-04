@@ -120,11 +120,11 @@ export async function GET(req: NextRequest) {
 
     for (let i = 0; i < raw.length; i += BATCH_SIZE) {
       const chunk = raw.slice(i, i + BATCH_SIZE)
-      try {
+try {
         const rewrites = await geminiRewrite(chunk, geminiKey)
         allResults.push(...rewrites)
       } catch (e) {
-        console.error(`Batch ${i} failed:`, (e as Error).message)
+        return NextResponse.json({ error: (e as Error).message, analyzed: 0 })
       }
       if (i + BATCH_SIZE < raw.length) await new Promise(r => setTimeout(r, 1000))
     }
