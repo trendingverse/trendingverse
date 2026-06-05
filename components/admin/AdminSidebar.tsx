@@ -17,7 +17,6 @@ const baseNav = [
     { href: '/admin/ai-writer', label: 'AI Writer', icon: '✦' },
     { href: '/admin/seo', label: 'SEO Engine', icon: '◈' },
     { href: '/admin/trends', label: 'Trends', icon: '🔥' },
-    ...(isAdmin ? [{ href: '/admin/author-fix', label: 'Author & Category', icon: '👤' }] : []),
   ]},
   { label: 'Revenue', items: [
     { href: '/admin/monetization', label: 'Monetization', icon: '◎' },
@@ -36,15 +35,16 @@ const adminNav = {
 }
 
 const adminExtraItems: Record<string, { href: string; label: string; icon: string }[]> = {
-  'Revenue': [{ href: '/admin/direct-ads', label: 'Direct Ads', icon: '🎯' }],
-  'System':  [{ href: '/admin/audience', label: 'Audience', icon: '👥' }, { href: '/admin/author-fix', label: 'Author & Category', icon: '👤' }],
+  'AI & SEO': [{ href: '/admin/author-fix', label: 'Author & Category', icon: '👤' }],
+  'Revenue':  [{ href: '/admin/direct-ads', label: 'Direct Ads', icon: '🎯' }],
+  'System':   [{ href: '/admin/audience', label: 'Audience', icon: '👥' }],
 }
+
 export function AdminSidebar({ isAdmin = false }: { isAdmin?: boolean }) {
   const path = usePathname()
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
 
-  // Build nav — inject admin-only items into existing sections
   const nav = (() => {
     const sections = baseNav.map(section => {
       if (isAdmin && adminExtraItems[section.label]) {
