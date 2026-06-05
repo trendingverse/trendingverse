@@ -37,9 +37,8 @@ const adminNav = {
 
 const adminExtraItems: Record<string, { href: string; label: string; icon: string }[]> = {
   'Revenue': [{ href: '/admin/direct-ads', label: 'Direct Ads', icon: '🎯' }],
-  'System':  [{ href: '/admin/audience', label: 'Audience', icon: '👥' }],
+  'System':  [{ href: '/admin/audience', label: 'Audience', icon: '👥' }, { href: '/admin/author-fix', label: 'Author & Category', icon: '👤' }],
 }
-
 export function AdminSidebar({ isAdmin = false }: { isAdmin?: boolean }) {
   const path = usePathname()
   const [collapsed, setCollapsed] = useState(false)
