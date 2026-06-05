@@ -17,6 +17,7 @@ const baseNav = [
     { href: '/admin/ai-writer', label: 'AI Writer', icon: '✦' },
     { href: '/admin/seo', label: 'SEO Engine', icon: '◈' },
     { href: '/admin/trends', label: 'Trends', icon: '🔥' },
+    ...(isAdmin ? [{ href: '/admin/author-fix', label: 'Author & Category', icon: '👤' }] : []),
   ]},
   { label: 'Revenue', items: [
     { href: '/admin/monetization', label: 'Monetization', icon: '◎' },
