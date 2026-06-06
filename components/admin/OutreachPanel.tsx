@@ -1,7 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
-import * as XLSX from 'xlsx'
 
 interface Publisher {
   id?: string; name: string; site: string; site_url?: string
@@ -72,7 +71,6 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
 
     if (data.error) { toast.error(data.error); setSuggesting(false); return }
 
-    // Save campaign
     const saveRes = await fetch('/api/outreach/campaigns', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -133,25 +131,19 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
     toast.success('Status updated')
   }
 
-  function downloadExcel(pubs: Publisher[]) {
-    const rows = pubs.map(p => ({
-      'Publisher Name': p.name,
-      'Website': p.site || p.site_url || '',
-      'Category': p.category,
-      'Region': p.region,
-      'Language': p.language,
-      'Monthly Audience': p.monthly_audience,
-      'Contact Email': p.contact_email,
-      'Phone': p.contact_phone,
-      'Fit Score': p.fit_score ? p.fit_score + '%' : '—',
-      'Why': p.why || '',
-      'Status': p.status || 'prospect',
-    }))
-    const ws = XLSX.utils.json_to_sheet(rows)
-    ws['!cols'] = [22, 25, 15, 20, 15, 16, 30, 18, 12, 35, 12].map(w => ({ wch: w }))
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'Publishers')
-    XLSX.writeFile(wb, `TrendingVerse-Outreach-${new Date().toISOString().split('T')[0]}.xlsx`)
+  function downloadCSV(pubs: Publisher[]) {
+    const headers = ['Publisher Name','Website','Category','Region','Language','Monthly Audience','Contact Email','Phone','Fit Score','Why','Status']
+    const rows = pubs.map(p => [
+      p.name, p.site || p.site_url || '', p.category, p.region, p.language,
+      p.monthly_audience, p.contact_email, p.contact_phone,
+      p.fit_score ? p.fit_score + '%' : '—', p.why || '', p.status || 'prospect',
+    ])
+    const csv = [headers, ...rows].map(r => r.map(v => `"${(v||'').toString().replace(/"/g,'""')}"`).join(',')).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `TrendingVerse-Outreach-${new Date().toISOString().split('T')[0]}.csv`
+    a.click()
   }
 
   function sendGmail() {
@@ -162,7 +154,6 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
     const url = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(draftingFor.contact_email)}&su=${encodeURIComponent(subjectLine)}&body=${encodeURIComponent(body)}`
     window.open(url, '_blank')
     setSendModal(false)
-    // Update status to contacted if saved publisher
     if (draftingFor.id) updateStatus(draftingFor.id, 'contacted')
   }
 
@@ -191,9 +182,9 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
           )}
           {tab === 'publishers' && (
             <>
-              <button onClick={() => downloadExcel(publishers)} disabled={!publishers.length}
+              <button onClick={() => downloadCSV(publishers)} disabled={!publishers.length}
                 className="text-xs px-3 py-2 bg-ink-100 text-ink-700 rounded-xl hover:bg-ink-200 disabled:opacity-40">
-                ⬇ Export Excel
+                ⬇ Export CSV
               </button>
               <button onClick={() => setShowPubForm(true)} className="btn-primary text-xs px-4 py-2">+ Add Publisher</button>
             </>
@@ -204,7 +195,6 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
       {/* ── CAMPAIGNS TAB ── */}
       {tab === 'campaigns' && (
         <div className="space-y-4">
-          {/* New campaign form */}
           {showCampaignForm && (
             <div className="card p-5 space-y-4 border-2 border-accent/20">
               <h3 className="font-semibold text-ink-900">New Campaign Brief</h3>
@@ -227,7 +217,6 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
             </div>
           )}
 
-          {/* Active campaign with suggestions */}
           {activeCampaign && suggestions.length > 0 && (
             <div className="card overflow-hidden">
               <div className="p-4 bg-ink-50 border-b border-ink-100 flex items-center justify-between">
@@ -235,13 +224,12 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
                   <p className="font-semibold text-ink-900">{activeCampaign.brand || activeCampaign.name}</p>
                   <p className="text-xs text-ink-400">{suggestions.length} AI-matched publishers</p>
                 </div>
-                <button onClick={() => downloadExcel(suggestions)}
+                <button onClick={() => downloadCSV(suggestions)}
                   className="text-xs px-3 py-1.5 bg-green-50 text-green-700 border border-green-200 rounded-lg hover:bg-green-100">
-                  ⬇ Export Excel
+                  ⬇ Export CSV
                 </button>
               </div>
 
-              {/* Campaign summary pills */}
               {summary && (
                 <div className="px-4 py-3 border-b border-ink-50 flex flex-wrap gap-2">
                   {[
@@ -289,7 +277,6 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
             </div>
           )}
 
-          {/* Campaigns list */}
           {campaigns.length === 0 && !showCampaignForm ? (
             <div className="card p-8 text-center">
               <p className="text-2xl mb-2">📋</p>
