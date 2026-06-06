@@ -34,10 +34,12 @@ const adminNav = {
   ]
 }
 
-const adminExtraItems: Record<string, { href: string; label: string; icon: string }[]> = {
+const adminExtraItems = {
   'AI & SEO': [{ href: '/admin/author-fix', label: 'Author & Category', icon: '👤' }],
-  'Revenue':  [{ href: '/admin/direct-ads', label: 'Direct Ads', icon: '🎯' }],
-  'System':   [{ href: '/admin/audience', label: 'Audience', icon: '👥' }],
+  'Revenue':  [{ href: '/admin/direct-ads', label: 'Direct Ads', icon: '🎯' },
+               { href: '/admin/outreach', label: 'Outreach', icon: '📋' }],
+  'System':   [{ href: '/admin/audience', label: 'Audience', icon: '👥' },
+               { href: '/admin/advertisers', label: 'Advertisers', icon: '🏢' }],
 }
 
 export function AdminSidebar({ isAdmin = false }: { isAdmin?: boolean }) {
