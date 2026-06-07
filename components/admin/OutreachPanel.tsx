@@ -16,14 +16,6 @@ interface Campaign {
   budget_range: string; status: string; created_at: string
 }
 
-const STATUS_COLORS: Record<string, string> = {
-  prospect:  'bg-ink-100 text-ink-600',
-  contacted: 'bg-blue-100 text-blue-700',
-  responded: 'bg-amber-100 text-amber-700',
-  onboarded: 'bg-green-100 text-green-700',
-  rejected:  'bg-red-100 text-red-600',
-}
-
 export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
   const [tab, setTab] = useState<'campaigns' | 'publishers'>('campaigns')
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
@@ -38,11 +30,15 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
   const [draftLoading, setDraftLoading] = useState(false)
   const [sendModal, setSendModal] = useState(false)
   const [senderEmail, setSenderEmail] = useState('')
+  const [senderName, setSenderName] = useState('')
+  const [senderTitle, setSenderTitle] = useState('')
   const [showCampaignForm, setShowCampaignForm] = useState(false)
   const [showPubForm, setShowPubForm] = useState(false)
   const [briefInput, setBriefInput] = useState('')
   const [campaignName, setCampaignName] = useState('')
+  const [pubScope, setPubScope] = useState<'both' | 'india' | 'global'>('both')
   const [pubForm, setPubForm] = useState<Partial<Publisher>>({})
+  const [savingPub, setSavingPub] = useState<string | null>(null)
 
   useEffect(() => { fetchAll() }, [])
 
@@ -60,11 +56,11 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
   async function createCampaign() {
     if (!briefInput.trim()) { toast.error('Paste a campaign brief first'); return }
     setSuggesting(true)
-    toast.loading('AI analyzing brief...', { id: 'suggest' })
+    toast.loading('AI analyzing campaign brief...', { id: 'suggest' })
 
     const suggestRes = await fetch('/api/outreach/suggest', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ brief: briefInput }),
+      body: JSON.stringify({ brief: briefInput, publisher_scope: pubScope }),
     })
     const data = await suggestRes.json()
     toast.dismiss('suggest')
@@ -74,7 +70,7 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
     const saveRes = await fetch('/api/outreach/campaigns', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        name: campaignName || data.summary?.brand + ' Campaign',
+        name: campaignName || (data.summary?.brand || 'Campaign') + ' — Outreach',
         brief: briefInput,
         brand: data.summary?.brand,
         category: data.summary?.category,
@@ -88,11 +84,12 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
     const saved = await saveRes.json()
     setActiveCampaign(saved)
     setSummary(data.summary)
-    console.log('Suggest response:', data)
     setSuggestions(data.suggestions || [])
     setShowCampaignForm(false)
+    setBriefInput('')
+    setCampaignName('')
     setCampaigns(prev => [saved, ...prev])
-    toast.success(`${data.suggestions?.length} publishers matched!`)
+    toast.success(`${data.suggestions?.length || 0} publishers matched!`)
     setSuggesting(false)
   }
 
@@ -104,23 +101,45 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
 
     const res = await fetch('/api/outreach/draft-email', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ publisher: pub, campaign_summary: summary }),
+      body: JSON.stringify({
+        publisher: pub,
+        campaign_summary: summary,
+        sender_name: senderName,
+        sender_title: senderTitle,
+      }),
     })
     const data = await res.json()
+    if (data.error) { toast.error('Email draft failed'); setDraftLoading(false); return }
     setEmailDraft(data.draft || '')
     setDraftLoading(false)
   }
 
   async function savePublisher(pub: Publisher) {
+    const key = pub.name
+    setSavingPub(key)
     const res = await fetch('/api/outreach/publishers', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(pub),
+      body: JSON.stringify({
+        name: pub.name,
+        site_url: pub.site || pub.site_url || '',
+        category: pub.category || '',
+        region: pub.region || '',
+        language: pub.language || '',
+        monthly_audience: pub.monthly_audience || '',
+        contact_email: pub.contact_email || '',
+        contact_phone: pub.contact_phone || '',
+        status: 'prospect',
+      }),
     })
     if (res.ok) {
       const saved = await res.json()
       setPublishers(prev => [saved, ...prev])
-      toast.success(`${pub.name} saved to database!`)
+      toast.success(`${pub.name} saved!`)
+    } else {
+      const err = await res.json()
+      toast.error(err.error || 'Save failed')
     }
+    setSavingPub(null)
   }
 
   async function updateStatus(id: string, status: string) {
@@ -129,7 +148,6 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
       body: JSON.stringify({ id, status }),
     })
     setPublishers(prev => prev.map(p => p.id === id ? { ...p, status } : p))
-    toast.success('Status updated')
   }
 
   function downloadCSV(pubs: Publisher[]) {
@@ -143,22 +161,24 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
     const blob = new Blob([csv], { type: 'text/csv' })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
-    a.download = `TrendingVerse-Outreach-${new Date().toISOString().split('T')[0]}.csv`
+    a.download = `Outreach-${new Date().toISOString().split('T')[0]}.csv`
     a.click()
   }
 
   function sendGmail() {
     if (!senderEmail || !emailDraft || !draftingFor) return
     const lines = emailDraft.split('\n')
-    const subjectLine = lines.find(l => l.startsWith('Subject:'))?.replace('Subject:', '').trim() || 'Partnership Opportunity — TrendingVerse'
+    const subjectLine = lines.find(l => l.startsWith('Subject:'))?.replace('Subject:', '').trim() || 'Partnership Opportunity'
     const body = lines.slice(lines.findIndex(l => l.startsWith('Subject:')) + 2).join('\n')
     const url = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(draftingFor.contact_email)}&su=${encodeURIComponent(subjectLine)}&body=${encodeURIComponent(body)}`
     window.open(url, '_blank')
     setSendModal(false)
     if (draftingFor.id) updateStatus(draftingFor.id, 'contacted')
+    toast.success('Gmail opened — review and send!')
   }
 
   const fitColor = (score = 75) => score >= 90 ? 'text-green-600' : score >= 75 ? 'text-amber-600' : 'text-red-500'
+  const alreadySaved = (pub: Publisher) => publishers.some(p => p.name === pub.name || (p.site_url || p.site) === (pub.site || pub.site_url))
 
   if (loading) return <div className="h-24 bg-ink-50 rounded-xl animate-pulse" />
 
@@ -178,8 +198,12 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
           ))}
         </div>
         <div className="flex gap-2">
-          {tab === 'campaigns' && (
+          {tab === 'campaigns' && !activeCampaign && (
             <button onClick={() => setShowCampaignForm(true)} className="btn-primary text-xs px-4 py-2">+ New Campaign</button>
+          )}
+          {tab === 'campaigns' && activeCampaign && (
+            <button onClick={() => { setActiveCampaign(null); setSuggestions([]) }}
+              className="text-xs px-4 py-2 bg-ink-100 text-ink-600 rounded-xl hover:bg-ink-200">← All Campaigns</button>
           )}
           {tab === 'publishers' && (
             <>
@@ -193,9 +217,11 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
         </div>
       </div>
 
-      {/* ── CAMPAIGNS TAB ── */}
+      {/* ── CAMPAIGNS ── */}
       {tab === 'campaigns' && (
         <div className="space-y-4">
+
+          {/* Campaign form */}
           {showCampaignForm && (
             <div className="card p-5 space-y-4 border-2 border-accent/20">
               <h3 className="font-semibold text-ink-900">New Campaign Brief</h3>
@@ -204,26 +230,51 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
                 <input className="input" value={campaignName} onChange={e => setCampaignName(e.target.value)} placeholder="e.g. Diwali Sale 2026" />
               </div>
               <div>
-                <label className="label">Paste Campaign Brief *</label>
-                <textarea className="input resize-none" rows={7} value={briefInput}
+                <label className="label">Paste Campaign Requirements *</label>
+                <textarea className="input resize-none" rows={8} value={briefInput}
                   onChange={e => setBriefInput(e.target.value)}
-                  placeholder={`Brand: Nykaa\nProduct: Summer skincare\nTarget: Women 18-35\nRegion: Karnataka, Maharashtra\nBudget: ₹5-10L\nGoal: Brand awareness + conversions\nLanguage: Kannada, Hindi, English\nTimeline: June–August 2026`} />
+                  placeholder={`Brand: Nykaa\nProduct: Summer skincare range\nTarget Audience: Women 18-35, urban\nRegion: Karnataka, Maharashtra, Tamil Nadu\nBudget: ₹5-10 Lakhs\nGoal: Brand awareness + app installs\nLanguage: Kannada, Hindi, English\nTimeline: June–August 2026\nAd formats: Display banner, native`} />
+              </div>
+              <div>
+                <label className="label">Publisher Scope</label>
+                <div className="flex gap-2">
+                  {[
+                    { k: 'both', l: '🌏 India + Global' },
+                    { k: 'india', l: '🇮🇳 India Only' },
+                    { k: 'global', l: '🌐 Global Only' },
+                  ].map(opt => (
+                    <button key={opt.k} onClick={() => setPubScope(opt.k as any)}
+                      className={`text-xs px-4 py-2 rounded-xl border transition-colors ${pubScope === opt.k ? 'border-accent bg-accent/5 text-accent font-semibold' : 'border-ink-200 text-ink-600 hover:border-ink-300'}`}>
+                      {opt.l}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="label">Your Name (for email draft)</label>
+                <input className="input" value={senderName} onChange={e => setSenderName(e.target.value)} placeholder="e.g. Bhanu Prakash" />
+              </div>
+              <div>
+                <label className="label">Your Title</label>
+                <input className="input" value={senderTitle} onChange={e => setSenderTitle(e.target.value)} placeholder="e.g. Head of Media Buying" />
               </div>
               <div className="flex gap-3">
                 <button onClick={createCampaign} disabled={!briefInput.trim() || suggesting} className="btn-primary">
                   {suggesting ? '✦ Analyzing...' : '✦ Analyze & Find Publishers'}
                 </button>
-                <button onClick={() => setShowCampaignForm(false)} className="px-4 py-2 text-sm bg-ink-100 text-ink-600 rounded-xl">Cancel</button>
+                <button onClick={() => { setShowCampaignForm(false); setBriefInput('') }}
+                  className="px-4 py-2 text-sm bg-ink-100 text-ink-600 rounded-xl">Cancel</button>
               </div>
             </div>
           )}
 
+          {/* Suggestions */}
           {activeCampaign && suggestions.length > 0 && (
             <div className="card overflow-hidden">
               <div className="p-4 bg-ink-50 border-b border-ink-100 flex items-center justify-between">
                 <div>
                   <p className="font-semibold text-ink-900">{activeCampaign.brand || activeCampaign.name}</p>
-                  <p className="text-xs text-ink-400">{suggestions.length} AI-matched publishers</p>
+                  <p className="text-xs text-ink-400">{suggestions.length} matched publishers — save to DB or draft outreach email</p>
                 </div>
                 <button onClick={() => downloadCSV(suggestions)}
                   className="text-xs px-3 py-1.5 bg-green-50 text-green-700 border border-green-200 rounded-lg hover:bg-green-100">
@@ -239,6 +290,7 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
                     { l: 'Audience', v: summary.target_audience },
                     { l: 'Regions', v: (summary.regions || []).join(', ') },
                     { l: 'Budget', v: summary.budget_range },
+                    { l: 'Goal', v: summary.key_message },
                   ].filter(s => s.v).map(s => (
                     <span key={s.l} className="text-xs bg-ink-100 text-ink-600 px-2 py-0.5 rounded-full">
                       <span className="text-ink-400">{s.l}:</span> {s.v}
@@ -248,43 +300,62 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
               )}
 
               <div className="divide-y divide-ink-50">
-                {suggestions.map((pub, i) => (
-                  <div key={i} className="px-4 py-3 flex items-center justify-between gap-4 hover:bg-ink-50/50">
-                    <div className="flex items-center gap-4 flex-1 min-w-0">
-                      <span className="text-xs text-ink-400 w-5 shrink-0">{i + 1}</span>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-ink-900">{pub.name}</p>
-                        <p className="text-xs text-ink-400">{pub.site} · {pub.region} · {pub.language}</p>
-                        {pub.why && <p className="text-xs text-blue-600 mt-0.5">{pub.why}</p>}
-                      </div>
-                      <div className="text-right shrink-0">
-                        <p className={`text-sm font-bold ${fitColor(pub.fit_score)}`}>{pub.fit_score}%</p>
-                        <p className="text-xs text-ink-400">{pub.monthly_audience}</p>
+                {suggestions.map((pub, i) => {
+                  const saved = alreadySaved(pub)
+                  return (
+                    <div key={i} className="px-4 py-3 hover:bg-ink-50/50">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex items-start gap-3 flex-1 min-w-0">
+                          <span className="text-xs text-ink-400 w-5 shrink-0 mt-0.5">{i + 1}</span>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                              <p className="text-sm font-semibold text-ink-900">{pub.name}</p>
+                              <a href={`https://${pub.site}`} target="_blank" rel="noreferrer"
+                                className="text-xs text-blue-500 hover:underline">{pub.site}</a>
+                              {saved && <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">✓ Saved</span>}
+                            </div>
+                            <p className="text-xs text-ink-400">{pub.region} · {pub.language} · {pub.monthly_audience}</p>
+                            {pub.why && <p className="text-xs text-blue-600 mt-1">{pub.why}</p>}
+                            <div className="flex items-center gap-3 mt-1">
+                              <span className="text-xs text-ink-500">📧 {pub.contact_email}</span>
+                              <span className="text-xs text-ink-500">📞 {pub.contact_phone}</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex flex-col items-end gap-2 shrink-0">
+                          <div className="text-right">
+                            <p className={`text-base font-bold ${fitColor(pub.fit_score)}`}>{pub.fit_score}%</p>
+                            <p className="text-xs text-ink-400">fit</p>
+                          </div>
+                          <div className="flex gap-1.5">
+                            {!saved && (
+                              <button onClick={() => savePublisher(pub)} disabled={savingPub === pub.name}
+                                className="text-xs px-2.5 py-1.5 bg-ink-100 text-ink-600 rounded-lg hover:bg-ink-200 disabled:opacity-50">
+                                {savingPub === pub.name ? '...' : '+ Save'}
+                              </button>
+                            )}
+                            <button onClick={() => draftEmail(pub)}
+                              className="text-xs px-3 py-1.5 bg-accent text-white rounded-lg hover:bg-accent/90">
+                              ✉ Draft Email
+                            </button>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                    <div className="flex gap-2 shrink-0">
-                      <button onClick={() => savePublisher(pub)}
-                        className="text-xs px-2 py-1.5 bg-ink-100 text-ink-600 rounded-lg hover:bg-ink-200">
-                        + Save
-                      </button>
-                      <button onClick={() => draftEmail(pub)}
-                        className="text-xs px-3 py-1.5 bg-accent text-white rounded-lg hover:bg-accent/90">
-                        ✉ Draft Email
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
           )}
 
+          {/* Campaigns list */}
           {campaigns.length === 0 && !showCampaignForm ? (
             <div className="card p-8 text-center">
               <p className="text-2xl mb-2">📋</p>
               <p className="text-sm text-ink-500 mb-1">No campaigns yet</p>
-              <p className="text-xs text-ink-400">Paste a campaign brief to find matching publishers</p>
+              <p className="text-xs text-ink-400">Paste a campaign brief to find matching publishers and draft outreach emails</p>
             </div>
-          ) : campaigns.length > 0 && !activeCampaign && (
+          ) : campaigns.length > 0 && !activeCampaign && !showCampaignForm && (
             <div className="card overflow-hidden">
               <table className="w-full text-sm">
                 <thead><tr className="bg-ink-50 border-b border-ink-100">
@@ -318,7 +389,7 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
         </div>
       )}
 
-      {/* ── PUBLISHERS DB TAB ── */}
+      {/* ── PUBLISHERS DB ── */}
       {tab === 'publishers' && (
         <div className="space-y-4">
           {showPubForm && (
@@ -327,7 +398,7 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
               <div className="grid grid-cols-2 gap-4">
                 {[
                   { l: 'Publisher Name *', k: 'name', placeholder: 'DailyKannada News' },
-                  { l: 'Website', k: 'site', placeholder: 'kannadadunia.com' },
+                  { l: 'Website', k: 'site_url', placeholder: 'kannadadunia.com' },
                   { l: 'Category', k: 'category', placeholder: 'Regional News' },
                   { l: 'Region', k: 'region', placeholder: 'Karnataka' },
                   { l: 'Language', k: 'language', placeholder: 'Kannada, English' },
@@ -345,15 +416,14 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
                 <div className="col-span-2">
                   <label className="label">Notes</label>
                   <textarea className="input resize-none" rows={2} value={pubForm.notes || ''}
-                    onChange={e => setPubForm(p => ({ ...p, notes: e.target.value }))} placeholder="Any notes about this publisher" />
+                    onChange={e => setPubForm(p => ({ ...p, notes: e.target.value }))} />
                 </div>
               </div>
               <div className="flex gap-3">
                 <button onClick={async () => {
                   if (!pubForm.name || !pubForm.contact_email) { toast.error('Name and email required'); return }
                   await savePublisher(pubForm as Publisher)
-                  setShowPubForm(false)
-                  setPubForm({})
+                  setShowPubForm(false); setPubForm({})
                 }} className="btn-primary">Save Publisher</button>
                 <button onClick={() => setShowPubForm(false)} className="px-4 py-2 text-sm bg-ink-100 text-ink-600 rounded-xl">Cancel</button>
               </div>
@@ -363,8 +433,7 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
           {publishers.length === 0 && !showPubForm ? (
             <div className="card p-8 text-center">
               <p className="text-2xl mb-2">🏢</p>
-              <p className="text-sm text-ink-500 mb-1">No publishers saved yet</p>
-              <p className="text-xs text-ink-400">Add publishers manually or save from AI campaign suggestions</p>
+              <p className="text-sm text-ink-500">No publishers saved yet — save from campaign suggestions or add manually</p>
             </div>
           ) : publishers.length > 0 && (
             <div className="card overflow-hidden">
@@ -416,21 +485,41 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
         <div className="card p-5 border-2 border-accent/20">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <p className="font-semibold text-ink-900">✉ Email Draft — {draftingFor.name}</p>
+              <p className="font-semibold text-ink-900">✉ Outreach Email — {draftingFor.name}</p>
               <p className="text-xs text-ink-400">{draftingFor.contact_email}</p>
             </div>
-            <button onClick={() => setDraftingFor(null)} className="text-xs text-ink-400 hover:text-ink-600">✕ Close</button>
+            <button onClick={() => { setDraftingFor(null); setEmailDraft('') }}
+              className="text-xs text-ink-400 hover:text-ink-600">✕ Close</button>
           </div>
+
+          {/* Sender details */}
+          {!emailDraft && !draftLoading && (
+            <div className="grid grid-cols-2 gap-3 mb-4 p-3 bg-ink-50 rounded-xl">
+              <div>
+                <label className="label">Your Name</label>
+                <input className="input" value={senderName} onChange={e => setSenderName(e.target.value)} placeholder="Bhanu Prakash" />
+              </div>
+              <div>
+                <label className="label">Your Title</label>
+                <input className="input" value={senderTitle} onChange={e => setSenderTitle(e.target.value)} placeholder="Head of Media Buying" />
+              </div>
+            </div>
+          )}
+
           {draftLoading ? (
-            <div className="h-48 bg-ink-50 rounded-xl flex items-center justify-center text-xs text-ink-400">
-              ✦ Drafting professional email...
+            <div className="h-64 bg-ink-50 rounded-xl flex items-center justify-center">
+              <div className="text-center">
+                <p className="text-2xl mb-2 animate-pulse">✦</p>
+                <p className="text-xs text-ink-400">Drafting professional outreach email...</p>
+              </div>
             </div>
           ) : (
-            <textarea className="input w-full resize-none font-mono text-xs leading-relaxed" rows={12}
+            <textarea className="input w-full resize-none font-mono text-xs leading-relaxed" rows={16}
               value={emailDraft} onChange={e => setEmailDraft(e.target.value)} />
           )}
           <div className="flex gap-2 mt-3">
-            <button onClick={() => draftEmail(draftingFor)} className="text-xs px-3 py-2 bg-ink-100 text-ink-600 rounded-xl hover:bg-ink-200">↺ Regenerate</button>
+            <button onClick={() => draftEmail(draftingFor)}
+              className="text-xs px-3 py-2 bg-ink-100 text-ink-600 rounded-xl hover:bg-ink-200">↺ Regenerate</button>
             <button onClick={() => { navigator.clipboard.writeText(emailDraft); toast.success('Copied!') }}
               className="text-xs px-3 py-2 bg-ink-100 text-ink-600 rounded-xl hover:bg-ink-200">⎘ Copy</button>
             <button onClick={() => setSendModal(true)} disabled={draftLoading || !emailDraft}
@@ -446,11 +535,11 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
           <div className="fixed inset-0 flex items-center justify-center z-50 p-4">
             <div className="card p-6 w-full max-w-sm space-y-4">
               <p className="font-semibold text-ink-900">Send via Gmail</p>
-              <p className="text-xs text-ink-400">Enter your official email — Gmail will open with the email pre-filled and ready to send</p>
+              <p className="text-xs text-ink-400">Gmail will open with the email pre-filled — review and click Send</p>
               <div>
-                <label className="label">Your Official Email</label>
+                <label className="label">Your Official Email *</label>
                 <input type="email" className="input" value={senderEmail}
-                  onChange={e => setSenderEmail(e.target.value)} placeholder="you@yourcompany.com" />
+                  onChange={e => setSenderEmail(e.target.value)} placeholder="bhanu@adcandid.com" />
               </div>
               <div className="flex gap-3">
                 <button onClick={() => setSendModal(false)} className="flex-1 px-4 py-2 text-sm bg-ink-100 text-ink-600 rounded-xl">Cancel</button>
