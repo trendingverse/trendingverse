@@ -78,10 +78,9 @@ Respond with ONLY a JSON array, starting with [ and ending with ]. No other text
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
+        generationConfig: {
             temperature: 0.2,
-            maxOutputTokens: 2048,
-            responseMimeType: 'application/json',
+            maxOutputTokens: 4096,
           },
         }),
       }
