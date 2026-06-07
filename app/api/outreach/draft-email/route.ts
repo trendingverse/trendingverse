@@ -6,60 +6,87 @@ import { createClient as createServiceClient } from '@supabase/supabase-js'
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'khan.khan.yusuf@gmail.com'
 
 export async function POST(req: NextRequest) {
+  const body = await req.json().catch(() => ({}))
+  const { publisher, campaign_summary, sender_company, sender_name, sender_title } = body
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const admin = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+  const admin = createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
   const { data: profile } = await admin.from('user_profiles').select('role, company_name').eq('id', user.id).single()
   const isAdmin = user.email === ADMIN_EMAIL
   if (!isAdmin && profile?.role !== 'advertiser') return NextResponse.json({ error: 'Access denied' }, { status: 403 })
 
-  const { publisher, campaign_summary, sender_company } = await req.json()
   const geminiKey = process.env.GEMINI_API_KEY!
-  const company = sender_company || profile?.company_name || 'TrendingVerse'
+  const company  = sender_company || profile?.company_name || 'TrendingVerse Ad Network'
+  const name     = sender_name || 'Business Development Team'
+  const title    = sender_title || 'Head of Partnerships'
 
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
-    {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: `Write a professional business development email to approach ${publisher.name} (${publisher.site}) for an advertising partnership.
+  const prompt = `Write a complete, professional business development email to approach ${publisher.name} for an advertising partnership.
 
-Campaign: ${JSON.stringify(campaign_summary)}
-Publisher: ${JSON.stringify(publisher)}
-Sender company: ${company}
+Publisher details:
+- Name: ${publisher.name}
+- Website: ${publisher.site || publisher.site_url}
+- Category: ${publisher.category}
+- Region: ${publisher.region}
+- Monthly Audience: ${publisher.monthly_audience}
 
-Rules:
-- Professional but warm tone
-- Lead with value for the publisher
-- Mention their specific audience relevance
-- Include specific campaign details
-- Clear call to action
-- Keep under 200 words
-- No generic filler
+Campaign/Advertiser details:
+${JSON.stringify(campaign_summary || {})}
+
+Sender:
+- Company: ${company}
+- Name: ${name}
+- Title: ${title}
+
+Write a complete professional email following this structure:
+1. Compelling subject line
+2. Warm personalized greeting using the publisher name
+3. Opening — who we are and why we're reaching out (1-2 sentences)
+4. Value proposition — what this partnership offers the publisher specifically (2-3 sentences, mention their audience relevance)
+5. Campaign details — what we're advertising, target audience, budget range if provided (2-3 sentences)
+6. What we're offering — CPM rates, revenue share, flexible formats (2-3 sentences)
+7. Clear call to action — schedule a 15-minute call this week
+8. Professional sign-off
+
+Important:
+- Be specific to ${publisher.name} and their audience
+- Sound human and warm, not templated
+- Total length: 200-250 words in the body
+- No placeholder text like [Your Name] — use the actual sender details provided
 
 Format exactly as:
-Subject: [subject line]
+Subject: [subject line here]
 
-[email body]` }] }],
-        generationConfig: { temperature: 0.4, maxOutputTokens: 1024 },
-      }),
-    }
-  )
-  const data = await res.json()
-  const draft = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+Dear [Publisher contact name or Team],
 
-  // Save to outreach log if campaign_id provided
-  const { campaign_id, publisher_id } = await req.json().catch(() => ({}))
-  if (campaign_id && publisher_id) {
-    await admin.from('outreach_log').upsert({
-      campaign_id, publisher_id,
-      email_draft: draft,
-      status: 'drafted',
-      created_by: user.id,
-    }, { onConflict: 'campaign_id,publisher_id' })
+[Full email body]
+
+Best regards,
+${name}
+${title}
+${company}`
+
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+      {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.4, maxOutputTokens: 2048 },
+        }),
+      }
+    )
+    const data = await res.json()
+    const draft = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+    if (!draft) return NextResponse.json({ error: 'Email generation failed' }, { status: 500 })
+    return NextResponse.json({ draft })
+  } catch (e) {
+    return NextResponse.json({ error: (e as Error).message }, { status: 500 })
   }
-
-  return NextResponse.json({ draft })
 }
