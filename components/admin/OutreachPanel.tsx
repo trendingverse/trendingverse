@@ -39,6 +39,9 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
   const [pubScope, setPubScope] = useState<'both' | 'india' | 'global'>('both')
   const [pubForm, setPubForm] = useState<Partial<Publisher>>({})
   const [savingPub, setSavingPub] = useState<string | null>(null)
+  const [editCampaign, setEditCampaign] = useState<Campaign | null>(null)
+  const [editCampaignForm, setEditCampaignForm] = useState<any>({})
+  const [savingCampaign, setSavingCampaign] = useState(false)
 
   useEffect(() => { fetchAll() }, [])
 
@@ -58,6 +61,34 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
     const res = await fetch(`/api/outreach/campaigns?id=${id}`, { method: "DELETE" })
     if (res.ok) { setCampaigns(prev => prev.filter(c => c.id !== id)); toast.success("Campaign deleted") }
     else toast.error("Failed to delete")
+  }
+
+  function openEditCampaign(c: Campaign) {
+    setEditCampaign(c)
+    setEditCampaignForm({
+      name: c.name || '',
+      brand: c.brand || '',
+      category: c.category || '',
+      target_audience: c.target_audience || '',
+      budget_range: c.budget_range || '',
+      brief: c.brief || '',
+      status: c.status || 'active',
+    })
+  }
+
+  async function updateCampaign() {
+    if (!editCampaign) return
+    setSavingCampaign(true)
+    const res = await fetch('/api/outreach/campaigns', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: editCampaign.id, ...editCampaignForm }),
+    })
+    if (res.ok) {
+      toast.success('Campaign updated!')
+      setCampaigns(prev => prev.map(c => c.id === editCampaign.id ? { ...c, ...editCampaignForm } : c))
+      setEditCampaign(null)
+    } else toast.error('Failed to update')
+    setSavingCampaign(false)
   }
 
   async function createCampaign() {
@@ -389,10 +420,14 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
                         {new Date(c.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
                       </td>
                       <td className="px-3 py-2.5 text-center">
-                        {isAdmin && (
-                          <button onClick={() => deleteCampaign(c.id)}
-                            className="text-xs text-red-500 hover:bg-red-50 px-2 py-1 rounded-lg">🗑</button>
-                        )}
+                        <div className="flex items-center justify-center gap-1">
+                          <button onClick={() => openEditCampaign(c)}
+                            className="text-xs px-2 py-1 bg-ink-100 text-ink-600 rounded-lg hover:bg-ink-200">✏ Edit</button>
+                          {isAdmin && (
+                            <button onClick={() => deleteCampaign(c.id)}
+                              className="text-xs text-red-500 hover:bg-red-50 px-2 py-1 rounded-lg">🗑</button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -540,6 +575,68 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
               className="flex-1 btn-primary text-xs py-2 disabled:opacity-50">✉ Send via Gmail</button>
           </div>
         </div>
+      )}
+
+      {/* Edit Campaign Modal */}
+      {editCampaign && (
+        <>
+          <div className="fixed inset-0 bg-black/40 z-40" onClick={() => setEditCampaign(null)} />
+          <div className="fixed inset-0 flex items-center justify-center z-50 p-4">
+            <div className="card p-6 w-full max-w-lg space-y-4">
+              <div className="flex items-center justify-between">
+                <p className="font-semibold text-ink-900">✏ Edit Campaign</p>
+                <button onClick={() => setEditCampaign(null)} className="text-xs text-ink-400 hover:text-ink-600">✕</button>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2">
+                  <label className="label">Campaign Name</label>
+                  <input className="input" value={editCampaignForm.name || ''}
+                    onChange={e => setEditCampaignForm((f: any) => ({ ...f, name: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="label">Brand</label>
+                  <input className="input" value={editCampaignForm.brand || ''}
+                    onChange={e => setEditCampaignForm((f: any) => ({ ...f, brand: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="label">Category</label>
+                  <input className="input" value={editCampaignForm.category || ''}
+                    onChange={e => setEditCampaignForm((f: any) => ({ ...f, category: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="label">Target Audience</label>
+                  <input className="input" value={editCampaignForm.target_audience || ''}
+                    onChange={e => setEditCampaignForm((f: any) => ({ ...f, target_audience: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="label">Budget Range</label>
+                  <input className="input" value={editCampaignForm.budget_range || ''}
+                    onChange={e => setEditCampaignForm((f: any) => ({ ...f, budget_range: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="label">Status</label>
+                  <select className="input" value={editCampaignForm.status || 'active'}
+                    onChange={e => setEditCampaignForm((f: any) => ({ ...f, status: e.target.value }))}>
+                    <option value="active">Active</option>
+                    <option value="paused">Paused</option>
+                    <option value="closed">Closed</option>
+                  </select>
+                </div>
+                <div className="col-span-2">
+                  <label className="label">Campaign Brief</label>
+                  <textarea className="input resize-none" rows={4} value={editCampaignForm.brief || ''}
+                    onChange={e => setEditCampaignForm((f: any) => ({ ...f, brief: e.target.value }))} />
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <button onClick={updateCampaign} disabled={savingCampaign} className="flex-1 btn-primary disabled:opacity-50">
+                  {savingCampaign ? 'Saving...' : '✓ Save Changes'}
+                </button>
+                <button onClick={() => setEditCampaign(null)} className="px-4 py-2 text-sm bg-ink-100 text-ink-600 rounded-xl">Cancel</button>
+              </div>
+            </div>
+          </div>
+        </>
       )}
 
       {/* Send modal */}
