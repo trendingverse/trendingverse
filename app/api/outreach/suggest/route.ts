@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Generate suggestions using a simpler, more reliable prompt
-  const prompt = `List 8 Indian news/content publisher websites suitable for this advertising campaign.
+  const prompt = `List 5 Indian news/content publisher websites suitable for this advertising campaign.
 
 Campaign details: ${JSON.stringify(summary)}
 Brief: ${brief || ''}
