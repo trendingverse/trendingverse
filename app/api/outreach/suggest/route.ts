@@ -82,13 +82,14 @@ Return ONLY a valid JSON array with no explanation:
     const cleaned = raw.replace(/```json\n?|```/g, '').trim()
     const match = cleaned.match(/\[[\s\S]*\]/)
 
-    if (!match) {
-      return NextResponse.json({
-        error: 'Could not generate suggestions',
-        gemini_raw: raw.slice(0, 300),
-      }, { status: 500 })
-    }
-
+return NextResponse.json({
+      debug: true,
+      raw: raw.slice(0, 500),
+      cleaned: cleaned.slice(0, 500),
+      match_found: !!match,
+      summary,
+      brief_received: brief?.slice(0, 100),
+    })
     const suggestions = JSON.parse(match[0])
     return NextResponse.json({ summary, suggestions, existing_count: existingPubs?.length || 0 })
 
