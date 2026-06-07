@@ -53,6 +53,13 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
     setLoading(false)
   }
 
+  async function deleteCampaign(id: string) {
+    if (!confirm("Delete this campaign?")) return
+    const res = await fetch(`/api/outreach/campaigns?id=${id}`, { method: "DELETE" })
+    if (res.ok) { setCampaigns(prev => prev.filter(c => c.id !== id)); toast.success("Campaign deleted") }
+    else toast.error("Failed to delete")
+  }
+
   async function createCampaign() {
     if (!briefInput.trim()) { toast.error('Paste a campaign brief first'); return }
     setSuggesting(true)
@@ -364,6 +371,7 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
                   <th className="text-center px-3 py-2.5 text-xs font-medium text-ink-500">Budget</th>
                   <th className="text-center px-3 py-2.5 text-xs font-medium text-ink-500">Status</th>
                   <th className="text-right px-4 py-2.5 text-xs font-medium text-ink-500">Date</th>
+                  <th className="text-center px-3 py-2.5 text-xs font-medium text-ink-500">Action</th>
                 </tr></thead>
                 <tbody>
                   {campaigns.map(c => (
@@ -379,6 +387,12 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
                       </td>
                       <td className="px-4 py-2.5 text-right text-xs text-ink-400">
                         {new Date(c.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
+                      </td>
+                      <td className="px-3 py-2.5 text-center">
+                        {isAdmin && (
+                          <button onClick={() => deleteCampaign(c.id)}
+                            className="text-xs text-red-500 hover:bg-red-50 px-2 py-1 rounded-lg">🗑</button>
+                        )}
                       </td>
                     </tr>
                   ))}
