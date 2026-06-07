@@ -1,7 +1,17 @@
+// components/admin/AdminSidebar.tsx
 'use client'
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
+
+type Role = 'admin' | 'publisher' | 'advertiser'
+
+// Advertiser only sees outreach
+const advertiserNav = [
+  { label: 'Outreach', items: [
+    { href: '/admin/outreach', label: 'Publisher Outreach', icon: '📋' },
+  ]},
+]
 
 const baseNav = [
   { label: 'Overview', items: [
@@ -27,6 +37,18 @@ const baseNav = [
   ]},
 ]
 
+const adminExtraItems: Record<string, { href: string; label: string; icon: string }[]> = {
+  'AI & SEO': [{ href: '/admin/author-fix', label: 'Author & Category', icon: '👤' }],
+  'Revenue':  [
+    { href: '/admin/direct-ads', label: 'Direct Ads', icon: '🎯' },
+    { href: '/admin/outreach', label: 'Outreach', icon: '📋' },
+  ],
+  'System': [
+    { href: '/admin/audience', label: 'Audience', icon: '👥' },
+    { href: '/admin/advertisers', label: 'Advertisers', icon: '🏢' },
+  ],
+}
+
 const adminNav = {
   label: 'Admin',
   items: [
@@ -34,28 +56,23 @@ const adminNav = {
   ]
 }
 
-const adminExtraItems = {
-  'AI & SEO': [{ href: '/admin/author-fix', label: 'Author & Category', icon: '👤' }],
-  'Revenue':  [{ href: '/admin/direct-ads', label: 'Direct Ads', icon: '🎯' },
-               { href: '/admin/outreach', label: 'Outreach', icon: '📋' }],
-  'System':   [{ href: '/admin/audience', label: 'Audience', icon: '👥' },
-               { href: '/admin/advertisers', label: 'Advertisers', icon: '🏢' }],
-}
-
-export function AdminSidebar({ isAdmin = false }: { isAdmin?: boolean }) {
+export function AdminSidebar({ isAdmin = false, role = 'publisher' }: { isAdmin?: boolean; role?: Role }) {
   const path = usePathname()
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
 
-  const nav = (() => {
-    const sections = baseNav.map(section => {
-      if (isAdmin && adminExtraItems[section.label]) {
-        return { ...section, items: [...section.items, ...adminExtraItems[section.label]] }
-      }
-      return section
-    })
-    return isAdmin ? [...sections, adminNav] : sections
-  })()
+  // Advertisers get a completely separate minimal nav
+  const nav = role === 'advertiser'
+    ? advertiserNav
+    : (() => {
+        const sections = baseNav.map(section => {
+          if (isAdmin && adminExtraItems[section.label]) {
+            return { ...section, items: [...section.items, ...adminExtraItems[section.label]] }
+          }
+          return section
+        })
+        return isAdmin ? [...sections, adminNav] : sections
+      })()
 
   useEffect(() => { setMobileOpen(false) }, [path])
 
@@ -70,11 +87,18 @@ export function AdminSidebar({ isAdmin = false }: { isAdmin?: boolean }) {
         <button
           onClick={() => setCollapsed(!collapsed)}
           className="hidden lg:flex w-7 h-7 rounded-lg bg-ink-50 hover:bg-ink-100 items-center justify-center text-ink-500 transition-colors text-sm"
-          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
           {collapsed ? '→' : '←'}
         </button>
       </div>
+
+      {/* Role badge for non-admin users */}
+      {!collapsed && role === 'advertiser' && (
+        <div className="mx-3 mt-3 px-3 py-2 bg-violet-50 border border-violet-100 rounded-lg">
+          <p className="text-xs font-semibold text-violet-700">🏢 Advertiser</p>
+          <p className="text-[10px] text-violet-400 mt-0.5">Campaign outreach access</p>
+        </div>
+      )}
 
       <nav className="flex-1 p-2 space-y-4 overflow-y-auto">
         {nav.map(section => (
@@ -105,12 +129,8 @@ export function AdminSidebar({ isAdmin = false }: { isAdmin?: boolean }) {
       </nav>
 
       <div className="p-2 border-t border-ink-100">
-        <a
-          href="/"
-          target="_blank"
-          title={collapsed ? 'View Site' : undefined}
-          className={`admin-nav-item text-xs ${collapsed ? 'justify-center px-2' : ''}`}
-        >
+        <a href="/" target="_blank" title={collapsed ? 'View Site' : undefined}
+          className={`admin-nav-item text-xs ${collapsed ? 'justify-center px-2' : ''}`}>
           <span>↗</span>
           {!collapsed && <span>View Site</span>}
         </a>
@@ -120,10 +140,8 @@ export function AdminSidebar({ isAdmin = false }: { isAdmin?: boolean }) {
 
   return (
     <>
-      <button
-        onClick={() => setMobileOpen(!mobileOpen)}
-        className="lg:hidden fixed top-3 left-3 z-50 w-9 h-9 rounded-xl bg-white border border-ink-100 shadow flex items-center justify-center text-ink-700"
-      >
+      <button onClick={() => setMobileOpen(!mobileOpen)}
+        className="lg:hidden fixed top-3 left-3 z-50 w-9 h-9 rounded-xl bg-white border border-ink-100 shadow flex items-center justify-center text-ink-700">
         {mobileOpen ? '✕' : '☰'}
       </button>
 
