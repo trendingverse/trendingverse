@@ -88,6 +88,7 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
     const saved = await saveRes.json()
     setActiveCampaign(saved)
     setSummary(data.summary)
+    console.log('Suggest response:', data)
     setSuggestions(data.suggestions || [])
     setShowCampaignForm(false)
     setCampaigns(prev => [saved, ...prev])
