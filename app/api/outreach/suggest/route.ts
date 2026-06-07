@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
   const admin = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
   const isAdmin = user.email === ADMIN_EMAIL
   const { data: profile } = await admin.from('user_profiles').select('role').eq('id', user.id).single()
-  if (!isAdmin && profile?.role !== 'advertiser') return NextResponse.json({ error: 'Access denied' }, { status: 403 })
+  if (!isAdmin && profile?.role !== 'advertiser') return NextResponse.json({ error: 'Access denied', debug: { role: profile?.role, isAdmin, userId: user.id } }, { status: 403 })
 
   const { brief, campaign_summary } = await req.json()
   const geminiKey = process.env.GEMINI_API_KEY!
