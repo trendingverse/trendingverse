@@ -11,7 +11,9 @@ export default function AdvertisersPage() {
   const [advertisers, setAdvertisers] = useState<Advertiser[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState({ email: '', password: '', full_name: '', company_name: '' })
+  const [editForm, setEditForm] = useState({ company_name: '', full_name: '', new_password: '' })
   const [saving, setSaving] = useState(false)
 
   useEffect(() => { fetchAdvertisers() }, [])
@@ -44,11 +46,35 @@ export default function AdvertisersPage() {
     setSaving(false)
   }
 
+  async function updateAdvertiser(id: string) {
+    setSaving(true)
+    const res = await fetch('/api/admin/advertisers', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, ...editForm }),
+    })
+    const data = await res.json()
+    if (res.ok) {
+      toast.success('Advertiser updated!')
+      setEditingId(null)
+      setEditForm({ company_name: '', full_name: '', new_password: '' })
+      fetchAdvertisers()
+    } else {
+      toast.error(data.error || 'Failed to update')
+    }
+    setSaving(false)
+  }
+
   async function deleteAdvertiser(id: string, email: string) {
     if (!confirm(`Delete advertiser ${email}?`)) return
     await fetch(`/api/admin/advertisers?id=${id}`, { method: 'DELETE' })
     setAdvertisers(prev => prev.filter(a => a.id !== id))
     toast.success('Advertiser deleted')
+  }
+
+  function startEdit(a: Advertiser) {
+    setEditingId(a.id)
+    setEditForm({ company_name: a.company_name || '', full_name: '', new_password: '' })
+    setShowForm(false)
   }
 
   return (
@@ -58,28 +84,37 @@ export default function AdvertisersPage() {
           <h1 className="font-display text-2xl font-bold text-ink-950">🏢 Advertisers</h1>
           <p className="text-sm text-ink-400 mt-1">Manage advertiser accounts — they can run campaigns and find publishers</p>
         </div>
-        <button onClick={() => setShowForm(true)} className="btn-primary text-xs px-4 py-2">+ Create Advertiser</button>
+        <button onClick={() => { setShowForm(true); setEditingId(null) }} className="btn-primary text-xs px-4 py-2">+ Create Advertiser</button>
       </div>
 
+      {/* Create form */}
       {showForm && (
         <div className="card p-5 space-y-4 border-2 border-accent/20">
           <h3 className="font-semibold text-ink-900">New Advertiser Account</h3>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="label">Company Name *</label>
-              <input className="input" value={form.company_name} onChange={e => setForm(f => ({ ...f, company_name: e.target.value }))} placeholder="Nykaa, Swiggy, etc." />
+              <input className="input" value={form.company_name}
+                onChange={e => setForm(f => ({ ...f, company_name: e.target.value }))}
+                placeholder="Nykaa, Swiggy, etc." />
             </div>
             <div>
               <label className="label">Contact Name</label>
-              <input className="input" value={form.full_name} onChange={e => setForm(f => ({ ...f, full_name: e.target.value }))} placeholder="Full name" />
+              <input className="input" value={form.full_name}
+                onChange={e => setForm(f => ({ ...f, full_name: e.target.value }))}
+                placeholder="Full name" />
             </div>
             <div>
               <label className="label">Email *</label>
-              <input type="email" className="input" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="advertiser@company.com" />
+              <input type="email" className="input" value={form.email}
+                onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+                placeholder="advertiser@company.com" />
             </div>
             <div>
               <label className="label">Password *</label>
-              <input type="password" className="input" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} placeholder="Minimum 8 characters" />
+              <input type="password" className="input" value={form.password}
+                onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
+                placeholder="Minimum 8 characters" />
             </div>
           </div>
           <div className="flex gap-3">
@@ -99,34 +134,76 @@ export default function AdvertisersPage() {
           <p className="text-sm text-ink-500">No advertisers yet — create the first one above</p>
         </div>
       ) : (
-        <div className="card overflow-hidden">
-          <table className="w-full text-sm">
-            <thead><tr className="bg-ink-50 border-b border-ink-100">
-              <th className="text-left px-4 py-2.5 text-xs font-medium text-ink-500">Company</th>
-              <th className="text-left px-4 py-2.5 text-xs font-medium text-ink-500">Email</th>
-              <th className="text-center px-3 py-2.5 text-xs font-medium text-ink-500">Plan</th>
-              <th className="text-right px-4 py-2.5 text-xs font-medium text-ink-500">Created</th>
-              <th className="text-center px-3 py-2.5 text-xs font-medium text-ink-500">Actions</th>
-            </tr></thead>
-            <tbody>
-              {advertisers.map(a => (
-                <tr key={a.id} className="border-b border-ink-50 hover:bg-ink-50/50">
-                  <td className="px-4 py-2.5 text-xs font-medium text-ink-900">{a.company_name || '—'}</td>
-                  <td className="px-4 py-2.5 text-xs text-ink-600">{a.email}</td>
-                  <td className="px-3 py-2.5 text-center">
-                    <span className="text-xs bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full">advertiser</span>
-                  </td>
-                  <td className="px-4 py-2.5 text-right text-xs text-ink-400">
+        <div className="space-y-3">
+          {advertisers.map(a => (
+            <div key={a.id} className="card overflow-hidden">
+              {/* Main row */}
+              <div className="flex items-center justify-between px-4 py-3">
+                <div className="flex items-center gap-4">
+                  <div className="w-9 h-9 rounded-xl bg-violet-100 flex items-center justify-center text-violet-700 font-bold text-sm">
+                    {(a.company_name || a.email)[0].toUpperCase()}
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-ink-900">{a.company_name || '—'}</p>
+                    <p className="text-xs text-ink-400">{a.email}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full">advertiser</span>
+                  <span className="text-xs text-ink-400">
                     {new Date(a.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' })}
-                  </td>
-                  <td className="px-3 py-2.5 text-center">
-                    <button onClick={() => deleteAdvertiser(a.id, a.email)}
-                      className="text-xs text-red-500 hover:bg-red-50 px-2 py-1 rounded-lg">🗑</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </span>
+                  <div className="flex gap-1">
+                    <button
+                      onClick={() => editingId === a.id ? setEditingId(null) : startEdit(a)}
+                      className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-colors ${editingId === a.id ? 'bg-ink-200 text-ink-700' : 'bg-ink-100 text-ink-600 hover:bg-ink-200'}`}>
+                      {editingId === a.id ? '✕ Cancel' : '✏ Edit'}
+                    </button>
+                    <button
+                      onClick={() => deleteAdvertiser(a.id, a.email)}
+                      className="text-xs px-3 py-1.5 rounded-lg text-red-500 hover:bg-red-50">
+                      🗑
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Edit form — inline below the row */}
+              {editingId === a.id && (
+                <div className="border-t border-ink-100 px-4 py-4 bg-ink-50/50 space-y-3">
+                  <p className="text-xs font-semibold text-ink-600 uppercase tracking-wide">Edit Details</p>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <label className="label">Company Name</label>
+                      <input className="input" value={editForm.company_name}
+                        onChange={e => setEditForm(f => ({ ...f, company_name: e.target.value }))}
+                        placeholder="Company name" />
+                    </div>
+                    <div>
+                      <label className="label">Contact Name</label>
+                      <input className="input" value={editForm.full_name}
+                        onChange={e => setEditForm(f => ({ ...f, full_name: e.target.value }))}
+                        placeholder="Full name (optional)" />
+                    </div>
+                    <div>
+                      <label className="label">New Password</label>
+                      <input type="password" className="input" value={editForm.new_password}
+                        onChange={e => setEditForm(f => ({ ...f, new_password: e.target.value }))}
+                        placeholder="Leave blank to keep current" />
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={() => updateAdvertiser(a.id)} disabled={saving}
+                      className="btn-primary text-xs px-4 py-2 disabled:opacity-50">
+                      {saving ? 'Saving...' : '✓ Save Changes'}
+                    </button>
+                    <button onClick={() => setEditingId(null)}
+                      className="text-xs px-4 py-2 bg-ink-100 text-ink-600 rounded-xl">Cancel</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       )}
     </div>
