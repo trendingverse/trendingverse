@@ -106,7 +106,7 @@ export default function LandingPage() {
               ))}
             </ul>
             <div className="flex gap-3">
-              <a href="mailto:support@trendingverse.online?subject=Advertiser Access Request"
+              <a href="mailto:yusuf@trendingverse.online?subject=Advertiser Access Request"
                 className="flex-1 text-center py-2.5 bg-violet-600 text-white text-sm font-semibold rounded-xl hover:bg-violet-700 transition-colors">
                 Request access →
               </a>
@@ -209,7 +209,7 @@ export default function LandingPage() {
             ))}
           </div>
           <div className="text-center mt-10">
-            <a href="mailto:support@trendingverse.online?subject=Advertiser Access Request"
+            <a href="mailto:yusuf@trendingverse.online?subject=Advertiser Access Request"
               className="inline-flex px-8 py-3 bg-violet-600 text-white font-semibold rounded-xl hover:bg-violet-700 transition-colors">
               Request Advertiser Access →
             </a>
@@ -350,7 +350,7 @@ export default function LandingPage() {
             <p className="text-2xl mb-3">🏢</p>
             <h3 className="text-xl font-bold text-gray-900 mb-2">Are you an Advertiser?</h3>
             <p className="text-gray-500 text-sm mb-6">Get invite-only access to our publisher outreach CRM and campaign tools</p>
-            <a href="mailto:support@trendingverse.online?subject=Advertiser Access Request"
+            <a href="mailto:yusuf@trendingverse.online?subject=Advertiser Access Request"
               className="inline-flex px-6 py-2.5 bg-violet-600 text-white font-semibold rounded-xl hover:bg-violet-700 transition-colors">
               Request access →
             </a>
@@ -363,7 +363,7 @@ export default function LandingPage() {
         © {new Date().getFullYear()} TrendingVerse · Made in India 🇮🇳 ·{' '}
         <Link href="/pricing" className="hover:text-gray-600">Pricing</Link> ·{' '}
         <Link href="/login" className="hover:text-gray-600">Sign in</Link> ·{' '}
-        <a href="mailto:support@trendingverse.online" className="hover:text-gray-600">Support</a>
+        <a href="mailto:Yusuf@trendingverse.online" className="hover:text-gray-600">Support</a>
       </footer>
     </div>
   )
