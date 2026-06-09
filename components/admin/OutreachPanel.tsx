@@ -370,6 +370,10 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
                               {saved && <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">✓ Saved</span>}
                             </div>
                             <p className="text-xs text-ink-400">{pub.region} · {pub.language} · {pub.monthly_audience}</p>
+                            <div className="flex gap-1 mt-1 flex-wrap">
+                              {(pub as any).ctv_available && <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full font-medium">📺 CTV</span>}
+                              {(pub as any).pmp_supported && <span className="text-[10px] bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded-full font-medium">🔒 PMP</span>}
+                            </div>
                             {pub.why && <p className="text-xs text-blue-600 mt-1">{pub.why}</p>}
                             <div className="flex items-center gap-3 mt-1">
                               <span className="text-xs text-ink-500">📧 {pub.contact_email}</span>
