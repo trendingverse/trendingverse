@@ -326,11 +326,11 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
               </div>
               <div>
                 <label className="label">Your Name (for email draft)</label>
-                <input className="input" value={senderName} onChange={e => setSenderName(e.target.value)} placeholder="e.g. Bhanu Prakash" />
+                <input className="input" value={senderName} onChange={e => setSenderName(e.target.value)} placeholder="e.g. Bhanushree" />
               </div>
               <div>
                 <label className="label">Your Title</label>
-                <input className="input" value={senderTitle} onChange={e => setSenderTitle(e.target.value)} placeholder="e.g. Head of Media Buying" />
+                <input className="input" value={senderTitle} onChange={e => setSenderTitle(e.target.value)} placeholder="e.g. Manager - Business Development" />
               </div>
               <div className="flex gap-3">
                 <button onClick={createCampaign} disabled={!briefInput.trim() || suggesting} className="btn-primary">
