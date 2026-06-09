@@ -36,13 +36,19 @@ export async function POST(req: NextRequest) {
           body: JSON.stringify({
             contents: [{ parts: [{ text: `Extract campaign details from this brief. May be free text, bullets, or table format.
 
-Brief:
 ${brief}
 
 Return ONLY valid JSON:
 {"brand":"","product":"","category":"","target_audience":"","regions":[],"budget_range":"","campaign_type":"","key_message":"","device":"","deal_type":"","creative_length":"","integration":"","payment_terms":"","kpi":""}
 
-IMPORTANT: Expand country codes to full names. MX=Mexico, BD=Bangladesh, IN=India, US=United States, UK=United Kingdom.` }] }],
+IMPORTANT: 
+- Parse tab-separated rows as key:value pairs
+- "Geo" field = regions. Expand ALL country codes: MX=Mexico, BD=Bangladesh, IN=India, US=United States, UK=United Kingdom, AE=UAE, SG=Singapore, PH=Philippines, ID=Indonesia, MY=Malaysia, TH=Thailand, VN=Vietnam
+- "Vertical" field = category
+- "Mode" field = campaign_type and deal_type  
+- "KPI" field = key_message and kpi
+- "PO" field = budget_range
+- Never default regions to India unless brief explicitly says India` }] }],
             generationConfig: { temperature: 0.1, maxOutputTokens: 1024 },
           }),
         }
