@@ -1,5 +1,3 @@
-
-
 // app/api/outreach/suggest/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
@@ -160,7 +158,7 @@ Return ONLY a valid JSON array:
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.2, maxOutputTokens: 8192 },
+          generationConfig: { temperature: 0.2, maxOutputTokens: 4096 },
         }),
       }
     )
