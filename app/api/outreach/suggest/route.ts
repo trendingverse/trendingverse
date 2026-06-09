@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
   const geminiKey = process.env.GEMINI_API_KEY!
   let summary = campaign_summary || { brand: 'Brand', category: 'General', regions: ['India'] }
 
-  // Parse brief — handles both free-text and tabular (tab/pipe separated) formats
+  // Parse brief
   if (!campaign_summary && brief) {
     try {
       const parseRes = await fetch(
@@ -34,31 +34,15 @@ export async function POST(req: NextRequest) {
         {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            contents: [{ parts: [{ text: `Extract ALL campaign details from this brief. The brief may be in free text, bullet points, or a table format (tab/pipe separated columns with headers like Campaign Name, Geo, Vertical, Mode, KPI, Payment Terms etc).
+            contents: [{ parts: [{ text: `Extract campaign details from this brief. May be free text, bullets, or table format.
 
 Brief:
 ${brief}
 
-Return ONLY valid JSON — no markdown, no explanation:
-{
-  "brand": "campaign/brand name",
-  "product": "product or service being advertised",
-  "category": "vertical/category (e.g. E-commerce, Fashion, Health, FMCG)",
-  "target_audience": "target audience description",
-  "regions": ["country or region codes expanded to full names — e.g. MX=Mexico, BD=Bangladesh, IN=India, US=United States"],
-  "budget_range": "budget or PO value if mentioned",
-  "campaign_type": "deal type or mode (CPA, CPM, PMP, CTV etc)",
-  "key_message": "campaign goal or KPI",
-  "device": "device type if mentioned (CTV, Mobile, Desktop)",
-  "deal_type": "deal type",
-  "creative_length": "creative length if mentioned",
-  "integration": "integration method if mentioned",
-  "payment_terms": "payment terms if mentioned",
-  "kpi": "KPI if mentioned",
-  "preview_link": "preview link if mentioned"
-}
+Return ONLY valid JSON:
+{"brand":"","product":"","category":"","target_audience":"","regions":[],"budget_range":"","campaign_type":"","key_message":"","device":"","deal_type":"","creative_length":"","integration":"","payment_terms":"","kpi":""}
 
-IMPORTANT: For regions/geo, always expand country codes to full country names. MX = Mexico, BD = Bangladesh, IN = India, US = United States, UK = United Kingdom, etc.` }] }],
+IMPORTANT: Expand country codes to full names. MX=Mexico, BD=Bangladesh, IN=India, US=United States, UK=United Kingdom.` }] }],
             generationConfig: { temperature: 0.1, maxOutputTokens: 1024 },
           }),
         }
@@ -70,86 +54,46 @@ IMPORTANT: For regions/geo, always expand country codes to full country names. M
     } catch { /* use fallback */ }
   }
 
-  // Detect key campaign signals
+  // Detect signals
   const regions: string[] = Array.isArray(summary.regions) ? summary.regions : [summary.regions || 'India']
   const regionsStr = regions.join(', ').toLowerCase()
+  const briefLower = (brief || '').toLowerCase()
   const isBangladesh = regionsStr.includes('bangladesh') || regionsStr.includes('dhaka')
-  const isCTV = (summary.device || brief || '').toLowerCase().includes('ctv') ||
-                (summary.device || brief || '').toLowerCase().includes('connected tv')
-  const isPMP = (summary.deal_type || brief || '').toLowerCase().includes('pmp') ||
-                (summary.deal_type || brief || '').toLowerCase().includes('private marketplace')
-  const isDV360 = (summary.integration || brief || '').toLowerCase().includes('dv360') ||
-                  (summary.integration || brief || '').toLowerCase().includes('display & video 360')
+  const isCTV = briefLower.includes('ctv') || briefLower.includes('connected tv') || (summary.device || '').toLowerCase().includes('ctv')
+  const isPMP = briefLower.includes('pmp') || (summary.deal_type || '').toLowerCase().includes('pmp')
+  const isDV360 = briefLower.includes('dv360') || (summary.integration || '').toLowerCase().includes('dv360')
 
-  // Build smart geo/device context for Gemini
   const geoContext = isBangladesh
-    ? `CRITICAL: This campaign targets Bangladesh (Dhaka). Suggest publishers with ACTUAL Bangladesh audience reach:
-       - Prioritize: Hoichoi, Bongo, Chorki, Toffee (BRAC TV), Channel i Digital, NTV Digital, Prothom Alo Digital, Daily Star Bangladesh
-       - OTT/streaming platforms with verified Bangladesh user base
-       - DO NOT suggest Indian-only platforms like JioCinema, Hotstar, SonyLIV, Zee5 unless they have confirmed Bangladesh operations`
-    : `Suggest publishers matching the geographic target: ${regions.join(', ')}`
+    ? `CRITICAL: Campaign targets Bangladesh/Dhaka. ONLY suggest publishers with real Bangladesh presence:
+Hoichoi, Bongo, Chorki, Toffee/BRAC TV, Channel i Digital, NTV Digital, Prothom Alo Digital, Daily Star Bangladesh.
+DO NOT suggest JioCinema, Hotstar, SonyLIV, Zee5 — they have no Bangladesh operations.`
+    : `Target geography: ${regions.join(', ')}`
 
   const deviceContext = isCTV
-    ? `CRITICAL: This is a CTV (Connected TV) campaign. Only suggest publishers/platforms that:
-       - Have a Smart TV app or CTV inventory
-       - Support video ad formats (pre-roll/mid-roll on TV screens)
-       - Support PMP deals for CTV
-       - Examples: OTT platforms with TV apps (not mobile-only publishers)`
+    ? `CTV CAMPAIGN: Only suggest OTT/streaming platforms with Smart TV apps and CTV ad inventory.`
     : ''
 
   const dealContext = (isPMP || isDV360)
-    ? `Deal type is PMP (Private Marketplace). Only suggest publishers that:
-       - Support programmatic PMP deals
-       - Are integrated with DSPs${isDV360 ? ', especially DV360' : ''}
-       - Have their own SSP integration or work through a rep firm`
+    ? `PMP DEAL: Only suggest publishers supporting programmatic PMP deals${isDV360 ? ' and DV360 integration' : ''}.`
     : ''
 
   const scope = publisher_scope || 'both'
-  const scopeInstruction = scope === 'india' ? 'Focus on Indian publishers only.'
-    : scope === 'global' ? 'Focus on international publishers.'
-    : 'Include publishers from the relevant geography.'
+  const scopeInstruction = scope === 'india' ? 'Indian publishers only.' : scope === 'global' ? 'International publishers only.' : 'Publishers from relevant geography.'
 
-  const prompt = `You are a senior programmatic media buying expert with deep knowledge of publisher inventory globally.
+  const prompt = `You are a programmatic media buying expert. Suggest 6 publishers for this campaign.
 
-Suggest 6 publishers PERFECTLY suited for this advertising campaign. Be specific and accurate.
+Campaign: ${JSON.stringify(summary)}
+Brief: ${(brief || '').slice(0, 300)}
 
-Campaign Brief:
-${JSON.stringify(summary, null, 2)}
-
-Raw Brief:
-${(brief || '').slice(0, 400)}
-
-Geographic Requirements:
 ${geoContext}
-
 ${deviceContext}
-
 ${dealContext}
-
 ${scopeInstruction}
 
-IMPORTANT RULES:
-- Only suggest publishers that ACTUALLY exist and have REAL presence in the target geography
-- If CTV campaign, only suggest platforms with actual Smart TV/CTV inventory
-- If PMP deal, only suggest publishers that support programmatic buying
-- Be specific about WHY each publisher fits this exact campaign
-- Include realistic contact details (publisher's partnerships/advertising team email format)
+Keep ALL field values SHORT. "why" = max 12 words. "monthly_audience" = format like "5M/mo".
 
-Return ONLY a valid JSON array:
-[{
-  "name": "Publisher Name",
-  "site": "website.com",
-  "category": "OTT/News/etc",
-  "region": "Bangladesh/India/etc",
-  "language": "Bengali/English/etc",
-  "monthly_audience": "Xm monthly users",
-  "ctv_available": true/false,
-  "pmp_supported": true/false,
-  "contact_email": "partnerships@publisher.com",
-  "contact_phone": "+XX XXXXX XXXXX",
-  "why": "Specific reason why this publisher fits this exact campaign",
-  "fit_score": 85
-}]`
+Return ONLY a JSON array, no markdown:
+[{"name":"","site":"","category":"","region":"","language":"","monthly_audience":"","ctv_available":false,"pmp_supported":false,"contact_email":"","contact_phone":"","why":"","fit_score":85}]`
 
   try {
     const res = await fetch(
@@ -158,10 +102,11 @@ Return ONLY a valid JSON array:
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.2, maxOutputTokens: 4096 },
+          generationConfig: { temperature: 0.2, maxOutputTokens: 8192 },
         }),
       }
     )
+
     const data = await res.json()
     if (data.error) return NextResponse.json({ error: 'Gemini error: ' + data.error.message }, { status: 500 })
 
@@ -180,7 +125,7 @@ Return ONLY a valid JSON array:
     }
 
     if (!suggestions || !Array.isArray(suggestions)) {
-      return NextResponse.json({ error: 'Could not parse suggestions', raw_preview: raw.slice(0, 200) }, { status: 500 })
+      return NextResponse.json({ error: 'Could not parse suggestions', raw_preview: raw.slice(0, 300) }, { status: 500 })
     }
 
     const { data: existingPubs } = await admin.from('publishers_db').select('*').limit(50)
