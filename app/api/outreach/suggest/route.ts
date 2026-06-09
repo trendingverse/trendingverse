@@ -26,6 +26,7 @@ export async function POST(req: NextRequest) {
   const geminiKey = process.env.GEMINI_API_KEY!
   let summary = campaign_summary || { brand: 'Brand', category: 'General', regions: ['India'] }
 
+  // Parse brief
   if (!campaign_summary && brief) {
     try {
       const parseRes = await fetch(
@@ -33,7 +34,7 @@ export async function POST(req: NextRequest) {
         {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            contents: [{ parts: [{ text: `Extract campaign details from this brief. Return ONLY valid JSON:\n\n${brief}\n\n{"brand":"","product":"","category":"","target_audience":"","regions":[],"budget_range":"","campaign_type":"","key_message":""}` }] }],
+            contents: [{ parts: [{ text: `Extract ALL campaign details from this brief. Return ONLY valid JSON:\n\n${brief}\n\n{"brand":"","product":"","category":"","target_audience":"","regions":[],"budget_range":"","campaign_type":"","key_message":"","device":"","deal_type":"","creative_length":"","integration":""}` }] }],
             generationConfig: { temperature: 0.1, maxOutputTokens: 512 },
           }),
         }
@@ -45,23 +46,86 @@ export async function POST(req: NextRequest) {
     } catch { /* use fallback */ }
   }
 
-  // Scope: india | global | both
+  // Detect key campaign signals
+  const regions: string[] = Array.isArray(summary.regions) ? summary.regions : [summary.regions || 'India']
+  const regionsStr = regions.join(', ').toLowerCase()
+  const isBangladesh = regionsStr.includes('bangladesh') || regionsStr.includes('dhaka')
+  const isCTV = (summary.device || brief || '').toLowerCase().includes('ctv') ||
+                (summary.device || brief || '').toLowerCase().includes('connected tv')
+  const isPMP = (summary.deal_type || brief || '').toLowerCase().includes('pmp') ||
+                (summary.deal_type || brief || '').toLowerCase().includes('private marketplace')
+  const isDV360 = (summary.integration || brief || '').toLowerCase().includes('dv360') ||
+                  (summary.integration || brief || '').toLowerCase().includes('display & video 360')
+
+  // Build smart geo/device context for Gemini
+  const geoContext = isBangladesh
+    ? `CRITICAL: This campaign targets Bangladesh (Dhaka). Suggest publishers with ACTUAL Bangladesh audience reach:
+       - Prioritize: Hoichoi, Bongo, Chorki, Toffee (BRAC TV), Channel i Digital, NTV Digital, Prothom Alo Digital, Daily Star Bangladesh
+       - OTT/streaming platforms with verified Bangladesh user base
+       - DO NOT suggest Indian-only platforms like JioCinema, Hotstar, SonyLIV, Zee5 unless they have confirmed Bangladesh operations`
+    : `Suggest publishers matching the geographic target: ${regions.join(', ')}`
+
+  const deviceContext = isCTV
+    ? `CRITICAL: This is a CTV (Connected TV) campaign. Only suggest publishers/platforms that:
+       - Have a Smart TV app or CTV inventory
+       - Support video ad formats (pre-roll/mid-roll on TV screens)
+       - Support PMP deals for CTV
+       - Examples: OTT platforms with TV apps (not mobile-only publishers)`
+    : ''
+
+  const dealContext = (isPMP || isDV360)
+    ? `Deal type is PMP (Private Marketplace). Only suggest publishers that:
+       - Support programmatic PMP deals
+       - Are integrated with DSPs${isDV360 ? ', especially DV360' : ''}
+       - Have their own SSP integration or work through a rep firm`
+    : ''
+
   const scope = publisher_scope || 'both'
-  const scopeInstruction = scope === 'india'
-    ? 'Focus only on Indian publishers.'
-    : scope === 'global'
-    ? 'Focus on international/global publishers.'
-    : 'Include a mix of Indian and international publishers.'
+  const scopeInstruction = scope === 'india' ? 'Focus on Indian publishers only.'
+    : scope === 'global' ? 'Focus on international publishers.'
+    : 'Include publishers from the relevant geography.'
 
-  const prompt = `You are a senior media buying expert. Suggest 6 publisher websites for this advertising campaign.
+  const prompt = `You are a senior programmatic media buying expert with deep knowledge of publisher inventory globally.
 
-Campaign: ${JSON.stringify(summary)}
-Brief: ${(brief || '').slice(0, 300)}
+Suggest 6 publishers PERFECTLY suited for this advertising campaign. Be specific and accurate.
+
+Campaign Brief:
+${JSON.stringify(summary, null, 2)}
+
+Raw Brief:
+${(brief || '').slice(0, 400)}
+
+Geographic Requirements:
+${geoContext}
+
+${deviceContext}
+
+${dealContext}
 
 ${scopeInstruction}
 
-Return ONLY a valid JSON array. Keep each entry concise:
-[{"name":"","site":"","category":"","region":"","language":"","monthly_audience":"","contact_email":"","contact_phone":"","why":"","fit_score":85}]`
+IMPORTANT RULES:
+- Only suggest publishers that ACTUALLY exist and have REAL presence in the target geography
+- If CTV campaign, only suggest platforms with actual Smart TV/CTV inventory
+- If PMP deal, only suggest publishers that support programmatic buying
+- Be specific about WHY each publisher fits this exact campaign
+- Include realistic contact details (publisher's partnerships/advertising team email format)
+
+Return ONLY a valid JSON array:
+[{
+  "name": "Publisher Name",
+  "site": "website.com",
+  "category": "OTT/News/etc",
+  "region": "Bangladesh/India/etc",
+  "language": "Bengali/English/etc",
+  "monthly_audience": "Xm monthly users",
+  "ctv_available": true/false,
+  "pmp_supported": true/false,
+  "contact_email": "partnerships@publisher.com",
+  "contact_phone": "+XX XXXXX XXXXX",
+  "why": "Specific reason why this publisher fits this exact campaign",
+  "fit_score": 85
+}]`
 
   try {
     const res = await fetch(
@@ -74,7 +138,6 @@ Return ONLY a valid JSON array. Keep each entry concise:
         }),
       }
     )
-
     const data = await res.json()
     if (data.error) return NextResponse.json({ error: 'Gemini error: ' + data.error.message }, { status: 500 })
 
