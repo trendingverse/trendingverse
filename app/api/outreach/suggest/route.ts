@@ -87,7 +87,7 @@ export async function POST(req: NextRequest) {
 
   const prompt = `You are a senior programmatic media buying expert with deep knowledge of publisher inventory globally.
 
-Suggest 6 publishers PERFECTLY suited for this advertising campaign. Be specific and accurate.
+Suggest 10 publishers PERFECTLY suited for this advertising campaign. Be specific and accurate.
 
 Campaign Brief:
 ${JSON.stringify(summary, null, 2)}
