@@ -7,7 +7,7 @@ const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'khan.khan.yusuf@gmail.com'
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}))
-  const { publisher, campaign_summary, sender_company, sender_name, sender_title } = body
+  const { publisher, campaign_summary, sender_name, sender_title, sender_company } = body
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -18,66 +18,86 @@ export async function POST(req: NextRequest) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   )
   const { data: profile } = await admin
-    .from('user_profiles')
-    .select('role, company_name')
-    .eq('id', user.id)
-    .single()
+    .from('user_profiles').select('role, company_name').eq('id', user.id).single()
 
   const isAdmin = user.email === ADMIN_EMAIL
   if (!isAdmin && profile?.role !== 'advertiser') {
     return NextResponse.json({ error: 'Access denied' }, { status: 403 })
   }
 
-  const geminiKey  = process.env.GEMINI_API_KEY!
-  const company    = sender_company || profile?.company_name || 'Our Company'
-  const name       = sender_name   || 'Business Development Team'
-  const title      = sender_title  || 'Head of Partnerships'
+  const geminiKey = process.env.GEMINI_API_KEY!
+  const company   = sender_company || profile?.company_name || 'AdCandid'
+  const name      = sender_name || 'Business Development Team'
+  const title     = sender_title || 'Head of Partnerships'
 
-  // Build a detailed campaign brief string
   const cs = campaign_summary || {}
-  const campaignDetails = [
-    cs.brand         && cs.brand !== 'Brand'  ? `Brand / Advertiser: ${cs.brand}`                : null,
-    cs.product                                 ? `Product / Service: ${cs.product || cs.key_message}` : null,
-    cs.category      && cs.category !== 'General' ? `Category: ${cs.category}`                   : null,
-    cs.target_audience                         ? `Target Audience: ${cs.target_audience}`          : null,
-    cs.regions?.length                         ? `Geography: ${Array.isArray(cs.regions) ? cs.regions.join(', ') : cs.regions}` : null,
-    cs.budget_range                            ? `Campaign Budget: ${cs.budget_range}`             : null,
-    cs.campaign_type                           ? `Deal Type / Format: ${cs.campaign_type}`         : null,
-    cs.key_message                             ? `Campaign Goal: ${cs.key_message}`                : null,
-    cs.brief                                   ? `Full Brief:\n${cs.brief}`                        : null,
+
+  // Detect campaign signals for correct terminology
+  const isCTV    = (cs.device || cs.brief || '').toLowerCase().includes('ctv') ||
+                   (cs.device || cs.brief || '').toLowerCase().includes('connected tv')
+  const isPMP    = (cs.deal_type || cs.brief || '').toLowerCase().includes('pmp')
+  const isDV360  = (cs.integration || cs.brief || '').toLowerCase().includes('dv360')
+  const regions  = Array.isArray(cs.regions) ? cs.regions.join(', ') : (cs.regions || 'the target region')
+
+  // Build structured campaign details block
+  const campaignBlock = [
+    cs.product || cs.brand      ? `• Product/Brand: ${cs.product || cs.brand}` : null,
+    cs.target_audience           ? `• Target Audience: ${cs.target_audience}` : null,
+    regions                      ? `• Geography: ${regions}` : null,
+    cs.device                    ? `• Device: ${cs.device}` : null,
+    cs.creative_length           ? `• Creative Length: ${cs.creative_length}` : null,
+    cs.deal_type                 ? `• Deal Type: ${cs.deal_type}` : null,
+    cs.integration               ? `• Integration: ${cs.integration}` : null,
+    cs.budget_range              ? `• Budget: ${cs.budget_range}` : null,
+    cs.key_message               ? `• Campaign Goal: ${cs.key_message}` : null,
   ].filter(Boolean).join('\n')
 
-  const hasCampaignDetails = campaignDetails.length > 10
+  const hasBrief = campaignBlock.length > 20
 
-  const prompt = `You are ${name}, ${title} at ${company} — a programmatic advertising company.
+  // CTV-specific terminology guide
+  const terminologyGuide = isCTV ? `
+Use correct CTV/programmatic terminology:
+- Say "CTV inventory" not "display placements"
+- Say "video creatives (${cs.creative_length || '15/30 sec'})" not just "ads"
+- Say "PMP deal ID" or "private deal" not "partnership"
+- Say "impressions" and "CPM" not generic "ads"
+- Mention DV360 or DSP integration specifically${isDV360 ? ' — they use DV360' : ''}
+- Reference "brand safety" and "viewability" as CTV strengths` : `
+Use standard digital advertising terminology appropriate for this publisher type.`
 
-Write a sharp, specific, direct B2B outreach email to ${publisher.name} (${publisher.site || publisher.site_url}) proposing an advertising partnership.
+  const prompt = `You are ${name}, ${title} at ${company} — a programmatic advertising / ad tech company.
 
-${hasCampaignDetails ? `ACTIVE CAMPAIGN BRIEF (include these specific details in the email):
-${campaignDetails}` : `No specific campaign brief available — write a general partnership introduction.`}
+Write a concise, sharp B2B outreach email to ${publisher.name} proposing a specific advertising campaign.
 
-Publisher details:
+Publisher:
 - Name: ${publisher.name}
 - Website: ${publisher.site || publisher.site_url}
-- Category: ${publisher.category || 'Digital Publisher'}
-- Region: ${publisher.region || 'India'}
-- Monthly Audience: ${publisher.monthly_audience || 'Large audience'}
+- Audience: ${publisher.monthly_audience || 'large audience'}
+- Region: ${publisher.region || 'relevant market'}
+- Category: ${publisher.category || 'digital publisher'}
 
-Email writing rules:
-1. Subject line must mention the specific product/campaign and publisher name
-2. Opening — one sentence max. No "I hope this email finds you well." Get straight to the point.
-3. Paragraph 1 — who we are in ONE sentence only. Then immediately pivot to why we're writing.
-4. Paragraph 2 — describe the SPECIFIC campaign brief in detail. Include: product, target audience, geography, deal type, creative formats, and integration method. This is the most important paragraph.
-5. Paragraph 3 — why ${publisher.name} is the right fit for THIS specific campaign. Be specific about their audience alignment.
-6. Paragraph 4 — clear next step. Ask for a 15-minute call to discuss integration and rates.
-7. Sign off with name, title, company and contact.
+${hasBrief ? `CAMPAIGN DETAILS (these MUST appear in the email — do not omit or generalize):
+${campaignBlock}` : 'Write a general introduction to explore inventory opportunities.'}
 
-Tone: Direct, professional, B2B advertising industry language. Not salesy. Not generic. Treat the recipient as a media professional.
+${terminologyGuide}
 
-Total email body: 180-220 words. No fluff.
+Email structure (strict):
+1. Subject — specific: mention product category + publisher name + deal type (e.g. "CTV PMP Opportunity: Sanitary Care Campaign for [Publisher]")
+2. Line 1 — state who you are and why you're writing in ONE sentence. No pleasantries.
+3. Para 1 (3-4 sentences) — describe the campaign specifically: what the product is, who the target audience is, geography, device type, deal structure. This is the pitch.
+4. Para 2 (2-3 sentences) — why THIS publisher is the right fit for this specific campaign. Reference their actual audience/geography.
+5. Para 3 (1-2 sentences) — next step. Ask for a brief call to share deal ID / tag details.
+6. Sign off.
+
+Rules:
+- No "I hope this email finds you well" or any filler opener
+- No vague statements like "we can help monetize your audience"
+- Every sentence must be specific to this campaign and this publisher
+- Total body: 150-180 words
+- Tone: confident, peer-to-peer, media industry professional
 
 Format:
-Subject: [specific subject line]
+Subject: [subject line]
 
 [email body]
 
@@ -90,8 +110,7 @@ ${company}`
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
       {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: { temperature: 0.3, maxOutputTokens: 4096 },
