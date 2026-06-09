@@ -62,14 +62,7 @@ export function AIWriterPanel({ categories }: { categories: Category[] }) {
       const res = await fetch('/api/ai/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title,
-          keywords,
-          category: categories.find(c=>c.id===catId)?.name,
-          wordCount,
-          tone,
-          language
-        })
+        body: JSON.stringify({ title, keywords, category: categories.find(c=>c.id===catId)?.name, wordCount, tone, language })
       })
       const data = await res.json()
       if (!res.ok) {
@@ -123,6 +116,76 @@ export function AIWriterPanel({ categories }: { categories: Category[] }) {
     const article = await res.json()
     if (res.ok) { toast.success('Saved as draft!'); router.push(`/admin/articles/${article.id}/edit`) }
     else toast.error(article.error)
+  }
+
+  function downloadTXT() {
+    if (!result) return
+    const text = [
+      `TITLE\n${result.title}`,
+      `EXCERPT\n${result.excerpt}`,
+      `SEO TITLE\n${result.seo_title}`,
+      `FOCUS KEYWORD\n${result.focus_keyword}`,
+      result.meta_description ? `META DESCRIPTION\n${result.meta_description}` : '',
+      `KEYWORDS\n${(result.keywords as string[] || []).join(', ')}`,
+      `CONTENT\n${(result.content as string || '').replace(/<[^>]+>/g, '').trim()}`,
+    ].filter(Boolean).join('\n\n')
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    const slug = (result.title as string || 'article').slice(0, 50).replace(/[^\w\s]/g, '').trim().replace(/\s+/g, '-')
+    a.download = `${slug}.txt`
+    a.click()
+    toast.success('Downloaded as TXT!')
+  }
+
+  function downloadHTML() {
+    if (!result) return
+    const kwSpans = (result.keywords as string[] || []).map(k =>
+      `<span style="background:#ede9fe;color:#6d28d9;padding:2px 8px;border-radius:20px;font-size:12px;">${k}</span>`
+    ).join(' ')
+    const metaRow = result.meta_description
+      ? `<tr><td style="font-weight:600;color:#6b7280;padding:6px 12px;font-size:13px;">Meta Description</td><td style="padding:6px 12px;font-size:13px;">${result.meta_description}</td></tr>`
+      : ''
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>${result.title}</title>
+<style>
+body{font-family:Arial,sans-serif;max-width:820px;margin:40px auto;padding:24px;line-height:1.7;color:#1f2937}
+h1{font-size:28px;color:#111;margin-bottom:8px}
+table{width:100%;border-collapse:collapse;margin:20px 0;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden}
+th{background:#1f2937;color:#fff;padding:8px 12px;text-align:left;font-size:13px}
+td{padding:6px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;vertical-align:top}
+.content{margin-top:28px;padding-top:20px;border-top:2px solid #e5e7eb}
+.content h2{color:#374151;font-size:20px}
+.tip{background:#fef9ec;border-left:4px solid #ef4444;padding:12px 16px;margin:16px 0;font-size:13px;color:#92400e;border-radius:0 8px 8px 0}
+</style>
+</head>
+<body>
+<h1>${result.title}</h1>
+<div class="tip">📋 Copy the content below and paste into WordPress. Use the SEO Title and Meta Description in Yoast SEO.</div>
+<table>
+<tr><th colspan="2">Article Details</th></tr>
+<tr><td style="font-weight:600;color:#6b7280;padding:6px 12px;font-size:13px;">Excerpt</td><td style="padding:6px 12px;font-size:13px;">${result.excerpt}</td></tr>
+<tr><td style="font-weight:600;color:#6b7280;padding:6px 12px;font-size:13px;">SEO Title</td><td style="padding:6px 12px;font-size:13px;">${result.seo_title}</td></tr>
+<tr><td style="font-weight:600;color:#6b7280;padding:6px 12px;font-size:13px;">Focus Keyword</td><td style="padding:6px 12px;font-size:13px;">${result.focus_keyword}</td></tr>
+${metaRow}
+<tr><td style="font-weight:600;color:#6b7280;padding:6px 12px;font-size:13px;">Keywords</td><td style="padding:6px 12px;">${kwSpans}</td></tr>
+</table>
+<div class="content">
+<h2>Article Content</h2>
+${result.content}
+</div>
+</body>
+</html>`
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    const slug = (result.title as string || 'article').slice(0, 50).replace(/[^\w\s]/g, '').trim().replace(/\s+/g, '-')
+    a.download = `${slug}.html`
+    a.click()
+    toast.success('HTML downloaded — open in browser, copy content into WordPress!')
   }
 
   const selectedLang = LANGUAGES.find(l => l.code === language)
@@ -216,13 +279,36 @@ export function AIWriterPanel({ categories }: { categories: Category[] }) {
 
           {result && (
             <div className="card p-5 space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-2">
                 <div>
                   <h3 className="font-semibold text-ink-900">Generated Article</h3>
                   {result.language_name && <span className="text-xs text-accent">{result.language_name as string}</span>}
                 </div>
-                <button onClick={useGenerated} className="btn-primary btn-sm">Save as Draft →</button>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {/* Download buttons */}
+                  <div className="flex gap-1">
+                    <button onClick={downloadTXT}
+                      className="text-xs px-3 py-1.5 bg-ink-100 text-ink-700 rounded-lg hover:bg-ink-200 flex items-center gap-1"
+                      title="Download as plain text — easy to copy paste into WordPress">
+                      ⬇ TXT
+                    </button>
+                    <button onClick={downloadHTML}
+                      className="text-xs px-3 py-1.5 bg-green-50 text-green-700 border border-green-200 rounded-lg hover:bg-green-100 flex items-center gap-1"
+                      title="Download as HTML — preserves formatting, open in browser and copy into WordPress">
+                      ⬇ HTML
+                    </button>
+                  </div>
+                  <button onClick={useGenerated} className="btn-primary btn-sm">Save as Draft →</button>
+                </div>
               </div>
+
+              {/* Download tip for Cloudflare-blocked publishers */}
+              <div className="bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+                <p className="text-xs text-amber-700">
+                  <span className="font-semibold">Can't publish directly?</span> Download as <button onClick={downloadHTML} className="underline font-semibold">HTML</button> → open in browser → copy content → paste into WordPress editor.
+                </p>
+              </div>
+
               <div>
                 <p className="label">Headline</p>
                 <p className="font-display font-bold text-ink-950 text-lg leading-snug">{result.title as string}</p>
