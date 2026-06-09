@@ -17,54 +17,69 @@ export async function POST(req: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   )
-  const { data: profile } = await admin.from('user_profiles').select('role, company_name').eq('id', user.id).single()
+  const { data: profile } = await admin
+    .from('user_profiles')
+    .select('role, company_name')
+    .eq('id', user.id)
+    .single()
+
   const isAdmin = user.email === ADMIN_EMAIL
-  if (!isAdmin && profile?.role !== 'advertiser') return NextResponse.json({ error: 'Access denied' }, { status: 403 })
+  if (!isAdmin && profile?.role !== 'advertiser') {
+    return NextResponse.json({ error: 'Access denied' }, { status: 403 })
+  }
 
-  const geminiKey = process.env.GEMINI_API_KEY!
-  const company  = sender_company || profile?.company_name || 'TrendingVerse Ad Network'
-  const name     = sender_name || 'Business Development Team'
-  const title    = sender_title || 'Head of Partnerships'
+  const geminiKey  = process.env.GEMINI_API_KEY!
+  const company    = sender_company || profile?.company_name || 'Our Company'
+  const name       = sender_name   || 'Business Development Team'
+  const title      = sender_title  || 'Head of Partnerships'
 
-  const prompt = `Write a complete, professional business development email to approach ${publisher.name} for an advertising partnership.
+  // Build a detailed campaign brief string
+  const cs = campaign_summary || {}
+  const campaignDetails = [
+    cs.brand         && cs.brand !== 'Brand'  ? `Brand / Advertiser: ${cs.brand}`                : null,
+    cs.product                                 ? `Product / Service: ${cs.product || cs.key_message}` : null,
+    cs.category      && cs.category !== 'General' ? `Category: ${cs.category}`                   : null,
+    cs.target_audience                         ? `Target Audience: ${cs.target_audience}`          : null,
+    cs.regions?.length                         ? `Geography: ${Array.isArray(cs.regions) ? cs.regions.join(', ') : cs.regions}` : null,
+    cs.budget_range                            ? `Campaign Budget: ${cs.budget_range}`             : null,
+    cs.campaign_type                           ? `Deal Type / Format: ${cs.campaign_type}`         : null,
+    cs.key_message                             ? `Campaign Goal: ${cs.key_message}`                : null,
+    cs.brief                                   ? `Full Brief:\n${cs.brief}`                        : null,
+  ].filter(Boolean).join('\n')
+
+  const hasCampaignDetails = campaignDetails.length > 10
+
+  const prompt = `You are ${name}, ${title} at ${company} — a programmatic advertising company.
+
+Write a sharp, specific, direct B2B outreach email to ${publisher.name} (${publisher.site || publisher.site_url}) proposing an advertising partnership.
+
+${hasCampaignDetails ? `ACTIVE CAMPAIGN BRIEF (include these specific details in the email):
+${campaignDetails}` : `No specific campaign brief available — write a general partnership introduction.`}
 
 Publisher details:
 - Name: ${publisher.name}
 - Website: ${publisher.site || publisher.site_url}
-- Category: ${publisher.category}
-- Region: ${publisher.region}
-- Monthly Audience: ${publisher.monthly_audience}
+- Category: ${publisher.category || 'Digital Publisher'}
+- Region: ${publisher.region || 'India'}
+- Monthly Audience: ${publisher.monthly_audience || 'Large audience'}
 
-Campaign/Advertiser details:
-${JSON.stringify(campaign_summary || {})}
+Email writing rules:
+1. Subject line must mention the specific product/campaign and publisher name
+2. Opening — one sentence max. No "I hope this email finds you well." Get straight to the point.
+3. Paragraph 1 — who we are in ONE sentence only. Then immediately pivot to why we're writing.
+4. Paragraph 2 — describe the SPECIFIC campaign brief in detail. Include: product, target audience, geography, deal type, creative formats, and integration method. This is the most important paragraph.
+5. Paragraph 3 — why ${publisher.name} is the right fit for THIS specific campaign. Be specific about their audience alignment.
+6. Paragraph 4 — clear next step. Ask for a 15-minute call to discuss integration and rates.
+7. Sign off with name, title, company and contact.
 
-Sender:
-- Company: ${company}
-- Name: ${name}
-- Title: ${title}
+Tone: Direct, professional, B2B advertising industry language. Not salesy. Not generic. Treat the recipient as a media professional.
 
-Write a complete professional email following this structure:
-1. Compelling subject line
-2. Warm personalized greeting using the publisher name
-3. Opening — who we are and why we're reaching out (1-2 sentences)
-4. Value proposition — what this partnership offers the publisher specifically (2-3 sentences, mention their audience relevance)
-5. Campaign details — what we're advertising, target audience, budget range if provided (2-3 sentences)
-6. What we're offering — CPM rates, revenue share, flexible formats (2-3 sentences)
-7. Clear call to action — schedule a 15-minute call this week
-8. Professional sign-off
+Total email body: 180-220 words. No fluff.
 
-Important:
-- Be specific to ${publisher.name} and their audience
-- Sound human and warm, not templated
-- Total length: 200-250 words in the body
-- No placeholder text like [Your Name] — use the actual sender details provided
+Format:
+Subject: [specific subject line]
 
-Format exactly as:
-Subject: [subject line here]
-
-Dear [Publisher contact name or Team],
-
-[Full email body]
+[email body]
 
 Best regards,
 ${name}
@@ -75,10 +90,11 @@ ${company}`
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
       {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.4, maxOutputTokens: 2048 },
+          generationConfig: { temperature: 0.3, maxOutputTokens: 4096 },
         }),
       }
     )
