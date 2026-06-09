@@ -42,6 +42,7 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
   const [editCampaign, setEditCampaign] = useState<Campaign | null>(null)
   const [editCampaignForm, setEditCampaignForm] = useState<any>({})
   const [savingCampaign, setSavingCampaign] = useState(false)
+  const [selectedCampaignId, setSelectedCampaignId] = useState<string>('')
 
   useEffect(() => { fetchAll() }, [])
 
@@ -131,17 +132,33 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
     setSuggesting(false)
   }
 
-  async function draftEmail(pub: Publisher) {
+  async function draftEmail(pub: Publisher, campaignOverride?: Campaign) {
     setDraftingFor(pub)
     setDraftLoading(true)
     setEmailDraft('')
     setSendModal(false)
 
+    // Build campaign summary from: active summary → campaignOverride → selectedCampaignId → most recent campaign
+    let campaignSummary = summary
+    const sourceC = campaignOverride || campaigns.find(c => c.id === selectedCampaignId) || activeCampaign || campaigns[0]
+    if (!campaignSummary && sourceC) {
+      campaignSummary = {
+        brand: sourceC.brand,
+        category: sourceC.category,
+        target_audience: sourceC.target_audience,
+        regions: sourceC.regions,
+        budget_range: sourceC.budget_range,
+        key_message: (sourceC as any).key_message || '',
+        campaign_type: (sourceC as any).campaign_type || '',
+        brief: sourceC.brief,
+      }
+    }
+
     const res = await fetch('/api/outreach/draft-email', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         publisher: pub,
-        campaign_summary: summary,
+        campaign_summary: campaignSummary,
         sender_name: senderName,
         sender_title: senderTitle,
       }),
@@ -476,6 +493,22 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
                 }} className="btn-primary">Save Publisher</button>
                 <button onClick={() => setShowPubForm(false)} className="px-4 py-2 text-sm bg-ink-100 text-ink-600 rounded-xl">Cancel</button>
               </div>
+            </div>
+          )}
+
+          {/* Campaign selector for email drafting */}
+          {campaigns.length > 0 && (
+            <div className="card p-3 flex items-center gap-3">
+              <p className="text-xs font-medium text-ink-600 shrink-0">📋 Campaign for email:</p>
+              <select
+                value={selectedCampaignId || (campaigns[0]?.id || '')}
+                onChange={e => setSelectedCampaignId(e.target.value)}
+                className="input text-xs flex-1 py-1.5">
+                {campaigns.filter(c => c.status !== 'closed').map(c => (
+                  <option key={c.id} value={c.id}>{c.brand || c.name} {c.budget_range ? `· ${c.budget_range}` : ''}</option>
+                ))}
+              </select>
+              <p className="text-xs text-ink-400 shrink-0">Used to personalize email drafts</p>
             </div>
           )}
 
