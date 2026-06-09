@@ -64,6 +64,25 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
     else toast.error("Failed to delete")
   }
 
+  async function reRunCampaign(c: Campaign) {
+    setActiveCampaign(c)
+    setSuggestions([])
+    setSummary(null)
+    setSuggesting(true)
+    toast.loading('Finding publishers for this campaign...', { id: 'rerun' })
+    const res = await fetch('/api/outreach/suggest', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ brief: c.brief, publisher_scope: pubScope }),
+    })
+    const data = await res.json()
+    toast.dismiss('rerun')
+    if (data.error) { toast.error(data.error); setSuggesting(false); setActiveCampaign(null); return }
+    setSummary(data.summary)
+    setSuggestions(data.suggestions || [])
+    toast.success(`${data.suggestions?.length || 0} publishers found!`)
+    setSuggesting(false)
+  }
+
   function openEditCampaign(c: Campaign) {
     setEditCampaign(c)
     setEditCampaignForm({
@@ -323,8 +342,16 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
             </div>
           )}
 
+          {/* Suggestions loading */}
+          {activeCampaign && suggesting && (
+            <div className="card p-8 text-center">
+              <p className="text-2xl mb-2 animate-pulse">✦</p>
+              <p className="text-sm text-ink-500">Finding best publishers for <strong>{activeCampaign.brand || activeCampaign.name}</strong>...</p>
+            </div>
+          )}
+
           {/* Suggestions */}
-          {activeCampaign && suggestions.length > 0 && (
+          {activeCampaign && suggestions.length > 0 && !suggesting && (
             <div className="card overflow-hidden">
               <div className="p-4 bg-ink-50 border-b border-ink-100 flex items-center justify-between">
                 <div>
@@ -337,15 +364,17 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
                 </button>
               </div>
 
-              {summary && (
+              {(summary || activeCampaign) && (
                 <div className="px-4 py-3 border-b border-ink-50 flex flex-wrap gap-2">
                   {[
-                    { l: 'Brand', v: summary.brand },
-                    { l: 'Category', v: summary.category },
-                    { l: 'Audience', v: summary.target_audience },
-                    { l: 'Regions', v: (summary.regions || []).join(', ') },
-                    { l: 'Budget', v: summary.budget_range },
-                    { l: 'Goal', v: summary.key_message },
+                    { l: 'Brand', v: summary?.brand || activeCampaign?.brand },
+                    { l: 'Category', v: summary?.category || activeCampaign?.category },
+                    { l: 'Audience', v: summary?.target_audience || activeCampaign?.target_audience },
+                    { l: 'Regions', v: (summary?.regions?.length ? summary.regions : activeCampaign?.regions || []).join(', ') },
+                    { l: 'Budget', v: summary?.budget_range || activeCampaign?.budget_range },
+                    { l: 'Device', v: summary?.device },
+                    { l: 'Deal Type', v: summary?.deal_type || summary?.campaign_type },
+                    { l: 'KPI', v: summary?.kpi || summary?.key_message },
                   ].filter(s => s.v).map(s => (
                     <span key={s.l} className="text-xs bg-ink-100 text-ink-600 px-2 py-0.5 rounded-full">
                       <span className="text-ink-400">{s.l}:</span> {s.v}
@@ -442,8 +471,10 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
                       </td>
                       <td className="px-3 py-2.5 text-center">
                         <div className="flex items-center justify-center gap-1">
+                          <button onClick={() => reRunCampaign(c)}
+                            className="text-xs px-2 py-1 bg-accent text-white rounded-lg hover:bg-accent/90">🔍 Find Publishers</button>
                           <button onClick={() => openEditCampaign(c)}
-                            className="text-xs px-2 py-1 bg-ink-100 text-ink-600 rounded-lg hover:bg-ink-200">✏ Edit</button>
+                            className="text-xs px-2 py-1 bg-ink-100 text-ink-600 rounded-lg hover:bg-ink-200">✏</button>
                           {isAdmin && (
                             <button onClick={() => deleteCampaign(c.id)}
                               className="text-xs text-red-500 hover:bg-red-50 px-2 py-1 rounded-lg">🗑</button>
