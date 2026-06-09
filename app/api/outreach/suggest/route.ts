@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
   const geminiKey = process.env.GEMINI_API_KEY!
   let summary = campaign_summary || { brand: 'Brand', category: 'General', regions: ['India'] }
 
-  // Parse brief
+  // Parse brief — handles both free-text and tabular (tab/pipe separated) formats
   if (!campaign_summary && brief) {
     try {
       const parseRes = await fetch(
@@ -34,8 +34,32 @@ export async function POST(req: NextRequest) {
         {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            contents: [{ parts: [{ text: `Extract ALL campaign details from this brief. Return ONLY valid JSON:\n\n${brief}\n\n{"brand":"","product":"","category":"","target_audience":"","regions":[],"budget_range":"","campaign_type":"","key_message":"","device":"","deal_type":"","creative_length":"","integration":""}` }] }],
-            generationConfig: { temperature: 0.1, maxOutputTokens: 512 },
+            contents: [{ parts: [{ text: `Extract ALL campaign details from this brief. The brief may be in free text, bullet points, or a table format (tab/pipe separated columns with headers like Campaign Name, Geo, Vertical, Mode, KPI, Payment Terms etc).
+
+Brief:
+${brief}
+
+Return ONLY valid JSON — no markdown, no explanation:
+{
+  "brand": "campaign/brand name",
+  "product": "product or service being advertised",
+  "category": "vertical/category (e.g. E-commerce, Fashion, Health, FMCG)",
+  "target_audience": "target audience description",
+  "regions": ["country or region codes expanded to full names — e.g. MX=Mexico, BD=Bangladesh, IN=India, US=United States"],
+  "budget_range": "budget or PO value if mentioned",
+  "campaign_type": "deal type or mode (CPA, CPM, PMP, CTV etc)",
+  "key_message": "campaign goal or KPI",
+  "device": "device type if mentioned (CTV, Mobile, Desktop)",
+  "deal_type": "deal type",
+  "creative_length": "creative length if mentioned",
+  "integration": "integration method if mentioned",
+  "payment_terms": "payment terms if mentioned",
+  "kpi": "KPI if mentioned",
+  "preview_link": "preview link if mentioned"
+}
+
+IMPORTANT: For regions/geo, always expand country codes to full country names. MX = Mexico, BD = Bangladesh, IN = India, US = United States, UK = United Kingdom, etc.` }] }],
+            generationConfig: { temperature: 0.1, maxOutputTokens: 1024 },
           }),
         }
       )
@@ -87,7 +111,7 @@ export async function POST(req: NextRequest) {
 
   const prompt = `You are a senior programmatic media buying expert with deep knowledge of publisher inventory globally.
 
-Suggest 10 publishers PERFECTLY suited for this advertising campaign. Be specific and accurate.
+Suggest 6 publishers PERFECTLY suited for this advertising campaign. Be specific and accurate.
 
 Campaign Brief:
 ${JSON.stringify(summary, null, 2)}
