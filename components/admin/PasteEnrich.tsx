@@ -27,8 +27,6 @@ export function PasteEnrich() {
   const [saving, setSaving] = useState(false)
   const [savedArticleId, setSavedArticleId] = useState<string | null>(null)
   const [showPublisher, setShowPublisher] = useState(false)
-
-  // WordPress publish state
   const [wpUrl, setWpUrl] = useState('')
   const [wpUser, setWpUser] = useState('')
   const [wpPass, setWpPass] = useState('')
@@ -43,7 +41,6 @@ export function PasteEnrich() {
     if (!title.trim()) { toast.error('Add a title'); return }
     setLoading(true)
     setEnriched(null)
-
     try {
       const res = await fetch('/api/ai/enrich', {
         method: 'POST',
@@ -69,8 +66,8 @@ export function PasteEnrich() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-  title: enriched.seo_title || title,
-  content: enriched.formatted_content || content,
+          title: enriched.seo_title || title,
+          content: enriched.formatted_content || content,
           excerpt: enriched.excerpt,
           slug: enriched.slug,
           seo_title: enriched.seo_title,
@@ -92,6 +89,85 @@ export function PasteEnrich() {
     }
   }
 
+  function downloadTXT() {
+    if (!enriched) return
+    const text = [
+      `TITLE\n${title}`,
+      `SEO TITLE\n${enriched.seo_title}`,
+      `META DESCRIPTION\n${enriched.meta_description}`,
+      `FOCUS KEYWORD\n${enriched.focus_keyword}`,
+      `SLUG\n${enriched.slug}`,
+      `EXCERPT\n${enriched.excerpt}`,
+      `DISCOVER HEADLINE\n${enriched.discover_headline}`,
+      `SECONDARY KEYWORDS\n${enriched.secondary_keywords.join(', ')}`,
+      `DISCOVER TAGS\n${enriched.discover_tags.map(t => '#' + t).join(' ')}`,
+      `READABILITY SCORE\n${enriched.readability_score}/100`,
+      `WORD COUNT\n${enriched.word_count} words · ${enriched.estimated_read_time}`,
+      `CONTENT\n${enriched.formatted_content || content}`,
+    ].join('\n\n')
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `${title.slice(0, 50).replace(/[^\w\s]/g, '').trim().replace(/\s+/g, '-')}.txt`
+    a.click()
+    toast.success('Downloaded as TXT!')
+  }
+
+  function downloadHTML() {
+    if (!enriched) return
+    const kwSpans = enriched.secondary_keywords.map(k =>
+      `<span style="background:#dbeafe;color:#1d4ed8;padding:2px 8px;border-radius:20px;font-size:12px;margin:2px;">${k}</span>`
+    ).join(' ')
+    const tagSpans = enriched.discover_tags.map(t =>
+      `<span style="background:#dcfce7;color:#166534;padding:2px 8px;border-radius:20px;font-size:12px;margin:2px;">#${t}</span>`
+    ).join(' ')
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>${enriched.seo_title}</title>
+<style>
+body{font-family:Arial,sans-serif;max-width:820px;margin:40px auto;padding:24px;line-height:1.7;color:#1f2937}
+h1{font-size:26px;color:#111;margin-bottom:8px}
+table{width:100%;border-collapse:collapse;margin:20px 0;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden}
+th{background:#1f2937;color:#fff;padding:8px 12px;text-align:left;font-size:13px}
+td{padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;vertical-align:top}
+td:first-child{font-weight:600;color:#6b7280;width:180px}
+.score{font-size:28px;font-weight:700;color:#16a34a}
+.tip{background:#fef9ec;border-left:4px solid #ef4444;padding:12px 16px;margin:16px 0;font-size:13px;color:#92400e;border-radius:0 8px 8px 0}
+.content{margin-top:28px;padding-top:20px;border-top:2px solid #e5e7eb}
+.content h2{color:#374151;font-size:20px}
+</style>
+</head>
+<body>
+<h1>${title}</h1>
+<div class="tip">📋 Copy the content below and paste into WordPress. Use the SEO Title and Meta Description in Yoast SEO. Score: <span class="score">${enriched.readability_score}/100</span></div>
+<table>
+<tr><th colspan="2">SEO & Metadata</th></tr>
+<tr><td>SEO Title</td><td>${enriched.seo_title}</td></tr>
+<tr><td>Meta Description</td><td>${enriched.meta_description}</td></tr>
+<tr><td>Focus Keyword</td><td>${enriched.focus_keyword}</td></tr>
+<tr><td>URL Slug</td><td><code>${enriched.slug}</code></td></tr>
+<tr><td>Excerpt</td><td>${enriched.excerpt}</td></tr>
+<tr><td>Discover Headline</td><td><strong>${enriched.discover_headline}</strong></td></tr>
+<tr><td>Word Count</td><td>${enriched.word_count} words · ${enriched.estimated_read_time}</td></tr>
+<tr><td>Secondary Keywords</td><td>${kwSpans}</td></tr>
+<tr><td>Discover Tags</td><td>${tagSpans}</td></tr>
+</table>
+<div class="content">
+<h2>Article Content</h2>
+${enriched.formatted_content || content.replace(/\n/g, '<br>')}
+</div>
+</body>
+</html>`
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `${title.slice(0, 50).replace(/[^\w\s]/g, '').trim().replace(/\s+/g, '-')}.html`
+    a.click()
+    toast.success('HTML downloaded — open in browser and copy into WordPress!')
+  }
+
   function addLog(text: string, type: string) {
     setPublishLog(prev => [...prev, { text, type }])
   }
@@ -99,14 +175,10 @@ export function PasteEnrich() {
   async function publishToWordPress() {
     if (!savedArticleId) { toast.error('Save as draft first'); return }
     if (!wpUrl || !wpUser || !wpPass) { toast.error('Fill in WordPress credentials'); return }
-
     setPublishing(true)
     setPublishLog([])
     setWpLink('')
-
     const finalUrl = wpUrl.replace(/\/$/, '')
-
-    // Fetch image
     addLog('Searching for featured image...', 'info')
     let wpMediaId = null
     try {
@@ -123,8 +195,6 @@ export function PasteEnrich() {
         addLog(`Image: ${imgData.error} — publishing without image`, 'warn')
       }
     } catch { addLog('Image fetch failed — continuing', 'warn') }
-
-    // Push to WordPress
     addLog('Checking for duplicates...', 'info')
     try {
       const res = await fetch('/api/wordpress', {
@@ -139,10 +209,7 @@ export function PasteEnrich() {
         }),
       })
       const data = await res.json()
-      if (res.status === 409) {
-        addLog('Duplicate detected — article already exists', 'error')
-        return
-      }
+      if (res.status === 409) { addLog('Duplicate detected — article already exists', 'error'); return }
       if (!res.ok) throw new Error(data.error || 'Publish failed')
       setWpLink(data.wp_url)
       addLog('Published successfully!', 'success')
@@ -166,7 +233,6 @@ export function PasteEnrich() {
         <p className="text-sm text-ink-400 mt-1">Paste your article → AI generates SEO metadata → push to WordPress</p>
       </div>
 
-      {/* Input section */}
       <div className="card p-5 space-y-4">
         <h3 className="font-semibold text-ink-900 text-sm">Article Content</h3>
         <div className="grid grid-cols-2 gap-4">
@@ -191,11 +257,9 @@ export function PasteEnrich() {
             rows={12}
             value={content}
             onChange={e => setContent(e.target.value)}
-            placeholder="Paste your article here (from WhatsApp, Word, email, anywhere)...&#10;&#10;The content will NOT be modified — only SEO metadata will be generated."
+            placeholder="Paste your article here (from WhatsApp, Word, email, anywhere)..."
           />
-          <p className="text-xs text-ink-400 mt-1">
-            ✓ Your original content is preserved exactly as pasted
-          </p>
+          <p className="text-xs text-ink-400 mt-1">✓ Your original content is preserved exactly as pasted</p>
         </div>
         <button onClick={enrichContent} disabled={loading || !content.trim() || !title.trim()}
           className="btn-primary">
@@ -208,10 +272,8 @@ export function PasteEnrich() {
         </button>
       </div>
 
-      {/* Enriched results */}
       {enriched && (
         <div className="space-y-4">
-          {/* SEO scores */}
           <div className="grid grid-cols-3 gap-4">
             <div className="card p-4 text-center">
               <div className="text-3xl font-bold text-green-600">{enriched.readability_score}/100</div>
@@ -227,12 +289,34 @@ export function PasteEnrich() {
             </div>
           </div>
 
-          {/* SEO Metadata */}
           <div className="card p-5 space-y-4">
-            <h3 className="font-semibold text-ink-900 flex items-center gap-2">
-              🔍 SEO Metadata
-              <span className="text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded-full">Auto-generated</span>
-            </h3>
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <h3 className="font-semibold text-ink-900 flex items-center gap-2">
+                🔍 SEO Metadata
+                <span className="text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded-full">Auto-generated</span>
+              </h3>
+              {/* Download buttons */}
+              <div className="flex gap-2">
+                <button onClick={downloadTXT}
+                  className="text-xs px-3 py-1.5 bg-ink-100 text-ink-700 rounded-lg hover:bg-ink-200"
+                  title="Download as plain text">
+                  ⬇ TXT
+                </button>
+                <button onClick={downloadHTML}
+                  className="text-xs px-3 py-1.5 bg-green-50 text-green-700 border border-green-200 rounded-lg hover:bg-green-100"
+                  title="Download as HTML — open in browser and copy into WordPress">
+                  ⬇ HTML
+                </button>
+              </div>
+            </div>
+
+            {/* Download tip */}
+            <div className="bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+              <p className="text-xs text-amber-700">
+                <span className="font-semibold">Can't publish directly?</span> Download as <button onClick={downloadHTML} className="underline font-semibold">HTML</button> → open in browser → copy content → paste into WordPress editor.
+              </p>
+            </div>
+
             <div className="space-y-3">
               <div>
                 <label className="label">SEO Title</label>
@@ -276,16 +360,13 @@ export function PasteEnrich() {
             </div>
           </div>
 
-          {/* Keywords */}
           <div className="card p-5 space-y-3">
             <h3 className="font-semibold text-ink-900">🏷 Keywords & Tags</h3>
             <div>
               <label className="label">Secondary Keywords</label>
               <div className="flex flex-wrap gap-2 mt-1">
                 {enriched.secondary_keywords.map((kw, i) => (
-                  <span key={i} className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded-lg">
-                    {kw}
-                  </span>
+                  <span key={i} className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded-lg">{kw}</span>
                 ))}
               </div>
             </div>
@@ -293,24 +374,19 @@ export function PasteEnrich() {
               <label className="label">Google Discover Tags</label>
               <div className="flex flex-wrap gap-2 mt-1">
                 {enriched.discover_tags.map((tag, i) => (
-                  <span key={i} className="text-xs bg-green-50 text-green-700 px-2 py-1 rounded-lg">
-                    #{tag}
-                  </span>
+                  <span key={i} className="text-xs bg-green-50 text-green-700 px-2 py-1 rounded-lg">#{tag}</span>
                 ))}
               </div>
             </div>
           </div>
 
-          {/* Google Discover */}
           <div className="card p-5 space-y-3">
             <h3 className="font-semibold text-ink-900">🌐 Google Discover Optimization</h3>
             <div>
               <label className="label">Discover-Optimized Headline</label>
               <input className="input" value={enriched.discover_headline}
                 onChange={e => setEnriched({...enriched, discover_headline: e.target.value})} />
-              <p className="text-xs text-ink-400 mt-1">
-                Use this as your article title for better Google Discover reach
-              </p>
+              <p className="text-xs text-ink-400 mt-1">Use this as your article title for better Google Discover reach</p>
             </div>
             {enriched.readability_tips.length > 0 && (
               <div>
@@ -327,7 +403,6 @@ export function PasteEnrich() {
             )}
           </div>
 
-          {/* Actions */}
           <div className="card p-5 space-y-4">
             <h3 className="font-semibold text-ink-900">🚀 Publish</h3>
             <div className="flex gap-3 flex-wrap">
@@ -364,7 +439,6 @@ export function PasteEnrich() {
                       onChange={e => setWpPass(e.target.value)} placeholder="xxxx xxxx xxxx xxxx" />
                   </div>
                 </div>
-
                 {publishLog.length > 0 && (
                   <div className="bg-ink-950 rounded-xl p-3 space-y-1 font-mono text-xs">
                     {publishLog.map((l, i) => (
@@ -374,7 +448,6 @@ export function PasteEnrich() {
                     ))}
                   </div>
                 )}
-
                 <div className="flex items-center gap-3">
                   <button onClick={publishToWordPress} disabled={publishing}
                     className="px-6 py-2.5 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700 disabled:opacity-50">
@@ -382,9 +455,7 @@ export function PasteEnrich() {
                   </button>
                   {wpLink && (
                     <a href={wpLink} target="_blank" rel="noopener noreferrer"
-                      className="text-sm text-blue-600 underline">
-                      View live post →
-                    </a>
+                      className="text-sm text-blue-600 underline">View live post →</a>
                   )}
                 </div>
               </div>
