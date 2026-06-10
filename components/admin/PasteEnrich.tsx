@@ -221,6 +221,43 @@ ${enriched.formatted_content || content.replace(/\n/g, '<br>')}
     }
   }
 
+  const [subheadings, setSubheadings] = useState<any[]>([])
+  const [injectedContent, setInjectedContent] = useState<string | null>(null)
+  const [subheadingsApplied, setSubheadingsApplied] = useState(false)
+  const [subLoading, setSubLoading] = useState(false)
+  const [copiedIdx, setCopiedIdx] = useState<number | null>(null)
+
+  async function generateSubheadings() {
+    if (!content.trim()) return
+    setSubLoading(true)
+    setSubheadings([])
+    try {
+      const res = await fetch('/api/ai/subheadings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content, title }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed')
+      setSubheadings(data.subheadings || [])
+      if (data.injected_content) {
+        setInjectedContent(data.injected_content)
+        setSubheadingsApplied(false)
+      }
+      toast.success(`${data.subheadings?.length} subheadings ready to inject!`)
+    } catch (e) {
+      toast.error((e as Error).message)
+    }
+    setSubLoading(false)
+  }
+
+  function copySubheading(text: string, idx: number) {
+    navigator.clipboard.writeText(text)
+    setCopiedIdx(idx)
+    setTimeout(() => setCopiedIdx(null), 2000)
+    toast.success('Copied!')
+  }
+
   const logColors: Record<string, string> = {
     info: 'text-ink-400', success: 'text-green-500',
     error: 'text-red-500', warn: 'text-amber-500'
@@ -400,6 +437,69 @@ ${enriched.formatted_content || content.replace(/\n/g, '<br>')}
                   ))}
                 </div>
               </div>
+            )}
+          </div>
+
+          {/* Subheadings section */}
+          <div className="card p-5 space-y-4">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div>
+                <h3 className="font-semibold text-ink-900">📑 Subheadings</h3>
+                <p className="text-xs text-ink-400 mt-0.5">AI suggests H2 subheadings to insert — your content stays unchanged</p>
+              </div>
+              <button onClick={generateSubheadings} disabled={subLoading}
+                className="text-xs px-4 py-2 bg-violet-600 text-white rounded-xl hover:bg-violet-700 disabled:opacity-50 font-medium">
+                {subLoading ? '⟳ Generating...' : '✦ Generate Subheadings'}
+              </button>
+            </div>
+
+            {subheadings.length > 0 && (
+              <div className="space-y-3">
+                {/* Subheadings list */}
+                <div className="space-y-2">
+                  {subheadings.map((sh: any, i: number) => (
+                    <div key={i} className="flex items-center gap-3 p-3 bg-ink-50 border border-ink-100 rounded-xl">
+                      <div className="w-8 h-8 rounded-lg bg-violet-100 text-violet-700 text-xs font-bold flex items-center justify-center shrink-0">H2</div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-ink-900">{sh.subheading}</p>
+                        <p className="text-xs text-ink-400">Before paragraph {sh.before_paragraph}{sh.preview && ` — "${sh.preview}"`}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Inject button */}
+                {!subheadingsApplied ? (
+                  <div className="flex items-center gap-3 p-4 bg-violet-50 border border-violet-200 rounded-xl">
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold text-violet-900">Ready to inject {subheadings.length} subheadings</p>
+                      <p className="text-xs text-violet-600 mt-0.5">Subheadings will be inserted into your content. Download the HTML to see the full formatted article.</p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        if (injectedContent) {
+                          setContent(injectedContent)
+                          setSubheadingsApplied(true)
+                          toast.success('Subheadings injected into content!')
+                        }
+                      }}
+                      className="text-xs px-4 py-2 bg-violet-600 text-white rounded-xl hover:bg-violet-700 font-semibold shrink-0">
+                      ✦ Inject into Content
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-xl">
+                    <span className="text-green-600 font-bold">✓</span>
+                    <p className="text-sm text-green-700 font-medium">Subheadings injected! Content updated with H2 tags.</p>
+                    <button onClick={() => { setSubheadingsApplied(false); setSubheadings([]) }}
+                      className="ml-auto text-xs text-green-600 hover:underline">Undo</button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {subheadings.length === 0 && !subLoading && enriched && (
+              <p className="text-xs text-ink-400">Click "Generate Subheadings" to get AI-suggested H2 headings for your article</p>
             )}
           </div>
 
