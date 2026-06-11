@@ -392,7 +392,22 @@ export function DirectAdsPanel() {
     toast.success('Network updated')
   }
 
+  // Ad units filtered by selected target sites
+  const filteredSiteUnits = adForm.target_site_urls?.length > 0
+    ? adUnits.filter(u => {
+        const unitDomain = (u.site_url || '').replace(/^https?:\/\//, '').replace(/\/$/, '').toLowerCase()
+        return adForm.target_site_urls.some((s: string) => unitDomain.includes(s) || s.includes(unitDomain))
+      })
+    : adUnits
+
   const groupedUnits = adUnits.reduce((acc, unit) => {
+    const pos = unit.position || 'other'
+    if (!acc[pos]) acc[pos] = []
+    acc[pos].push(unit)
+    return acc
+  }, {} as Record<string, AdUnit[]>)
+
+  const filteredGroupedUnits = filteredSiteUnits.reduce((acc, unit) => {
     const pos = unit.position || 'other'
     if (!acc[pos]) acc[pos] = []
     acc[pos].push(unit)
@@ -413,7 +428,29 @@ export function DirectAdsPanel() {
   // Geo filter helpers
   const filteredCountries = geoData.countries.filter(c => c.toLowerCase().includes(geoSearch.country.toLowerCase()))
   const filteredStates = geoData.states.filter(s => s.toLowerCase().includes(geoSearch.state.toLowerCase()))
-  const filteredCities = geoData.cities.filter(c => c.toLowerCase().includes(geoSearch.city.toLowerCase()))
+
+  // City aliases — common alternate spellings map to official names in DB
+  const CITY_ALIASES: Record<string, string[]> = {
+    'bengaluru': ['bangalore'], 'mysuru': ['mysore'], 'mumbai': ['bombay'],
+    'kolkata': ['calcutta'], 'chennai': ['madras'], 'thiruvananthapuram': ['trivandrum'],
+    'kochi': ['cochin'], 'varanasi': ['banaras', 'benares'], 'pune': ['poona'],
+    'belagavi': ['belgaum'], 'hubballi': ['hubli'], 'shivamogga': ['shimoga'],
+    'tumakuru': ['tumkur'], 'ballari': ['bellary'], 'vijayapura': ['bijapur'],
+  }
+  const filteredCities = geoCities.filter(c => {
+    const q = geoSearch.city.toLowerCase()
+    if (!q) return true
+    const cLower = c.toLowerCase()
+    if (cLower.includes(q)) return true
+    // Check if query matches an alias for this city
+    const aliases = CITY_ALIASES[cLower] || []
+    if (aliases.some(a => a.includes(q) || q.includes(a))) return true
+    // Check reverse — if city is an alias for the query
+    for (const [official, aliasList] of Object.entries(CITY_ALIASES)) {
+      if (cLower === official && aliasList.some(a => a.includes(q) || q.includes(a))) return true
+    }
+    return false
+  })
 
   if (loading) return <div className="h-24 bg-ink-50 rounded-xl animate-pulse" />
 
@@ -456,64 +493,28 @@ export function DirectAdsPanel() {
                   placeholder="e.g. TrendingVerse Publisher Signup — Kannadadunia" />
               </div>
 
-              {/* STEP 1 — Ad Units */}
+              {/* STEP 1 — Creative Type */}
               <div>
                 <div className="flex items-center gap-2 mb-3">
                   <span className="w-6 h-6 rounded-full bg-accent text-white text-xs font-bold flex items-center justify-center shrink-0">1</span>
-                  <p className="text-sm font-semibold text-ink-900">Select Ad Units</p>
-                </div>
-                <div className="flex items-center gap-3 mb-4">
-                  <input type="checkbox" checked={adForm.target_all}
-                    onChange={e => setAdForm((f: any) => ({ ...f, target_all: e.target.checked, target_ad_unit_ids: [] }))} className="w-4 h-4 accent-accent" />
-                  <label className="text-sm text-ink-700">Run on <strong>all ad units</strong> across all sites</label>
-                </div>
-                {!adForm.target_all && (
-                  <div className="space-y-4">
-                    {Object.entries(groupedUnits).map(([position, units]) => (
-                      <div key={position}>
-                        <p className="text-xs font-semibold text-ink-500 uppercase tracking-wide mb-2">{POSITION_LABELS[position] || position}</p>
-                        <div className="grid grid-cols-2 gap-2">
-                          {units.map(unit => {
-                            const selected = adForm.target_ad_unit_ids.includes(unit.id)
-                            return (
-                              <button key={unit.id} onClick={() => toggleUnit(unit.id)}
-                                className={`text-left p-3 rounded-xl border transition-all ${selected ? 'border-accent bg-accent/5' : 'border-ink-200 hover:border-ink-300'}`}>
-                                <div className="flex items-start justify-between gap-2">
-                                  <p className="text-xs font-semibold text-ink-900">{unit.name}</p>
-                                  {selected && <span className="text-accent shrink-0">✓</span>}
-                                </div>
-                                <div className="flex items-center gap-2 mt-1 flex-wrap">
-                                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium capitalize ${NETWORK_COLORS[unit.network_name] || NETWORK_COLORS.other}`}>{unit.network_name || 'unknown'}</span>
-                                  <span className="text-[10px] text-ink-400">{unit.size_width}×{unit.size_height}</span>
-                                  {unit.site_url && <span className="text-[10px] text-ink-400 truncate max-w-[100px]">{unit.site_url.replace(/https?:\/\//, '')}</span>}
-                                </div>
-                              </button>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* STEP 2 — Creative */}
-              <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="w-6 h-6 rounded-full bg-accent text-white text-xs font-bold flex items-center justify-center shrink-0">2</span>
-                  <p className="text-sm font-semibold text-ink-900">Ad Creative</p>
+                  <p className="text-sm font-semibold text-ink-900">Ad Creative Type</p>
                 </div>
                 <div className="flex gap-2 mb-3">
                   {[
-                    { k: 'script', l: '📜 Ad Script' }, { k: 'banner', l: '🖼 Banner' },
-                    { k: 'text', l: '📝 Text Ad' }, { k: 'native', l: '📰 Native' },
+                    { k: 'script', l: '📜 Ad Script', sub: 'Paste JS/HTML code' },
+                    { k: 'banner', l: '🖼 Banner', sub: 'Image + destination' },
+                    { k: 'text', l: '📝 Text Ad', sub: 'Headline + description' },
+                    { k: 'native', l: '📰 Native', sub: 'Image + text combo' },
                   ].map(opt => (
                     <button key={opt.k} onClick={() => setAdForm((f: any) => ({ ...f, ad_type: opt.k }))}
-                      className={`flex-1 p-2.5 rounded-xl border text-xs text-left transition-colors ${adForm.ad_type === opt.k ? 'border-accent bg-accent/5' : 'border-ink-200'}`}>
+                      className={`flex-1 p-2.5 rounded-xl border text-xs text-left transition-colors ${adForm.ad_type === opt.k ? 'border-accent bg-accent/5' : 'border-ink-200 hover:border-ink-300'}`}>
                       <p className="font-semibold text-ink-900">{opt.l}</p>
+                      <p className="text-ink-400 mt-0.5">{opt.sub}</p>
                     </button>
                   ))}
                 </div>
+
+                {/* Ad Creative Content */}
                 {adForm.ad_type !== 'script' && (
                   <div className="flex justify-end mb-2">
                     <button onClick={() => setShowPreview(v => !v)}
@@ -533,14 +534,9 @@ export function DirectAdsPanel() {
                       <div style={{ padding: '10px 12px' }}>
                         {adForm.headline && <p style={{ fontSize: 13, fontWeight: 700, color: '#111', margin: '0 0 4px' }}>{adForm.headline}</p>}
                         {adForm.description && <p style={{ fontSize: 11, color: '#666', margin: '0 0 8px', lineHeight: 1.4 }}>{adForm.description}</p>}
-                        {adForm.cta_text && (
-                          <span style={{ display: 'inline-block', background: '#ef4444', color: '#fff', fontSize: 11, fontWeight: 600, padding: '4px 12px', borderRadius: 6 }}>
-                            {adForm.cta_text}
-                          </span>
-                        )}
+                        {adForm.cta_text && <span style={{ display: 'inline-block', background: '#ef4444', color: '#fff', fontSize: 11, fontWeight: 600, padding: '4px 12px', borderRadius: 6 }}>{adForm.cta_text}</span>}
                       </div>
                     </div>
-                    <p className="text-xs text-ink-500 mt-2 text-center ml-3">Preview</p>
                   </div>
                 )}
 
@@ -565,10 +561,110 @@ export function DirectAdsPanel() {
                 )}
               </div>
 
-              {/* STEP 3 — Targeting */}
+              {/* STEP 2 — Site Selection */}
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="w-6 h-6 rounded-full bg-accent text-white text-xs font-bold flex items-center justify-center shrink-0">2</span>
+                  <p className="text-sm font-semibold text-ink-900">Select Publisher Sites</p>
+                </div>
+                <div className="border border-ink-200 rounded-xl overflow-hidden">
+                  <button onClick={() => setCollapsePublishers(v => !v)}
+                    className="w-full flex items-center justify-between px-4 py-3 bg-ink-50 hover:bg-ink-100 transition-colors">
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs font-semibold text-ink-700">🌐 Publisher Sites</p>
+                      {adForm.target_site_urls?.length > 0
+                        ? <span className="text-xs bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full">{adForm.target_site_urls.join(', ')}</span>
+                        : <span className="text-[10px] text-ink-400">Leave empty to run on all sites</span>}
+                    </div>
+                    <span className="text-ink-400 text-xs">{collapsePublishers ? '▼' : '▲'}</span>
+                  </button>
+                  {!collapsePublishers && (
+                    <div className="p-3 space-y-2">
+                      {publisherSites.map(site => {
+                        const selected = adForm.target_site_urls?.includes(site.domain)
+                        return (
+                          <button key={site.domain} onClick={() => {
+                            setAdForm((f: any) => ({
+                              ...f,
+                              target_site_urls: selected
+                                ? f.target_site_urls.filter((x: string) => x !== site.domain)
+                                : [...(f.target_site_urls || []), site.domain],
+                              target_ad_unit_ids: [], // reset ad units when site changes
+                            }))
+                          }}
+                            className={`w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all ${selected ? 'border-violet-400 bg-violet-50' : 'border-ink-200 hover:border-ink-300'}`}>
+                            <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${selected ? 'bg-violet-600 border-violet-600' : 'border-ink-300'}`}>
+                              {selected && <span className="text-white text-[10px]">✓</span>}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-semibold text-ink-900">{site.name}</p>
+                              <p className="text-xs text-ink-400">{site.domain}</p>
+                            </div>
+                            <span className="text-[10px] bg-ink-100 text-ink-500 px-2 py-0.5 rounded-full">{site.articles_count || 0} articles</span>
+                          </button>
+                        )
+                      })}
+                      {publisherSites.length === 0 && <p className="text-xs text-ink-400 bg-ink-50 p-3 rounded-lg">No onboarded publishers yet</p>}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* STEP 3 — Ad Units (filtered by selected sites) */}
               <div>
                 <div className="flex items-center gap-2 mb-3">
                   <span className="w-6 h-6 rounded-full bg-accent text-white text-xs font-bold flex items-center justify-center shrink-0">3</span>
+                  <p className="text-sm font-semibold text-ink-900">
+                    Select Ad Units
+                    {adForm.target_site_urls?.length > 0 && <span className="text-xs font-normal text-ink-400 ml-2">— showing units for selected sites</span>}
+                  </p>
+                </div>
+                <div className="flex items-center gap-3 mb-4">
+                  <input type="checkbox" checked={adForm.target_all}
+                    onChange={e => setAdForm((f: any) => ({ ...f, target_all: e.target.checked, target_ad_unit_ids: [] }))} className="w-4 h-4 accent-accent" />
+                  <label className="text-sm text-ink-700">Run on <strong>all ad units</strong> {adForm.target_site_urls?.length > 0 ? 'on selected sites' : 'across all sites'}</label>
+                </div>
+                {!adForm.target_all && (
+                  <div className="space-y-4">
+                    {Object.keys(filteredGroupedUnits).length === 0 ? (
+                      <p className="text-xs text-ink-400 bg-ink-50 p-3 rounded-lg">
+                        {adForm.target_site_urls?.length > 0 ? 'No ad units found for selected sites' : 'No ad units available'}
+                      </p>
+                    ) : Object.entries(filteredGroupedUnits).map(([position, units]) => (
+                      <div key={position}>
+                        <p className="text-xs font-semibold text-ink-500 uppercase tracking-wide mb-2">{POSITION_LABELS[position] || position}</p>
+                        <div className="grid grid-cols-2 gap-2">
+                          {units.map(unit => {
+                            const selected = adForm.target_ad_unit_ids.includes(unit.id)
+                            return (
+                              <button key={unit.id} onClick={() => toggleUnit(unit.id)}
+                                className={`text-left p-3 rounded-xl border transition-all ${selected ? 'border-accent bg-accent/5' : 'border-ink-200 hover:border-ink-300'}`}>
+                                <div className="flex items-start justify-between gap-2">
+                                  <p className="text-xs font-semibold text-ink-900">{unit.name}</p>
+                                  {selected && <span className="text-accent shrink-0">✓</span>}
+                                </div>
+                                <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium capitalize ${NETWORK_COLORS[unit.network_name] || NETWORK_COLORS.other}`}>{unit.network_name || 'unknown'}</span>
+                                  <span className="text-[10px] text-ink-400">{unit.size_width}×{unit.size_height}</span>
+                                  {unit.site_url && <span className="text-[10px] text-ink-400 truncate max-w-[100px]">{unit.site_url.replace(/https?:\/\//, '')}</span>}
+                                </div>
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                    {adForm.target_ad_unit_ids.length > 0 && (
+                      <p className="text-xs text-green-600 bg-green-50 px-3 py-2 rounded-lg">✓ {adForm.target_ad_unit_ids.length} unit{adForm.target_ad_unit_ids.length > 1 ? 's' : ''} selected</p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* STEP 5 — Targeting */}
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="w-6 h-6 rounded-full bg-accent text-white text-xs font-bold flex items-center justify-center shrink-0">5</span>
                   <p className="text-sm font-semibold text-ink-900">Targeting <span className="text-ink-400 font-normal text-xs">(optional)</span></p>
                 </div>
 
@@ -760,7 +856,7 @@ export function DirectAdsPanel() {
               {/* STEP 4 — Schedule */}
               <div>
                 <div className="flex items-center gap-2 mb-3">
-                  <span className="w-6 h-6 rounded-full bg-accent text-white text-xs font-bold flex items-center justify-center shrink-0">4</span>
+                  <span className="w-6 h-6 rounded-full bg-accent text-white text-xs font-bold flex items-center justify-center shrink-0">6</span>
                   <p className="text-sm font-semibold text-ink-900">Campaign Objective & Schedule</p>
                 </div>
 
