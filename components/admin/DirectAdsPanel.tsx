@@ -260,8 +260,7 @@ export function DirectAdsPanel() {
       ['BY DAY', 'Impressions', 'Clicks'],
       ...by_day.map((d: any) => [d.date, d.impressions, d.clicks]),
     ]
-    const csv = rows.map(r => r.map(v => `"${(v||'').toString().replace(/"/g,'""')}"`).join(',')).join('
-')
+    const csv = rows.map(r => r.map(v => `"${(v||'').toString().replace(/"/g,'""')}"`).join(',')).join('\n')
     const blob = new Blob([csv], { type: 'text/csv' })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
