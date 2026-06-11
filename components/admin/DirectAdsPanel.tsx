@@ -87,6 +87,12 @@ export function DirectAdsPanel() {
   const [geoSearch, setGeoSearch] = useState({ country: '', state: '', city: '' })
   const [siteInput, setSiteInput] = useState('')
   const [publisherSites, setPublisherSites] = useState<{ domain: string; name: string; articles_count: number }[]>([])
+  const [collapsePublishers, setCollapsePublishers] = useState(true)
+  const [collapseCountries, setCollapseCountries] = useState(true)
+  const [collapseStates, setCollapseStates] = useState(true)
+  const [collapseCities, setCollapseCities] = useState(true)
+  const [editCollapsePublishers, setEditCollapsePublishers] = useState(true)
+  const [editCollapseCountries, setEditCollapseCountries] = useState(true)
 
   useEffect(() => { fetchAll(); fetchGeoData(); fetchPublisherSites() }, [])
   useEffect(() => { if (activeTab === 'performance') fetchPerformance() }, [activeTab, perfDays])
@@ -105,21 +111,33 @@ export function DirectAdsPanel() {
   }
 
   async function fetchGeoData() {
-    const res = await fetch('/api/audience/geo-data')
-    if (res.ok) setGeoData(await res.json())
+    try {
+      const res = await fetch('/api/audience/geo-data')
+      if (res.ok) {
+        const data = await res.json()
+        setGeoData({
+          countries: Array.isArray(data.countries) ? data.countries : [],
+          states: Array.isArray(data.states) ? data.states : [],
+          cities: Array.isArray(data.cities) ? data.cities : [],
+        })
+      }
+    } catch { /* silent */ }
   }
 
   async function fetchPublisherSites() {
-    const res = await fetch('/api/sites')
-    if (res.ok) {
-      const data = await res.json()
-      const sites = (data.sites || data || []).map((s: any) => ({
-        domain: (s.site_url || '').replace(/^https?:\/\//, '').replace(/\/$/, '').toLowerCase(),
-        name: s.name || s.site_url || 'Unknown',
-        articles_count: s.articles_count || 0,
-      })).filter((s: any) => s.domain)
-      setPublisherSites(sites)
-    }
+    try {
+      const res = await fetch('/api/sites')
+      if (res.ok) {
+        const data = await res.json()
+        const arr = Array.isArray(data) ? data : (data.sites || data.data || [])
+        const sites = arr.map((s: any) => ({
+          domain: (s.site_url || s.url || '').replace(/^https?:\/\//, '').replace(/\/$/, '').toLowerCase(),
+          name: s.name || (s.site_url || '').replace(/^https?:\/\//, '') || 'Unknown',
+          articles_count: s.articles_count || 0,
+        })).filter((s: any) => s.domain)
+        setPublisherSites(sites)
+      }
+    } catch { /* silent */ }
   }
 
   async function fetchPerformance() {
@@ -388,38 +406,49 @@ export function DirectAdsPanel() {
                 </div>
 
                 <div className="space-y-4">
-                  {/* Site targeting — from onboarded publishers */}
-                  <div className="p-4 border border-ink-200 rounded-xl space-y-3">
-                    <p className="text-xs font-semibold text-ink-700">🌐 Site Targeting</p>
-                    <p className="text-xs text-ink-400">Select publisher sites to target. Leave all unselected to run on all sites.</p>
-                    <div className="space-y-2">
-                      {publisherSites.map(site => {
-                        const selected = adForm.target_site_urls?.includes(site.domain)
-                        return (
-                          <button key={site.domain} onClick={() => setAdForm((f: any) => ({
-                            ...f,
-                            target_site_urls: selected
-                              ? f.target_site_urls.filter((x: string) => x !== site.domain)
-                              : [...(f.target_site_urls || []), site.domain]
-                          }))}
-                            className={`w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all ${selected ? 'border-violet-400 bg-violet-50' : 'border-ink-200 hover:border-ink-300'}`}>
-                            <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${selected ? 'bg-violet-600 border-violet-600' : 'border-ink-300'}`}>
-                              {selected && <span className="text-white text-[10px]">✓</span>}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-xs font-semibold text-ink-900">{site.name}</p>
-                              <p className="text-xs text-ink-400">{site.domain}</p>
-                            </div>
-                            <span className="text-[10px] bg-ink-100 text-ink-500 px-2 py-0.5 rounded-full">{site.articles_count || 0} articles</span>
-                          </button>
-                        )
-                      })}
-                      {publisherSites.length === 0 && (
-                        <p className="text-xs text-ink-400 bg-ink-50 p-3 rounded-lg">No onboarded publishers yet</p>
-                      )}
-                    </div>
-                    {adForm.target_site_urls?.length > 0 && (
-                      <p className="text-xs text-violet-600">✓ Targeting: {adForm.target_site_urls.join(', ')}</p>
+                  {/* Site targeting — collapsible publisher list */}
+                  <div className="border border-ink-200 rounded-xl overflow-hidden">
+                    <button onClick={() => setCollapsePublishers(v => !v)}
+                      className="w-full flex items-center justify-between px-4 py-3 bg-ink-50 hover:bg-ink-100 transition-colors">
+                      <div className="flex items-center gap-2">
+                        <p className="text-xs font-semibold text-ink-700">🌐 Site Targeting</p>
+                        {adForm.target_site_urls?.length > 0 && (
+                          <span className="text-xs bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full">{adForm.target_site_urls.length} selected</span>
+                        )}
+                      </div>
+                      <span className="text-ink-400 text-xs">{collapsePublishers ? '▼ Show' : '▲ Hide'}</span>
+                    </button>
+                    {!collapsePublishers && (
+                      <div className="p-3 space-y-2">
+                        <p className="text-xs text-ink-400">Select publisher sites. Leave empty to run on all sites.</p>
+                        {publisherSites.map(site => {
+                          const selected = adForm.target_site_urls?.includes(site.domain)
+                          return (
+                            <button key={site.domain} onClick={() => setAdForm((f: any) => ({
+                              ...f,
+                              target_site_urls: selected
+                                ? f.target_site_urls.filter((x: string) => x !== site.domain)
+                                : [...(f.target_site_urls || []), site.domain]
+                            }))}
+                              className={`w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all ${selected ? 'border-violet-400 bg-violet-50' : 'border-ink-200 hover:border-ink-300'}`}>
+                              <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${selected ? 'bg-violet-600 border-violet-600' : 'border-ink-300'}`}>
+                                {selected && <span className="text-white text-[10px]">✓</span>}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs font-semibold text-ink-900">{site.name}</p>
+                                <p className="text-xs text-ink-400">{site.domain}</p>
+                              </div>
+                              <span className="text-[10px] bg-ink-100 text-ink-500 px-2 py-0.5 rounded-full">{site.articles_count || 0} articles</span>
+                            </button>
+                          )
+                        })}
+                        {publisherSites.length === 0 && <p className="text-xs text-ink-400 bg-ink-50 p-3 rounded-lg">No onboarded publishers yet</p>}
+                      </div>
+                    )}
+                    {adForm.target_site_urls?.length > 0 && collapsePublishers && (
+                      <div className="px-4 py-2 border-t border-ink-100">
+                        <p className="text-xs text-violet-600">✓ {adForm.target_site_urls.join(', ')}</p>
+                      </div>
                     )}
                   </div>
 
@@ -436,69 +465,116 @@ export function DirectAdsPanel() {
                     </div>
                   </div>
 
-                  {/* Geo targeting */}
-                  <div className="p-4 border border-ink-200 rounded-xl space-y-4">
-                    <p className="text-xs font-semibold text-ink-700">🌍 Geo Targeting <span className="font-normal text-ink-400">— from your actual audience data</span></p>
-
-                    {/* Countries */}
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <label className="label">Countries</label>
-                        <input className="text-xs border border-ink-200 rounded-lg px-2 py-1 w-36" placeholder="Search..."
+                  {/* Geo targeting — collapsible */}
+                  <div className="border border-ink-200 rounded-xl overflow-hidden">
+                    <button onClick={() => setCollapseCountries(v => !v)}
+                      className="w-full flex items-center justify-between px-4 py-3 bg-ink-50 hover:bg-ink-100 transition-colors">
+                      <div className="flex items-center gap-2">
+                        <p className="text-xs font-semibold text-ink-700">🌍 Countries</p>
+                        {adForm.target_countries?.length > 0 && (
+                          <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">{adForm.target_countries.length} selected</span>
+                        )}
+                        {geoData.countries.length > 0 && <span className="text-[10px] text-ink-400">{geoData.countries.length} available</span>}
+                      </div>
+                      <span className="text-ink-400 text-xs">{collapseCountries ? '▼ Show' : '▲ Hide'}</span>
+                    </button>
+                    {!collapseCountries && (
+                      <div className="p-3 space-y-2">
+                        <input className="input text-xs w-full" placeholder="Search countries..."
                           value={geoSearch.country} onChange={e => setGeoSearch(s => ({ ...s, country: e.target.value }))} />
+                        {geoData.countries.length === 0 ? (
+                          <p className="text-xs text-ink-400 bg-ink-50 p-2 rounded-lg">No audience data yet — visit your site to collect geo data</p>
+                        ) : (
+                          <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto">
+                            {filteredCountries.map(c => (
+                              <button key={c} onClick={() => toggleGeo('target_countries', c)}
+                                className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${adForm.target_countries.includes(c) ? 'bg-blue-600 text-white border-transparent' : 'bg-white text-ink-600 border-ink-200 hover:border-ink-300'}`}>
+                                {c}
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                      <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto">
-                        {filteredCountries.slice(0, 30).map(c => (
-                          <button key={c} onClick={() => toggleGeo('target_countries', c)}
-                            className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${adForm.target_countries.includes(c) ? 'bg-blue-600 text-white border-transparent' : 'bg-white text-ink-600 border-ink-200 hover:border-ink-300'}`}>
-                            {c}
-                          </button>
-                        ))}
+                    )}
+                    {adForm.target_countries?.length > 0 && collapseCountries && (
+                      <div className="px-4 py-2 border-t border-ink-100">
+                        <p className="text-xs text-blue-600">✓ {adForm.target_countries.join(', ')}</p>
                       </div>
-                      {adForm.target_countries.length > 0 && (
-                        <p className="text-xs text-blue-600 mt-1">✓ {adForm.target_countries.join(', ')}</p>
-                      )}
-                    </div>
+                    )}
+                  </div>
 
-                    {/* States */}
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <label className="label">States / Regions</label>
-                        <input className="text-xs border border-ink-200 rounded-lg px-2 py-1 w-36" placeholder="Search..."
+                  <div className="border border-ink-200 rounded-xl overflow-hidden">
+                    <button onClick={() => setCollapseStates(v => !v)}
+                      className="w-full flex items-center justify-between px-4 py-3 bg-ink-50 hover:bg-ink-100 transition-colors">
+                      <div className="flex items-center gap-2">
+                        <p className="text-xs font-semibold text-ink-700">🗺 States / Regions</p>
+                        {adForm.target_states?.length > 0 && (
+                          <span className="text-xs bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full">{adForm.target_states.length} selected</span>
+                        )}
+                        {geoData.states.length > 0 && <span className="text-[10px] text-ink-400">{geoData.states.length} available</span>}
+                      </div>
+                      <span className="text-ink-400 text-xs">{collapseStates ? '▼ Show' : '▲ Hide'}</span>
+                    </button>
+                    {!collapseStates && (
+                      <div className="p-3 space-y-2">
+                        <input className="input text-xs w-full" placeholder="Search states..."
                           value={geoSearch.state} onChange={e => setGeoSearch(s => ({ ...s, state: e.target.value }))} />
+                        {geoData.states.length === 0 ? (
+                          <p className="text-xs text-ink-400 bg-ink-50 p-2 rounded-lg">No state data yet</p>
+                        ) : (
+                          <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto">
+                            {filteredStates.map(s => (
+                              <button key={s} onClick={() => toggleGeo('target_states', s)}
+                                className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${adForm.target_states.includes(s) ? 'bg-violet-600 text-white border-transparent' : 'bg-white text-ink-600 border-ink-200 hover:border-ink-300'}`}>
+                                {s}
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                      <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto">
-                        {filteredStates.slice(0, 40).map(s => (
-                          <button key={s} onClick={() => toggleGeo('target_states', s)}
-                            className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${adForm.target_states.includes(s) ? 'bg-violet-600 text-white border-transparent' : 'bg-white text-ink-600 border-ink-200 hover:border-ink-300'}`}>
-                            {s}
-                          </button>
-                        ))}
+                    )}
+                    {adForm.target_states?.length > 0 && collapseStates && (
+                      <div className="px-4 py-2 border-t border-ink-100">
+                        <p className="text-xs text-violet-600">✓ {adForm.target_states.join(', ')}</p>
                       </div>
-                      {adForm.target_states.length > 0 && (
-                        <p className="text-xs text-violet-600 mt-1">✓ {adForm.target_states.join(', ')}</p>
-                      )}
-                    </div>
+                    )}
+                  </div>
 
-                    {/* Cities */}
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <label className="label">Cities</label>
-                        <input className="text-xs border border-ink-200 rounded-lg px-2 py-1 w-36" placeholder="Search..."
+                  <div className="border border-ink-200 rounded-xl overflow-hidden">
+                    <button onClick={() => setCollapseCities(v => !v)}
+                      className="w-full flex items-center justify-between px-4 py-3 bg-ink-50 hover:bg-ink-100 transition-colors">
+                      <div className="flex items-center gap-2">
+                        <p className="text-xs font-semibold text-ink-700">📍 Cities</p>
+                        {adForm.target_cities?.length > 0 && (
+                          <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">{adForm.target_cities.length} selected</span>
+                        )}
+                        {geoData.cities.length > 0 && <span className="text-[10px] text-ink-400">{geoData.cities.length} available</span>}
+                      </div>
+                      <span className="text-ink-400 text-xs">{collapseCities ? '▼ Show' : '▲ Hide'}</span>
+                    </button>
+                    {!collapseCities && (
+                      <div className="p-3 space-y-2">
+                        <input className="input text-xs w-full" placeholder="Search cities..."
                           value={geoSearch.city} onChange={e => setGeoSearch(s => ({ ...s, city: e.target.value }))} />
+                        {geoData.cities.length === 0 ? (
+                          <p className="text-xs text-ink-400 bg-ink-50 p-2 rounded-lg">No city data yet</p>
+                        ) : (
+                          <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto">
+                            {filteredCities.map(c => (
+                              <button key={c} onClick={() => toggleGeo('target_cities', c)}
+                                className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${adForm.target_cities.includes(c) ? 'bg-green-600 text-white border-transparent' : 'bg-white text-ink-600 border-ink-200 hover:border-ink-300'}`}>
+                                {c}
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                      <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto">
-                        {filteredCities.slice(0, 50).map(c => (
-                          <button key={c} onClick={() => toggleGeo('target_cities', c)}
-                            className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${adForm.target_cities.includes(c) ? 'bg-green-600 text-white border-transparent' : 'bg-white text-ink-600 border-ink-200 hover:border-ink-300'}`}>
-                            {c}
-                          </button>
-                        ))}
+                    )}
+                    {adForm.target_cities?.length > 0 && collapseCities && (
+                      <div className="px-4 py-2 border-t border-ink-100">
+                        <p className="text-xs text-green-600">✓ {adForm.target_cities.join(', ')}</p>
                       </div>
-                      {adForm.target_cities.length > 0 && (
-                        <p className="text-xs text-green-600 mt-1">✓ {adForm.target_cities.join(', ')}</p>
-                      )}
-                    </div>
+                    )}
                   </div>
 
                   {/* Audience segments */}
@@ -778,31 +854,48 @@ export function DirectAdsPanel() {
                 <div><label className="label">CPM Rate (₹)</label><input type="number" className="input" value={editForm.cpm_rate_inr || 0} onChange={e => setEditForm((f: any) => ({ ...f, cpm_rate_inr: parseFloat(e.target.value) || 0 }))} /></div>
                 <div><label className="label">Priority (0-100)</label><input type="number" className="input" min={0} max={100} value={editForm.priority || 0} onChange={e => setEditForm((f: any) => ({ ...f, priority: parseInt(e.target.value) || 0 }))} /></div>
 
-                {/* Site targeting — publisher dropdown */}
-                <div className="col-span-2">
-                  <label className="label">Target Sites</label>
-                  <div className="space-y-2 mt-1">
-                    {publisherSites.map(site => {
-                      const selected = (editForm.target_site_urls || []).includes(site.domain)
-                      return (
-                        <button key={site.domain} onClick={() => setEditForm((f: any) => ({
-                          ...f,
-                          target_site_urls: selected
-                            ? (f.target_site_urls || []).filter((x: string) => x !== site.domain)
-                            : [...(f.target_site_urls || []), site.domain]
-                        }))}
-                          className={`w-full text-left flex items-center gap-3 px-3 py-2 rounded-xl border transition-all ${selected ? 'border-violet-400 bg-violet-50' : 'border-ink-200 hover:border-ink-300'}`}>
-                          <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${selected ? 'bg-violet-600 border-violet-600' : 'border-ink-300'}`}>
-                            {selected && <span className="text-white text-[10px]">✓</span>}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs font-semibold text-ink-900">{site.name}</p>
-                            <p className="text-xs text-ink-400">{site.domain}</p>
-                          </div>
-                        </button>
-                      )
-                    })}
-                  </div>
+                {/* Site targeting — collapsible in edit modal */}
+                <div className="col-span-2 border border-ink-200 rounded-xl overflow-hidden">
+                  <button onClick={() => setEditCollapsePublishers(v => !v)}
+                    className="w-full flex items-center justify-between px-4 py-3 bg-ink-50 hover:bg-ink-100 transition-colors">
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs font-semibold text-ink-700">🌐 Target Sites</p>
+                      {(editForm.target_site_urls || []).length > 0 && (
+                        <span className="text-xs bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full">{editForm.target_site_urls.length} selected</span>
+                      )}
+                    </div>
+                    <span className="text-ink-400 text-xs">{editCollapsePublishers ? '▼ Show' : '▲ Hide'}</span>
+                  </button>
+                  {!editCollapsePublishers && (
+                    <div className="p-3 space-y-2">
+                      {publisherSites.map(site => {
+                        const selected = (editForm.target_site_urls || []).includes(site.domain)
+                        return (
+                          <button key={site.domain} onClick={() => setEditForm((f: any) => ({
+                            ...f,
+                            target_site_urls: selected
+                              ? (f.target_site_urls || []).filter((x: string) => x !== site.domain)
+                              : [...(f.target_site_urls || []), site.domain]
+                          }))}
+                            className={`w-full text-left flex items-center gap-3 px-3 py-2 rounded-xl border transition-all ${selected ? 'border-violet-400 bg-violet-50' : 'border-ink-200 hover:border-ink-300'}`}>
+                            <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${selected ? 'bg-violet-600 border-violet-600' : 'border-ink-300'}`}>
+                              {selected && <span className="text-white text-[10px]">✓</span>}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-semibold text-ink-900">{site.name}</p>
+                              <p className="text-xs text-ink-400">{site.domain}</p>
+                            </div>
+                          </button>
+                        )
+                      })}
+                      {publisherSites.length === 0 && <p className="text-xs text-ink-400">No publishers yet</p>}
+                    </div>
+                  )}
+                  {(editForm.target_site_urls || []).length > 0 && editCollapsePublishers && (
+                    <div className="px-4 py-2 border-t border-ink-100">
+                      <p className="text-xs text-violet-600">✓ {editForm.target_site_urls.join(', ')}</p>
+                    </div>
+                  )}
                 </div>
 
                 {/* Gender */}
@@ -819,16 +912,58 @@ export function DirectAdsPanel() {
                 </div>
 
                 {/* Geo */}
-                <div className="col-span-2">
-                  <label className="label">Countries</label>
-                  <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
-                    {geoData.countries.map(c => (
-                      <button key={c} onClick={() => setEditForm((f: any) => ({ ...f, target_countries: f.target_countries?.includes(c) ? f.target_countries.filter((x: string) => x !== c) : [...(f.target_countries || []), c] }))}
-                        className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${(editForm.target_countries || []).includes(c) ? 'bg-blue-600 text-white border-transparent' : 'bg-white text-ink-600 border-ink-200'}`}>
-                        {c}
-                      </button>
-                    ))}
-                  </div>
+                <div className="col-span-2 border border-ink-200 rounded-xl overflow-hidden">
+                  <button onClick={() => setEditCollapseCountries(v => !v)}
+                    className="w-full flex items-center justify-between px-4 py-3 bg-ink-50 hover:bg-ink-100 transition-colors">
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs font-semibold text-ink-700">🌍 Countries / States / Cities</p>
+                      {((editForm.target_countries || []).length + (editForm.target_states || []).length + (editForm.target_cities || []).length) > 0 && (
+                        <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
+                          {(editForm.target_countries || []).length + (editForm.target_states || []).length + (editForm.target_cities || []).length} selected
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-ink-400 text-xs">{editCollapseCountries ? '▼ Show' : '▲ Hide'}</span>
+                  </button>
+                  {!editCollapseCountries && (
+                    <div className="p-3 space-y-3">
+                      <div>
+                        <p className="text-xs font-medium text-ink-600 mb-1">Countries</p>
+                        <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
+                          {geoData.countries.length === 0 ? (
+                            <p className="text-xs text-ink-400">No audience geo data yet</p>
+                          ) : geoData.countries.map(c => (
+                            <button key={c} onClick={() => setEditForm((f: any) => ({ ...f, target_countries: f.target_countries?.includes(c) ? f.target_countries.filter((x: string) => x !== c) : [...(f.target_countries || []), c] }))}
+                              className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${(editForm.target_countries || []).includes(c) ? 'bg-blue-600 text-white border-transparent' : 'bg-white text-ink-600 border-ink-200'}`}>
+                              {c}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium text-ink-600 mb-1">States</p>
+                        <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
+                          {geoData.states.map(s => (
+                            <button key={s} onClick={() => setEditForm((f: any) => ({ ...f, target_states: f.target_states?.includes(s) ? f.target_states.filter((x: string) => x !== s) : [...(f.target_states || []), s] }))}
+                              className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${(editForm.target_states || []).includes(s) ? 'bg-violet-600 text-white border-transparent' : 'bg-white text-ink-600 border-ink-200'}`}>
+                              {s}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium text-ink-600 mb-1">Cities</p>
+                        <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
+                          {geoData.cities.map(c => (
+                            <button key={c} onClick={() => setEditForm((f: any) => ({ ...f, target_cities: f.target_cities?.includes(c) ? f.target_cities.filter((x: string) => x !== c) : [...(f.target_cities || []), c] }))}
+                              className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${(editForm.target_cities || []).includes(c) ? 'bg-green-600 text-white border-transparent' : 'bg-white text-ink-600 border-ink-200'}`}>
+                              {c}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="col-span-2"><label className="label">Notes</label><textarea className="input resize-none" rows={2} value={editForm.campaign_notes || ''} onChange={e => setEditForm((f: any) => ({ ...f, campaign_notes: e.target.value }))} /></div>
