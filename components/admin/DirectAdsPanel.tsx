@@ -60,6 +60,7 @@ const EMPTY_AD = {
   priority: 0, cpm_rate_inr: 0, impressions_cap: 0, start_date: '', end_date: '',
   target_site_urls: [] as string[], target_countries: [] as string[],
   target_states: [] as string[], target_cities: [] as string[], target_gender: 'all',
+  campaign_objective: 'impressions', target_impressions: 0, freq_cap_per_user: 0,
 }
 
 const EMPTY_SEG = {
@@ -92,6 +93,7 @@ export function DirectAdsPanel() {
   // Keep geoData for backwards compat in segments tab
   const geoData = { countries: geoCountries, states: geoStates, cities: geoCities }
   const [siteInput, setSiteInput] = useState('')
+  const [showPreview, setShowPreview] = useState(false)
   const [publisherSites, setPublisherSites] = useState<{ domain: string; name: string; articles_count: number }[]>([])
   const [collapsePublishers, setCollapsePublishers] = useState(true)
   const [collapseCountries, setCollapseCountries] = useState(true)
@@ -212,16 +214,29 @@ export function DirectAdsPanel() {
     setAdForm((f: any) => {
       const newVal = f[field].includes(val) ? f[field].filter((x: string) => x !== val) : [...f[field], val]
       const updated = { ...f, [field]: newVal }
-      // Cascade: country change → reset states & cities, fetch new states
       if (field === 'target_countries') {
         updated.target_states = []
         updated.target_cities = []
-        fetchStatesForCountries(newVal)
+        if (newVal.length > 0) {
+          fetchStatesForCountries(newVal)
+          setCollapseStates(false) // auto-expand states
+          setCollapseCities(true)
+        } else {
+          setGeoStates([])
+          setGeoCities([])
+          setCollapseStates(true)
+          setCollapseCities(true)
+        }
       }
-      // Cascade: state change → reset cities, fetch new cities
       if (field === 'target_states') {
         updated.target_cities = []
-        fetchCitiesForStates(newVal, f.target_countries)
+        if (newVal.length > 0) {
+          fetchCitiesForStates(newVal, f.target_countries)
+          setCollapseCities(false) // auto-expand cities
+        } else {
+          setGeoCities([])
+          setCollapseCities(true)
+        }
       }
       return updated
     })
@@ -499,6 +514,36 @@ export function DirectAdsPanel() {
                     </button>
                   ))}
                 </div>
+                {adForm.ad_type !== 'script' && (
+                  <div className="flex justify-end mb-2">
+                    <button onClick={() => setShowPreview(v => !v)}
+                      className="text-xs px-3 py-1.5 bg-ink-100 text-ink-700 rounded-lg hover:bg-ink-200">
+                      {showPreview ? '✕ Hide Preview' : '👁 Preview Ad'}
+                    </button>
+                  </div>
+                )}
+
+                {showPreview && adForm.ad_type !== 'script' && (
+                  <div className="mb-3 p-4 bg-ink-950 rounded-xl flex items-center justify-center">
+                    <div style={{ width: Math.min(adForm.size_width || 300, 280), background: '#fff', borderRadius: 8, overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,0.3)' }}>
+                      {adForm.image_url && (adForm.ad_type === 'banner' || adForm.ad_type === 'native') && (
+                        <img src={adForm.image_url} alt="Ad preview" style={{ width: '100%', display: 'block', maxHeight: 150, objectFit: 'cover' }}
+                          onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                      )}
+                      <div style={{ padding: '10px 12px' }}>
+                        {adForm.headline && <p style={{ fontSize: 13, fontWeight: 700, color: '#111', margin: '0 0 4px' }}>{adForm.headline}</p>}
+                        {adForm.description && <p style={{ fontSize: 11, color: '#666', margin: '0 0 8px', lineHeight: 1.4 }}>{adForm.description}</p>}
+                        {adForm.cta_text && (
+                          <span style={{ display: 'inline-block', background: '#ef4444', color: '#fff', fontSize: 11, fontWeight: 600, padding: '4px 12px', borderRadius: 6 }}>
+                            {adForm.cta_text}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <p className="text-xs text-ink-500 mt-2 text-center ml-3">Preview</p>
+                  </div>
+                )}
+
                 {adForm.ad_type === 'script' ? (
                   <div>
                     <label className="label">Ad Script *</label>
@@ -716,16 +761,57 @@ export function DirectAdsPanel() {
               <div>
                 <div className="flex items-center gap-2 mb-3">
                   <span className="w-6 h-6 rounded-full bg-accent text-white text-xs font-bold flex items-center justify-center shrink-0">4</span>
-                  <p className="text-sm font-semibold text-ink-900">Schedule & Pricing</p>
+                  <p className="text-sm font-semibold text-ink-900">Campaign Objective & Schedule</p>
                 </div>
+
+                {/* Campaign Objective */}
+                <div className="mb-4">
+                  <label className="label">Campaign Objective</label>
+                  <div className="flex gap-2">
+                    {[
+                      { k: 'impressions', l: '👁 Impressions', sub: 'Maximize ad views' },
+                      { k: 'clicks', l: '🖱 Clicks', sub: 'Drive traffic' },
+                      { k: 'awareness', l: '📢 Awareness', sub: 'Brand visibility' },
+                    ].map(opt => (
+                      <button key={opt.k} onClick={() => setAdForm((f: any) => ({ ...f, campaign_objective: opt.k }))}
+                        className={`flex-1 p-2.5 rounded-xl border text-xs text-left transition-colors ${adForm.campaign_objective === opt.k ? 'border-accent bg-accent/5' : 'border-ink-200 hover:border-ink-300'}`}>
+                        <p className="font-semibold text-ink-900">{opt.l}</p>
+                        <p className="text-ink-400 mt-0.5">{opt.sub}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-4 gap-3">
                   <div><label className="label">Start Date</label><input type="date" className="input" value={adForm.start_date} onChange={e => setAdForm((f: any) => ({ ...f, start_date: e.target.value }))} /></div>
                   <div><label className="label">End Date</label><input type="date" className="input" value={adForm.end_date} onChange={e => setAdForm((f: any) => ({ ...f, end_date: e.target.value }))} /></div>
                   <div><label className="label">CPM Rate (₹)</label><input type="number" className="input" min={0} step="0.01" value={adForm.cpm_rate_inr} onChange={e => setAdForm((f: any) => ({ ...f, cpm_rate_inr: parseFloat(e.target.value) || 0 }))} /></div>
-                  <div><label className="label">Impr. Cap</label><input type="number" className="input" min={0} value={adForm.impressions_cap} onChange={e => setAdForm((f: any) => ({ ...f, impressions_cap: parseInt(e.target.value) || 0 }))} placeholder="0 = ∞" /></div>
+                  <div><label className="label">Priority (0–100)</label><input type="number" className="input" min={0} max={100} value={adForm.priority} onChange={e => setAdForm((f: any) => ({ ...f, priority: parseInt(e.target.value) || 0 }))} /></div>
                 </div>
-                <div className="mt-3 w-32"><label className="label">Priority (0–100)</label>
-                  <input type="number" className="input" min={0} max={100} value={adForm.priority} onChange={e => setAdForm((f: any) => ({ ...f, priority: parseInt(e.target.value) || 0 }))} /></div>
+
+                <div className="grid grid-cols-3 gap-3 mt-3">
+                  <div>
+                    <label className="label">Target Impressions</label>
+                    <input type="number" className="input" min={0} value={adForm.target_impressions}
+                      onChange={e => setAdForm((f: any) => ({ ...f, target_impressions: parseInt(e.target.value) || 0 }))}
+                      placeholder="0 = unlimited" />
+                    <p className="text-[10px] text-ink-400 mt-1">Campaign stops when target is reached</p>
+                  </div>
+                  <div>
+                    <label className="label">Total Impression Cap</label>
+                    <input type="number" className="input" min={0} value={adForm.impressions_cap}
+                      onChange={e => setAdForm((f: any) => ({ ...f, impressions_cap: parseInt(e.target.value) || 0 }))}
+                      placeholder="0 = ∞" />
+                    <p className="text-[10px] text-ink-400 mt-1">Hard limit across all visitors</p>
+                  </div>
+                  <div>
+                    <label className="label">Freq. Cap (per user)</label>
+                    <input type="number" className="input" min={0} value={adForm.freq_cap_per_user}
+                      onChange={e => setAdForm((f: any) => ({ ...f, freq_cap_per_user: parseInt(e.target.value) || 0 }))}
+                      placeholder="0 = unlimited" />
+                    <p className="text-[10px] text-ink-400 mt-1">Max times same visitor sees this ad</p>
+                  </div>
+                </div>
               </div>
 
               <div>
