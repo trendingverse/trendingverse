@@ -235,7 +235,7 @@ export function DirectAdsPanel() {
     setReportModal(ad)
     setReportData(null)
     setReportLoading(true)
-    const res = await fetch(`/api/audience/campaign-report?id=${ad.id}`)
+    const res = await fetch(`/api/audience/track/campaign-report?id=${ad.id}`)
     if (res.ok) setReportData(await res.json())
     setReportLoading(false)
   }
@@ -272,7 +272,7 @@ export function DirectAdsPanel() {
   async function emailReport() {
     if (!reportEmail || !reportModal) return
     setSendingReport(true)
-    const res = await fetch('/api/audience/campaign-report', {
+    const res = await fetch('/api/audience/track/campaign-report', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ campaign_id: reportModal.id, email: reportEmail }),
     })
