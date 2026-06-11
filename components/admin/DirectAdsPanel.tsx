@@ -243,6 +243,7 @@ export function DirectAdsPanel() {
   function downloadReportCSV() {
     if (!reportData) return
     const { campaign, summary, by_site, by_day } = reportData
+    const { by_country, by_state, by_city } = reportData
     const rows = [
       ['Campaign Report', campaign.name],
       ['Status', campaign.status],
@@ -256,6 +257,15 @@ export function DirectAdsPanel() {
       [''],
       ['BY SITE', 'Impressions', 'Clicks', 'CTR'],
       ...by_site.map((s: any) => [s.site, s.impressions, s.clicks, s.ctr + '%']),
+      [''],
+      ['BY COUNTRY', 'Impressions'],
+      ...(by_country || []).map((c: any) => [c.country, c.impressions]),
+      [''],
+      ['BY STATE', 'Impressions'],
+      ...(by_state || []).map((s: any) => [s.state, s.impressions]),
+      [''],
+      ['BY CITY', 'Impressions'],
+      ...(by_city || []).map((c: any) => [c.city, c.impressions]),
       [''],
       ['BY DAY', 'Impressions', 'Clicks'],
       ...by_day.map((d: any) => [d.date, d.impressions, d.clicks]),
@@ -1013,6 +1023,77 @@ export function DirectAdsPanel() {
                                 <td className="px-3 py-2 text-xs text-ink-700">{d.date}</td>
                                 <td className="px-3 py-2 text-xs text-right text-ink-600">{d.impressions.toLocaleString()}</td>
                                 <td className="px-3 py-2 text-xs text-right text-ink-600">{d.clicks}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Geo breakdown */}
+                  {reportData.by_country?.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold text-ink-700 mb-2">🌍 By Country</p>
+                      <div className="rounded-xl border border-ink-100 overflow-hidden">
+                        <table className="w-full">
+                          <thead><tr className="bg-ink-50">
+                            <th className="text-left px-3 py-2 text-xs font-medium text-ink-500">Country</th>
+                            <th className="text-right px-3 py-2 text-xs font-medium text-ink-500">Impressions</th>
+                            <th className="text-right px-3 py-2 text-xs font-medium text-ink-500">Share</th>
+                          </tr></thead>
+                          <tbody>
+                            {reportData.by_country.map((c: any) => (
+                              <tr key={c.country} className="border-t border-ink-50">
+                                <td className="px-3 py-2 text-xs text-ink-700">{c.country}</td>
+                                <td className="px-3 py-2 text-xs text-right text-ink-600">{c.impressions.toLocaleString()}</td>
+                                <td className="px-3 py-2 text-xs text-right text-blue-600">
+                                  {reportData.summary.impressions > 0 ? ((c.impressions / reportData.summary.impressions) * 100).toFixed(1) + '%' : '—'}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {reportData.by_state?.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold text-ink-700 mb-2">🗺 By State</p>
+                      <div className="rounded-xl border border-ink-100 overflow-hidden max-h-40 overflow-y-auto">
+                        <table className="w-full">
+                          <thead><tr className="bg-ink-50 sticky top-0">
+                            <th className="text-left px-3 py-2 text-xs font-medium text-ink-500">State</th>
+                            <th className="text-right px-3 py-2 text-xs font-medium text-ink-500">Impressions</th>
+                          </tr></thead>
+                          <tbody>
+                            {reportData.by_state.map((s: any) => (
+                              <tr key={s.state} className="border-t border-ink-50">
+                                <td className="px-3 py-2 text-xs text-ink-700">{s.state}</td>
+                                <td className="px-3 py-2 text-xs text-right text-ink-600">{s.impressions.toLocaleString()}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {reportData.by_city?.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold text-ink-700 mb-2">📍 By City</p>
+                      <div className="rounded-xl border border-ink-100 overflow-hidden max-h-40 overflow-y-auto">
+                        <table className="w-full">
+                          <thead><tr className="bg-ink-50 sticky top-0">
+                            <th className="text-left px-3 py-2 text-xs font-medium text-ink-500">City</th>
+                            <th className="text-right px-3 py-2 text-xs font-medium text-ink-500">Impressions</th>
+                          </tr></thead>
+                          <tbody>
+                            {reportData.by_city.map((c: any) => (
+                              <tr key={c.city} className="border-t border-ink-50">
+                                <td className="px-3 py-2 text-xs text-ink-700">{c.city}</td>
+                                <td className="px-3 py-2 text-xs text-right text-ink-600">{c.impressions.toLocaleString()}</td>
                               </tr>
                             ))}
                           </tbody>
