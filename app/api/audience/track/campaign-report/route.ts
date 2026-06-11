@@ -205,7 +205,7 @@ th{background:#1f2937;color:#fff;padding:8px 12px;text-align:left;font-size:12px
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${resendKey}` },
     body: JSON.stringify({
-      from: 'TrendingVerse <noreply@trendingverse.online>',
+      from: 'TrendingVerse <onboarding@resend.dev>',
       to: [email],
       subject: `Campaign Report: ${campaign.campaign_name} — ${new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`,
       html,
