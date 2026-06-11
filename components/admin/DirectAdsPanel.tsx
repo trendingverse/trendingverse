@@ -86,8 +86,9 @@ export function DirectAdsPanel() {
   const [geoData, setGeoData] = useState<{ countries: string[]; states: string[]; cities: string[] }>({ countries: [], states: [], cities: [] })
   const [geoSearch, setGeoSearch] = useState({ country: '', state: '', city: '' })
   const [siteInput, setSiteInput] = useState('')
+  const [publisherSites, setPublisherSites] = useState<{ domain: string; name: string; articles_count: number }[]>([])
 
-  useEffect(() => { fetchAll(); fetchGeoData() }, [])
+  useEffect(() => { fetchAll(); fetchGeoData(); fetchPublisherSites() }, [])
   useEffect(() => { if (activeTab === 'performance') fetchPerformance() }, [activeTab, perfDays])
 
   async function fetchAll() {
@@ -106,6 +107,19 @@ export function DirectAdsPanel() {
   async function fetchGeoData() {
     const res = await fetch('/api/audience/geo-data')
     if (res.ok) setGeoData(await res.json())
+  }
+
+  async function fetchPublisherSites() {
+    const res = await fetch('/api/sites')
+    if (res.ok) {
+      const data = await res.json()
+      const sites = (data.sites || data || []).map((s: any) => ({
+        domain: (s.site_url || '').replace(/^https?:\/\//, '').replace(/\/$/, '').toLowerCase(),
+        name: s.name || s.site_url || 'Unknown',
+        articles_count: s.articles_count || 0,
+      })).filter((s: any) => s.domain)
+      setPublisherSites(sites)
+    }
   }
 
   async function fetchPerformance() {
@@ -374,26 +388,38 @@ export function DirectAdsPanel() {
                 </div>
 
                 <div className="space-y-4">
-                  {/* Site targeting */}
+                  {/* Site targeting — from onboarded publishers */}
                   <div className="p-4 border border-ink-200 rounded-xl space-y-3">
                     <p className="text-xs font-semibold text-ink-700">🌐 Site Targeting</p>
-                    <p className="text-xs text-ink-400">Restrict this campaign to specific websites. Leave empty to run on all sites.</p>
-                    <div className="flex gap-2">
-                      <input className="input flex-1 text-xs" value={siteInput} onChange={e => setSiteInput(e.target.value)}
-                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addSite() } }}
-                        placeholder="e.g. kannadadunia.com" />
-                      <button onClick={addSite} className="px-3 py-2 bg-ink-100 text-ink-700 rounded-xl text-xs hover:bg-ink-200">+ Add</button>
+                    <p className="text-xs text-ink-400">Select publisher sites to target. Leave all unselected to run on all sites.</p>
+                    <div className="space-y-2">
+                      {publisherSites.map(site => {
+                        const selected = adForm.target_site_urls?.includes(site.domain)
+                        return (
+                          <button key={site.domain} onClick={() => setAdForm((f: any) => ({
+                            ...f,
+                            target_site_urls: selected
+                              ? f.target_site_urls.filter((x: string) => x !== site.domain)
+                              : [...(f.target_site_urls || []), site.domain]
+                          }))}
+                            className={`w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all ${selected ? 'border-violet-400 bg-violet-50' : 'border-ink-200 hover:border-ink-300'}`}>
+                            <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${selected ? 'bg-violet-600 border-violet-600' : 'border-ink-300'}`}>
+                              {selected && <span className="text-white text-[10px]">✓</span>}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-semibold text-ink-900">{site.name}</p>
+                              <p className="text-xs text-ink-400">{site.domain}</p>
+                            </div>
+                            <span className="text-[10px] bg-ink-100 text-ink-500 px-2 py-0.5 rounded-full">{site.articles_count || 0} articles</span>
+                          </button>
+                        )
+                      })}
+                      {publisherSites.length === 0 && (
+                        <p className="text-xs text-ink-400 bg-ink-50 p-3 rounded-lg">No onboarded publishers yet</p>
+                      )}
                     </div>
                     {adForm.target_site_urls?.length > 0 && (
-                      <div className="flex flex-wrap gap-2">
-                        {adForm.target_site_urls.map((s: string) => (
-                          <span key={s} className="flex items-center gap-1 text-xs bg-violet-100 text-violet-700 px-2 py-1 rounded-full">
-                            {s}
-                            <button onClick={() => setAdForm((f: any) => ({ ...f, target_site_urls: f.target_site_urls.filter((x: string) => x !== s) }))}
-                              className="text-violet-400 hover:text-violet-700">×</button>
-                          </span>
-                        ))}
-                      </div>
+                      <p className="text-xs text-violet-600">✓ Targeting: {adForm.target_site_urls.join(', ')}</p>
                     )}
                   </div>
 
@@ -752,13 +778,31 @@ export function DirectAdsPanel() {
                 <div><label className="label">CPM Rate (₹)</label><input type="number" className="input" value={editForm.cpm_rate_inr || 0} onChange={e => setEditForm((f: any) => ({ ...f, cpm_rate_inr: parseFloat(e.target.value) || 0 }))} /></div>
                 <div><label className="label">Priority (0-100)</label><input type="number" className="input" min={0} max={100} value={editForm.priority || 0} onChange={e => setEditForm((f: any) => ({ ...f, priority: parseInt(e.target.value) || 0 }))} /></div>
 
-                {/* Site targeting */}
+                {/* Site targeting — publisher dropdown */}
                 <div className="col-span-2">
-                  <label className="label">Target Sites (one per line)</label>
-                  <textarea className="input resize-none text-xs font-mono" rows={2}
-                    value={(editForm.target_site_urls || []).join('\n')}
-                    onChange={e => setEditForm((f: any) => ({ ...f, target_site_urls: e.target.value.split('\n').map((s: string) => s.trim()).filter(Boolean) }))}
-                    placeholder="kannadadunia.com" />
+                  <label className="label">Target Sites</label>
+                  <div className="space-y-2 mt-1">
+                    {publisherSites.map(site => {
+                      const selected = (editForm.target_site_urls || []).includes(site.domain)
+                      return (
+                        <button key={site.domain} onClick={() => setEditForm((f: any) => ({
+                          ...f,
+                          target_site_urls: selected
+                            ? (f.target_site_urls || []).filter((x: string) => x !== site.domain)
+                            : [...(f.target_site_urls || []), site.domain]
+                        }))}
+                          className={`w-full text-left flex items-center gap-3 px-3 py-2 rounded-xl border transition-all ${selected ? 'border-violet-400 bg-violet-50' : 'border-ink-200 hover:border-ink-300'}`}>
+                          <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${selected ? 'bg-violet-600 border-violet-600' : 'border-ink-300'}`}>
+                            {selected && <span className="text-white text-[10px]">✓</span>}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold text-ink-900">{site.name}</p>
+                            <p className="text-xs text-ink-400">{site.domain}</p>
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
                 </div>
 
                 {/* Gender */}
