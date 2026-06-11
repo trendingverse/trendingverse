@@ -395,8 +395,15 @@ export function DirectAdsPanel() {
   // Ad units filtered by selected target sites
   const filteredSiteUnits = adForm.target_site_urls?.length > 0
     ? adUnits.filter(u => {
-        const unitDomain = (u.site_url || '').replace(/^https?:\/\//, '').replace(/\/$/, '').toLowerCase()
-        return adForm.target_site_urls.some((s: string) => unitDomain.includes(s) || s.includes(unitDomain))
+        const unitDomain = (u.site_url || '')
+          .replace(/^https?:\/\//, '')
+          .replace(/^www\./, '')
+          .replace(/\/$/, '')
+          .toLowerCase()
+        return adForm.target_site_urls.some((s: string) => {
+          const sDomain = s.replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/$/, '').toLowerCase()
+          return unitDomain === sDomain || unitDomain.endsWith('.' + sDomain) || sDomain.endsWith('.' + unitDomain)
+        })
       })
     : adUnits
 
