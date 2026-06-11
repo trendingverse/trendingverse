@@ -14,34 +14,25 @@ export async function GET(req: NextRequest) {
   )
 
   const { searchParams } = new URL(req.url)
-  const filterCountries = searchParams.getAll('country') // can pass multiple
+  const filterCountries = searchParams.getAll('country')
   const filterStates    = searchParams.getAll('state')
 
-  // Always fetch all countries
-  const { data: countriesData } = await admin
-    .from('audience_profiles')
-    .select('country')
-    .not('country', 'is', null)
-    .limit(5000)
-  const countries = [...new Set((countriesData || []).map(r => r.country).filter(Boolean))].sort()
+  // Use SQL functions for true DISTINCT — no row limit issues
+  const [cRes, sRes, ciRes] = await Promise.all([
+    admin.rpc('get_distinct_countries'),
+    filterCountries.length > 0
+      ? admin.rpc('get_distinct_states', { filter_country: filterCountries })
+      : Promise.resolve({ data: [] }),
+    filterStates.length > 0
+      ? admin.rpc('get_distinct_cities', { filter_state: filterStates, filter_country: [] })
+      : filterCountries.length > 0
+        ? admin.rpc('get_distinct_cities', { filter_state: [], filter_country: filterCountries })
+        : Promise.resolve({ data: [] }),
+  ])
 
-  // States — filter by selected countries if provided
-  let statesQuery = admin.from('audience_profiles').select('state, country').not('state', 'is', null).not('state', 'eq', '').limit(5000)
-  if (filterCountries.length > 0) {
-    statesQuery = statesQuery.in('country', filterCountries)
-  }
-  const { data: statesData } = await statesQuery
-  const states = [...new Set((statesData || []).map(r => r.state).filter(Boolean))].sort()
-
-  // Cities — filter by selected states if provided, else by countries
-  let citiesQuery = admin.from('audience_profiles').select('city, state, country').not('city', 'is', null).not('city', 'eq', '').limit(5000)
-  if (filterStates.length > 0) {
-    citiesQuery = citiesQuery.in('state', filterStates)
-  } else if (filterCountries.length > 0) {
-    citiesQuery = citiesQuery.in('country', filterCountries)
-  }
-  const { data: citiesData } = await citiesQuery
-  const cities = [...new Set((citiesData || []).map(r => r.city).filter(Boolean))].sort()
+  const countries = (cRes.data || []).map((r: any) => r.country || r).filter(Boolean)
+  const states    = (sRes.data || []).map((r: any) => r.state   || r).filter(Boolean)
+  const cities    = (ciRes.data || []).map((r: any) => r.city   || r).filter(Boolean)
 
   return NextResponse.json({ countries, states, cities })
 }
