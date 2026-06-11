@@ -1,5 +1,4 @@
 // app/api/audience/serve-ad/route.ts
-// Unified ad server — direct campaigns take priority over network ads
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 
@@ -24,6 +23,9 @@ export async function POST(req: NextRequest) {
 
   const today = new Date().toISOString().split('T')[0]
 
+  // Normalize incoming site_url for matching
+  const normalizedSiteUrl = (site_url || '').replace(/^https?:\/\//, '').replace(/\/$/, '').toLowerCase()
+
   // Get visitor profile
   const { data: profile } = await admin
     .from('audience_profiles')
@@ -31,7 +33,7 @@ export async function POST(req: NextRequest) {
     .eq('fingerprint', fingerprint)
     .single()
 
-  // Get all active direct ads/campaigns for this position
+  // Get all active direct ads for this position
   const { data: ads } = await admin
     .from('direct_ads')
     .select('*')
@@ -41,12 +43,10 @@ export async function POST(req: NextRequest) {
     .or(`end_date.is.null,end_date.gte.${today}`)
     .order('priority', { ascending: false })
 
-  // No direct campaigns — fall back to network ads
   if (!ads?.length) {
     return NextResponse.json({ ad: null, fallback: 'network' }, { headers: CORS })
   }
 
-  // Match visitor to best ad
   let bestAd = null
   let bestScore = -1
 
@@ -54,10 +54,27 @@ export async function POST(req: NextRequest) {
     // Check impression cap
     if (ad.impressions_cap > 0 && (ad.impressions || 0) >= ad.impressions_cap) continue
 
-    // Base score from priority
-    let score = (ad.priority || 0) * 10
+    // ── Site targeting check ──────────────────────────────────────────────
+    // If campaign has specific target sites, only serve on those sites
+    const targetSites: string[] = (ad.target_site_urls || [])
+      .map((s: string) => s.replace(/^https?:\/\//, '').replace(/\/$/, '').toLowerCase())
 
-    // Untargeted campaigns always eligible
+    if (targetSites.length > 0 && normalizedSiteUrl) {
+      const siteMatch = targetSites.some(s =>
+        normalizedSiteUrl.includes(s) || s.includes(normalizedSiteUrl)
+      )
+      if (!siteMatch) continue // skip this ad — not for this site
+    }
+    // ─────────────────────────────────────────────────────────────────────
+
+    // Base score from priority + site-specific bonus
+    let score = (ad.priority || 0) * 10
+    if (targetSites.length > 0 && normalizedSiteUrl) {
+      const exactMatch = targetSites.some(s => s === normalizedSiteUrl)
+      score += exactMatch ? 50 : 20 // bonus for site-targeted campaigns
+    }
+
+    // Untargeted campaigns (target_all) always eligible
     if (ad.target_all) {
       if (score > bestScore) { bestAd = ad; bestScore = score }
       continue
@@ -65,7 +82,7 @@ export async function POST(req: NextRequest) {
 
     if (!ad.segment_ids?.length || !profile) continue
 
-    // Get segments and score targeting match
+    // Audience segment scoring
     const { data: segments } = await admin
       .from('audience_segments')
       .select('conditions')
@@ -74,30 +91,25 @@ export async function POST(req: NextRequest) {
 
     for (const seg of segments || []) {
       const c = seg.conditions
-      // Geo scoring — country → state → city (increasing specificity)
       if (c.countries?.length && profile.country && c.countries.includes(profile.country)) score += 2
       if (c.states?.length && profile.state && c.states.includes(profile.state)) score += 3
       if (c.cities?.length && profile.city && c.cities.includes(profile.city)) score += 4
-      // Device match
       if (c.devices?.length && profile.device_type && c.devices.includes(profile.device_type)) score += 2
-      // Interest match
       if (c.interests?.length && profile.interests?.length) {
         const matches = c.interests.filter((i: string) => profile.interests.includes(i))
         score += matches.length * 2
       }
-      // Engagement match
       if (c.min_page_views && profile.page_views >= c.min_page_views) score += 1
     }
 
     if (score > bestScore) { bestScore = score; bestAd = ad }
   }
 
-  // No matching direct ad — fall back to network
   if (!bestAd) {
     return NextResponse.json({ ad: null, fallback: 'network' }, { headers: CORS })
   }
 
-  // Log impression asynchronously
+  // Log impression
   Promise.all([
     admin.from('direct_ad_events').insert({
       ad_id: bestAd.id, fingerprint, event_type: 'impression', site_url,
