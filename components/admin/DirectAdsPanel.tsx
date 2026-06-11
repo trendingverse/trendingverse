@@ -104,6 +104,14 @@ export function DirectAdsPanel() {
   const [reportData, setReportData] = useState<any>(null)
   const [reportLoading, setReportLoading] = useState(false)
   const [sendingReport, setSendingReport] = useState(false)
+  const [reportCollapse, setReportCollapse] = useState({
+    summary: false,
+    by_site: true,
+    by_day: true,
+    by_country: true,
+    by_state: true,
+    by_city: true,
+  })
 
   useEffect(() => { fetchAll(); fetchGeoData(); fetchPublisherSites() }, [])
   useEffect(() => { if (activeTab === 'performance') fetchPerformance() }, [activeTab, perfDays])
@@ -963,29 +971,46 @@ export function DirectAdsPanel() {
                   <p className="text-xs text-ink-400 animate-pulse">Loading report...</p>
                 </div>
               ) : reportData ? (
-                <div className="space-y-4">
-                  {/* Summary stats */}
-                  <div className="grid grid-cols-4 gap-3">
-                    {[
-                      { l: 'Impressions', v: reportData.summary.impressions.toLocaleString(), color: 'text-ink-900' },
-                      { l: 'Clicks', v: reportData.summary.clicks.toLocaleString(), color: 'text-ink-900' },
-                      { l: 'CTR', v: reportData.summary.ctr + '%', color: 'text-green-600' },
-                      { l: 'Earned', v: '₹' + reportData.summary.earned_inr, color: 'text-amber-600' },
-                    ].map(s => (
-                      <div key={s.l} className="bg-ink-50 rounded-xl p-3 text-center">
-                        <p className={`text-lg font-bold ${s.color}`}>{s.v}</p>
-                        <p className="text-xs text-ink-400 mt-0.5">{s.l}</p>
+                <div className="space-y-2">
+
+                  {/* Summary */}
+                  <div className="border border-ink-200 rounded-xl overflow-hidden">
+                    <button onClick={() => setReportCollapse(s => ({ ...s, summary: !s.summary }))}
+                      className="w-full flex items-center justify-between px-4 py-3 bg-ink-50 hover:bg-ink-100 transition-colors">
+                      <p className="text-xs font-semibold text-ink-700">📊 Summary</p>
+                      <span className="text-ink-400 text-xs">{reportCollapse.summary ? '▼' : '▲'}</span>
+                    </button>
+                    {!reportCollapse.summary && (
+                      <div className="p-3 grid grid-cols-4 gap-3">
+                        {[
+                          { l: 'Impressions', v: reportData.summary.impressions.toLocaleString(), color: 'text-ink-900' },
+                          { l: 'Clicks', v: reportData.summary.clicks.toLocaleString(), color: 'text-ink-900' },
+                          { l: 'CTR', v: reportData.summary.ctr + '%', color: 'text-green-600' },
+                          { l: 'Earned', v: '₹' + reportData.summary.earned_inr, color: 'text-amber-600' },
+                        ].map(s => (
+                          <div key={s.l} className="bg-ink-50 rounded-xl p-3 text-center">
+                            <p className={`text-lg font-bold ${s.color}`}>{s.v}</p>
+                            <p className="text-xs text-ink-400 mt-0.5">{s.l}</p>
+                          </div>
+                        ))}
                       </div>
-                    ))}
+                    )}
                   </div>
 
-                  {/* By site */}
-                  {reportData.by_site.length > 0 && (
-                    <div>
-                      <p className="text-xs font-semibold text-ink-700 mb-2">By Site</p>
-                      <div className="rounded-xl border border-ink-100 overflow-hidden">
+                  {/* By Site */}
+                  {reportData.by_site?.length > 0 && (
+                    <div className="border border-ink-200 rounded-xl overflow-hidden">
+                      <button onClick={() => setReportCollapse(s => ({ ...s, by_site: !s.by_site }))}
+                        className="w-full flex items-center justify-between px-4 py-3 bg-ink-50 hover:bg-ink-100 transition-colors">
+                        <div className="flex items-center gap-2">
+                          <p className="text-xs font-semibold text-ink-700">🌐 By Site</p>
+                          <span className="text-[10px] text-ink-400">{reportData.by_site.length} sites</span>
+                        </div>
+                        <span className="text-ink-400 text-xs">{reportCollapse.by_site ? '▼' : '▲'}</span>
+                      </button>
+                      {!reportCollapse.by_site && (
                         <table className="w-full">
-                          <thead><tr className="bg-ink-50">
+                          <thead><tr className="bg-ink-50 border-t border-ink-100">
                             <th className="text-left px-3 py-2 text-xs font-medium text-ink-500">Site</th>
                             <th className="text-right px-3 py-2 text-xs font-medium text-ink-500">Impr.</th>
                             <th className="text-right px-3 py-2 text-xs font-medium text-ink-500">Clicks</th>
@@ -995,49 +1020,31 @@ export function DirectAdsPanel() {
                             {reportData.by_site.map((s: any) => (
                               <tr key={s.site} className="border-t border-ink-50">
                                 <td className="px-3 py-2 text-xs text-ink-700 truncate max-w-[160px]">{s.site}</td>
-                                <td className="px-3 py-2 text-xs text-right text-ink-600">{s.impressions.toLocaleString()}</td>
-                                <td className="px-3 py-2 text-xs text-right text-ink-600">{s.clicks}</td>
+                                <td className="px-3 py-2 text-xs text-right">{s.impressions.toLocaleString()}</td>
+                                <td className="px-3 py-2 text-xs text-right">{s.clicks}</td>
                                 <td className="px-3 py-2 text-xs text-right text-green-600 font-medium">{s.ctr}%</td>
                               </tr>
                             ))}
                           </tbody>
                         </table>
-                      </div>
+                      )}
                     </div>
                   )}
 
-                  {/* By day */}
-                  {reportData.by_day.length > 0 && (
-                    <div>
-                      <p className="text-xs font-semibold text-ink-700 mb-2">Daily Breakdown</p>
-                      <div className="rounded-xl border border-ink-100 overflow-hidden max-h-40 overflow-y-auto">
-                        <table className="w-full">
-                          <thead><tr className="bg-ink-50 sticky top-0">
-                            <th className="text-left px-3 py-2 text-xs font-medium text-ink-500">Date</th>
-                            <th className="text-right px-3 py-2 text-xs font-medium text-ink-500">Impressions</th>
-                            <th className="text-right px-3 py-2 text-xs font-medium text-ink-500">Clicks</th>
-                          </tr></thead>
-                          <tbody>
-                            {reportData.by_day.map((d: any) => (
-                              <tr key={d.date} className="border-t border-ink-50">
-                                <td className="px-3 py-2 text-xs text-ink-700">{d.date}</td>
-                                <td className="px-3 py-2 text-xs text-right text-ink-600">{d.impressions.toLocaleString()}</td>
-                                <td className="px-3 py-2 text-xs text-right text-ink-600">{d.clicks}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Geo breakdown */}
+                  {/* By Country */}
                   {reportData.by_country?.length > 0 && (
-                    <div>
-                      <p className="text-xs font-semibold text-ink-700 mb-2">🌍 By Country</p>
-                      <div className="rounded-xl border border-ink-100 overflow-hidden">
+                    <div className="border border-ink-200 rounded-xl overflow-hidden">
+                      <button onClick={() => setReportCollapse(s => ({ ...s, by_country: !s.by_country }))}
+                        className="w-full flex items-center justify-between px-4 py-3 bg-ink-50 hover:bg-ink-100 transition-colors">
+                        <div className="flex items-center gap-2">
+                          <p className="text-xs font-semibold text-ink-700">🌍 By Country</p>
+                          <span className="text-[10px] text-ink-400">{reportData.by_country.length} countries</span>
+                        </div>
+                        <span className="text-ink-400 text-xs">{reportCollapse.by_country ? '▼' : '▲'}</span>
+                      </button>
+                      {!reportCollapse.by_country && (
                         <table className="w-full">
-                          <thead><tr className="bg-ink-50">
+                          <thead><tr className="bg-ink-50 border-t border-ink-100">
                             <th className="text-left px-3 py-2 text-xs font-medium text-ink-500">Country</th>
                             <th className="text-right px-3 py-2 text-xs font-medium text-ink-500">Impressions</th>
                             <th className="text-right px-3 py-2 text-xs font-medium text-ink-500">Share</th>
@@ -1046,7 +1053,7 @@ export function DirectAdsPanel() {
                             {reportData.by_country.map((c: any) => (
                               <tr key={c.country} className="border-t border-ink-50">
                                 <td className="px-3 py-2 text-xs text-ink-700">{c.country}</td>
-                                <td className="px-3 py-2 text-xs text-right text-ink-600">{c.impressions.toLocaleString()}</td>
+                                <td className="px-3 py-2 text-xs text-right">{c.impressions.toLocaleString()}</td>
                                 <td className="px-3 py-2 text-xs text-right text-blue-600">
                                   {reportData.summary.impressions > 0 ? ((c.impressions / reportData.summary.impressions) * 100).toFixed(1) + '%' : '—'}
                                 </td>
@@ -1054,55 +1061,109 @@ export function DirectAdsPanel() {
                             ))}
                           </tbody>
                         </table>
-                      </div>
+                      )}
                     </div>
                   )}
 
+                  {/* By State */}
                   {reportData.by_state?.length > 0 && (
-                    <div>
-                      <p className="text-xs font-semibold text-ink-700 mb-2">🗺 By State</p>
-                      <div className="rounded-xl border border-ink-100 overflow-hidden max-h-40 overflow-y-auto">
-                        <table className="w-full">
-                          <thead><tr className="bg-ink-50 sticky top-0">
-                            <th className="text-left px-3 py-2 text-xs font-medium text-ink-500">State</th>
-                            <th className="text-right px-3 py-2 text-xs font-medium text-ink-500">Impressions</th>
-                          </tr></thead>
-                          <tbody>
-                            {reportData.by_state.map((s: any) => (
-                              <tr key={s.state} className="border-t border-ink-50">
-                                <td className="px-3 py-2 text-xs text-ink-700">{s.state}</td>
-                                <td className="px-3 py-2 text-xs text-right text-ink-600">{s.impressions.toLocaleString()}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
+                    <div className="border border-ink-200 rounded-xl overflow-hidden">
+                      <button onClick={() => setReportCollapse(s => ({ ...s, by_state: !s.by_state }))}
+                        className="w-full flex items-center justify-between px-4 py-3 bg-ink-50 hover:bg-ink-100 transition-colors">
+                        <div className="flex items-center gap-2">
+                          <p className="text-xs font-semibold text-ink-700">🗺 By State</p>
+                          <span className="text-[10px] text-ink-400">{reportData.by_state.length} states</span>
+                        </div>
+                        <span className="text-ink-400 text-xs">{reportCollapse.by_state ? '▼' : '▲'}</span>
+                      </button>
+                      {!reportCollapse.by_state && (
+                        <div className="max-h-40 overflow-y-auto">
+                          <table className="w-full">
+                            <thead><tr className="bg-ink-50 border-t border-ink-100 sticky top-0">
+                              <th className="text-left px-3 py-2 text-xs font-medium text-ink-500">State</th>
+                              <th className="text-right px-3 py-2 text-xs font-medium text-ink-500">Impressions</th>
+                            </tr></thead>
+                            <tbody>
+                              {reportData.by_state.map((s: any) => (
+                                <tr key={s.state} className="border-t border-ink-50">
+                                  <td className="px-3 py-2 text-xs text-ink-700">{s.state}</td>
+                                  <td className="px-3 py-2 text-xs text-right">{s.impressions.toLocaleString()}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
                     </div>
                   )}
 
+                  {/* By City */}
                   {reportData.by_city?.length > 0 && (
-                    <div>
-                      <p className="text-xs font-semibold text-ink-700 mb-2">📍 By City</p>
-                      <div className="rounded-xl border border-ink-100 overflow-hidden max-h-40 overflow-y-auto">
-                        <table className="w-full">
-                          <thead><tr className="bg-ink-50 sticky top-0">
-                            <th className="text-left px-3 py-2 text-xs font-medium text-ink-500">City</th>
-                            <th className="text-right px-3 py-2 text-xs font-medium text-ink-500">Impressions</th>
-                          </tr></thead>
-                          <tbody>
-                            {reportData.by_city.map((c: any) => (
-                              <tr key={c.city} className="border-t border-ink-50">
-                                <td className="px-3 py-2 text-xs text-ink-700">{c.city}</td>
-                                <td className="px-3 py-2 text-xs text-right text-ink-600">{c.impressions.toLocaleString()}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
+                    <div className="border border-ink-200 rounded-xl overflow-hidden">
+                      <button onClick={() => setReportCollapse(s => ({ ...s, by_city: !s.by_city }))}
+                        className="w-full flex items-center justify-between px-4 py-3 bg-ink-50 hover:bg-ink-100 transition-colors">
+                        <div className="flex items-center gap-2">
+                          <p className="text-xs font-semibold text-ink-700">📍 By City</p>
+                          <span className="text-[10px] text-ink-400">{reportData.by_city.length} cities</span>
+                        </div>
+                        <span className="text-ink-400 text-xs">{reportCollapse.by_city ? '▼' : '▲'}</span>
+                      </button>
+                      {!reportCollapse.by_city && (
+                        <div className="max-h-40 overflow-y-auto">
+                          <table className="w-full">
+                            <thead><tr className="bg-ink-50 border-t border-ink-100 sticky top-0">
+                              <th className="text-left px-3 py-2 text-xs font-medium text-ink-500">City</th>
+                              <th className="text-right px-3 py-2 text-xs font-medium text-ink-500">Impressions</th>
+                            </tr></thead>
+                            <tbody>
+                              {reportData.by_city.map((c: any) => (
+                                <tr key={c.city} className="border-t border-ink-50">
+                                  <td className="px-3 py-2 text-xs text-ink-700">{c.city}</td>
+                                  <td className="px-3 py-2 text-xs text-right">{c.impressions.toLocaleString()}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
                     </div>
                   )}
 
-                  {/* Actions */}
+                  {/* By Day */}
+                  {reportData.by_day?.length > 0 && (
+                    <div className="border border-ink-200 rounded-xl overflow-hidden">
+                      <button onClick={() => setReportCollapse(s => ({ ...s, by_day: !s.by_day }))}
+                        className="w-full flex items-center justify-between px-4 py-3 bg-ink-50 hover:bg-ink-100 transition-colors">
+                        <div className="flex items-center gap-2">
+                          <p className="text-xs font-semibold text-ink-700">📅 Daily Breakdown</p>
+                          <span className="text-[10px] text-ink-400">{reportData.by_day.length} days</span>
+                        </div>
+                        <span className="text-ink-400 text-xs">{reportCollapse.by_day ? '▼' : '▲'}</span>
+                      </button>
+                      {!reportCollapse.by_day && (
+                        <div className="max-h-40 overflow-y-auto">
+                          <table className="w-full">
+                            <thead><tr className="bg-ink-50 border-t border-ink-100 sticky top-0">
+                              <th className="text-left px-3 py-2 text-xs font-medium text-ink-500">Date</th>
+                              <th className="text-right px-3 py-2 text-xs font-medium text-ink-500">Impressions</th>
+                              <th className="text-right px-3 py-2 text-xs font-medium text-ink-500">Clicks</th>
+                            </tr></thead>
+                            <tbody>
+                              {reportData.by_day.map((d: any) => (
+                                <tr key={d.date} className="border-t border-ink-50">
+                                  <td className="px-3 py-2 text-xs text-ink-700">{d.date}</td>
+                                  <td className="px-3 py-2 text-xs text-right">{d.impressions.toLocaleString()}</td>
+                                  <td className="px-3 py-2 text-xs text-right">{d.clicks}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                                    {/* Actions */}
                   <div className="border-t border-ink-100 pt-4 space-y-3">
                     <button onClick={downloadReportCSV} className="w-full text-xs px-4 py-2.5 bg-ink-100 text-ink-700 rounded-xl hover:bg-ink-200 font-medium">
                       ⬇ Download CSV Report
