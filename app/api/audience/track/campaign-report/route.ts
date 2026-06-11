@@ -66,6 +66,46 @@ export async function GET(req: NextRequest) {
     .map(([date, d]) => ({ date, ...d }))
     .sort((a, b) => a.date.localeCompare(b.date))
 
+  // Geo breakdown — join with audience_profiles via fingerprint
+  const { data: geoEvents } = await admin
+    .from('direct_ad_events')
+    .select('event_type, fingerprint')
+    .eq('ad_id', campaignId)
+    .eq('event_type', 'impression')
+    .limit(10000)
+
+  const fingerprints = [...new Set((geoEvents || []).map(e => e.fingerprint).filter(Boolean))]
+
+  let by_country: { country: string; impressions: number }[] = []
+  let by_state: { state: string; impressions: number }[] = []
+  let by_city: { city: string; impressions: number }[] = []
+
+  if (fingerprints.length > 0) {
+    const { data: profiles } = await admin
+      .from('audience_profiles')
+      .select('fingerprint, country, state, city')
+      .in('fingerprint', fingerprints.slice(0, 1000))
+
+    const fpMap: Record<string, { country: string; state: string; city: string }> = {}
+    for (const p of profiles || []) fpMap[p.fingerprint] = p
+
+    const countryMap: Record<string, number> = {}
+    const stateMap: Record<string, number> = {}
+    const cityMap: Record<string, number> = {}
+
+    for (const e of geoEvents || []) {
+      const p = fpMap[e.fingerprint]
+      if (!p) continue
+      if (p.country) countryMap[p.country] = (countryMap[p.country] || 0) + 1
+      if (p.state)   stateMap[p.state]     = (stateMap[p.state]   || 0) + 1
+      if (p.city)    cityMap[p.city]       = (cityMap[p.city]     || 0) + 1
+    }
+
+    by_country = Object.entries(countryMap).map(([country, impressions]) => ({ country, impressions })).sort((a, b) => b.impressions - a.impressions).slice(0, 20)
+    by_state   = Object.entries(stateMap).map(([state, impressions]) => ({ state, impressions })).sort((a, b) => b.impressions - a.impressions).slice(0, 20)
+    by_city    = Object.entries(cityMap).map(([city, impressions]) => ({ city, impressions })).sort((a, b) => b.impressions - a.impressions).slice(0, 20)
+  }
+
   return NextResponse.json({
     campaign: {
       id: campaign.id,
@@ -82,6 +122,9 @@ export async function GET(req: NextRequest) {
     summary: { impressions, clicks, ctr, earned_inr: earned },
     by_site,
     by_day,
+    by_country,
+    by_state,
+    by_city,
   }, { headers: CORS })
 }
 
