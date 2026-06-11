@@ -83,8 +83,14 @@ export function DirectAdsPanel() {
   const [editingAd, setEditingAd] = useState<DirectAd | null>(null)
   const [editForm, setEditForm] = useState<any>({})
   const [savingEdit, setSavingEdit] = useState(false)
-  const [geoData, setGeoData] = useState<{ countries: string[]; states: string[]; cities: string[] }>({ countries: [], states: [], cities: [] })
+  const [geoCountries, setGeoCountries] = useState<string[]>([])
+  const [geoStates, setGeoStates] = useState<string[]>([])
+  const [geoCities, setGeoCities] = useState<string[]>([])
+  const [geoLoadingStates, setGeoLoadingStates] = useState(false)
+  const [geoLoadingCities, setGeoLoadingCities] = useState(false)
   const [geoSearch, setGeoSearch] = useState({ country: '', state: '', city: '' })
+  // Keep geoData for backwards compat in segments tab
+  const geoData = { countries: geoCountries, states: geoStates, cities: geoCities }
   const [siteInput, setSiteInput] = useState('')
   const [publisherSites, setPublisherSites] = useState<{ domain: string; name: string; articles_count: number }[]>([])
   const [collapsePublishers, setCollapsePublishers] = useState(true)
@@ -93,6 +99,11 @@ export function DirectAdsPanel() {
   const [collapseCities, setCollapseCities] = useState(true)
   const [editCollapsePublishers, setEditCollapsePublishers] = useState(true)
   const [editCollapseCountries, setEditCollapseCountries] = useState(true)
+  const [reportModal, setReportModal] = useState<DirectAd | null>(null)
+  const [reportEmail, setReportEmail] = useState('')
+  const [reportData, setReportData] = useState<any>(null)
+  const [reportLoading, setReportLoading] = useState(false)
+  const [sendingReport, setSendingReport] = useState(false)
 
   useEffect(() => { fetchAll(); fetchGeoData(); fetchPublisherSites() }, [])
   useEffect(() => { if (activeTab === 'performance') fetchPerformance() }, [activeTab, perfDays])
@@ -115,13 +126,44 @@ export function DirectAdsPanel() {
       const res = await fetch('/api/audience/geo-data')
       if (res.ok) {
         const data = await res.json()
-        setGeoData({
-          countries: Array.isArray(data.countries) ? data.countries : [],
-          states: Array.isArray(data.states) ? data.states : [],
-          cities: Array.isArray(data.cities) ? data.cities : [],
-        })
+        setGeoCountries(Array.isArray(data.countries) ? data.countries : [])
+        setGeoStates([])
+        setGeoCities([])
       }
     } catch { /* silent */ }
+  }
+
+  async function fetchStatesForCountries(countries: string[]) {
+    if (countries.length === 0) { setGeoStates([]); setGeoCities([]); return }
+    setGeoLoadingStates(true)
+    setGeoStates([])
+    setGeoCities([])
+    try {
+      const params = countries.map(c => `country=${encodeURIComponent(c)}`).join('&')
+      const res = await fetch(`/api/audience/geo-data?${params}`)
+      if (res.ok) {
+        const data = await res.json()
+        setGeoStates(data.states || [])
+      }
+    } catch { /* silent */ }
+    setGeoLoadingStates(false)
+  }
+
+  async function fetchCitiesForStates(states: string[], countries: string[]) {
+    if (states.length === 0 && countries.length === 0) { setGeoCities([]); return }
+    setGeoLoadingCities(true)
+    setGeoCities([])
+    try {
+      const stateParams = states.map(s => `state=${encodeURIComponent(s)}`).join('&')
+      const countryParams = countries.map(c => `country=${encodeURIComponent(c)}`).join('&')
+      const params = stateParams || countryParams
+      const res = await fetch(`/api/audience/geo-data?${params}`)
+      if (res.ok) {
+        const data = await res.json()
+        setGeoCities(data.cities || [])
+      }
+    } catch { /* silent */ }
+    setGeoLoadingCities(false)
   }
 
   async function fetchPublisherSites() {
@@ -159,10 +201,22 @@ export function DirectAdsPanel() {
   }
 
   function toggleGeo(field: 'target_countries' | 'target_states' | 'target_cities', val: string) {
-    setAdForm((f: any) => ({
-      ...f,
-      [field]: f[field].includes(val) ? f[field].filter((x: string) => x !== val) : [...f[field], val]
-    }))
+    setAdForm((f: any) => {
+      const newVal = f[field].includes(val) ? f[field].filter((x: string) => x !== val) : [...f[field], val]
+      const updated = { ...f, [field]: newVal }
+      // Cascade: country change → reset states & cities, fetch new states
+      if (field === 'target_countries') {
+        updated.target_states = []
+        updated.target_cities = []
+        fetchStatesForCountries(newVal)
+      }
+      // Cascade: state change → reset cities, fetch new cities
+      if (field === 'target_states') {
+        updated.target_cities = []
+        fetchCitiesForStates(newVal, f.target_countries)
+      }
+      return updated
+    })
   }
 
   function addSite() {
@@ -175,6 +229,57 @@ export function DirectAdsPanel() {
   function toggleCond(field: string, val: string) {
     const arr = (segForm.conditions as any)[field] as string[]
     setSegForm(f => ({ ...f, conditions: { ...f.conditions, [field]: arr.includes(val) ? arr.filter((x: string) => x !== val) : [...arr, val] } }))
+  }
+
+  async function openReport(ad: DirectAd) {
+    setReportModal(ad)
+    setReportData(null)
+    setReportLoading(true)
+    const res = await fetch(`/api/audience/campaign-report?id=${ad.id}`)
+    if (res.ok) setReportData(await res.json())
+    setReportLoading(false)
+  }
+
+  function downloadReportCSV() {
+    if (!reportData) return
+    const { campaign, summary, by_site, by_day } = reportData
+    const rows = [
+      ['Campaign Report', campaign.name],
+      ['Status', campaign.status],
+      ['Period', `${campaign.start_date || 'N/A'} to ${campaign.end_date || 'Ongoing'}`],
+      [''],
+      ['SUMMARY', ''],
+      ['Impressions', summary.impressions],
+      ['Clicks', summary.clicks],
+      ['CTR', summary.ctr + '%'],
+      ['Earned (₹)', summary.earned_inr],
+      [''],
+      ['BY SITE', 'Impressions', 'Clicks', 'CTR'],
+      ...by_site.map((s: any) => [s.site, s.impressions, s.clicks, s.ctr + '%']),
+      [''],
+      ['BY DAY', 'Impressions', 'Clicks'],
+      ...by_day.map((d: any) => [d.date, d.impressions, d.clicks]),
+    ]
+    const csv = rows.map(r => r.map(v => `"${(v||'').toString().replace(/"/g,'""')}"`).join(',')).join('
+')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `Campaign-Report-${campaign.name.replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.csv`
+    a.click()
+    toast.success('Report downloaded!')
+  }
+
+  async function emailReport() {
+    if (!reportEmail || !reportModal) return
+    setSendingReport(true)
+    const res = await fetch('/api/audience/campaign-report', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ campaign_id: reportModal.id, email: reportEmail }),
+    })
+    if (res.ok) { toast.success(`Report sent to ${reportEmail}!`); setReportModal(null) }
+    else { const d = await res.json(); toast.error(d.error || 'Send failed') }
+    setSendingReport(false)
   }
 
   async function saveAd() {
@@ -466,27 +571,27 @@ export function DirectAdsPanel() {
                   </div>
 
                   {/* Geo targeting — collapsible */}
+                  {/* COUNTRY — always shown */}
                   <div className="border border-ink-200 rounded-xl overflow-hidden">
                     <button onClick={() => setCollapseCountries(v => !v)}
                       className="w-full flex items-center justify-between px-4 py-3 bg-ink-50 hover:bg-ink-100 transition-colors">
                       <div className="flex items-center gap-2">
-                        <p className="text-xs font-semibold text-ink-700">🌍 Countries</p>
-                        {adForm.target_countries?.length > 0 && (
-                          <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">{adForm.target_countries.length} selected</span>
-                        )}
-                        {geoData.countries.length > 0 && <span className="text-[10px] text-ink-400">{geoData.countries.length} available</span>}
+                        <p className="text-xs font-semibold text-ink-700">🌍 Country</p>
+                        {adForm.target_countries?.length > 0
+                          ? <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">{adForm.target_countries.join(', ')}</span>
+                          : <span className="text-[10px] text-ink-400">{geoCountries.length} available · select to filter states</span>}
                       </div>
-                      <span className="text-ink-400 text-xs">{collapseCountries ? '▼ Show' : '▲ Hide'}</span>
+                      <span className="text-ink-400 text-xs">{collapseCountries ? '▼' : '▲'}</span>
                     </button>
                     {!collapseCountries && (
                       <div className="p-3 space-y-2">
                         <input className="input text-xs w-full" placeholder="Search countries..."
                           value={geoSearch.country} onChange={e => setGeoSearch(s => ({ ...s, country: e.target.value }))} />
-                        {geoData.countries.length === 0 ? (
-                          <p className="text-xs text-ink-400 bg-ink-50 p-2 rounded-lg">No audience data yet — visit your site to collect geo data</p>
+                        {geoCountries.length === 0 ? (
+                          <p className="text-xs text-ink-400 bg-ink-50 p-2 rounded-lg">No audience data yet</p>
                         ) : (
-                          <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto">
-                            {filteredCountries.map(c => (
+                          <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto">
+                            {geoCountries.filter(c => c.toLowerCase().includes(geoSearch.country.toLowerCase())).map(c => (
                               <button key={c} onClick={() => toggleGeo('target_countries', c)}
                                 className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${adForm.target_countries.includes(c) ? 'bg-blue-600 text-white border-transparent' : 'bg-white text-ink-600 border-ink-200 hover:border-ink-300'}`}>
                                 {c}
@@ -496,86 +601,81 @@ export function DirectAdsPanel() {
                         )}
                       </div>
                     )}
-                    {adForm.target_countries?.length > 0 && collapseCountries && (
-                      <div className="px-4 py-2 border-t border-ink-100">
-                        <p className="text-xs text-blue-600">✓ {adForm.target_countries.join(', ')}</p>
-                      </div>
-                    )}
                   </div>
 
-                  <div className="border border-ink-200 rounded-xl overflow-hidden">
-                    <button onClick={() => setCollapseStates(v => !v)}
-                      className="w-full flex items-center justify-between px-4 py-3 bg-ink-50 hover:bg-ink-100 transition-colors">
-                      <div className="flex items-center gap-2">
-                        <p className="text-xs font-semibold text-ink-700">🗺 States / Regions</p>
-                        {adForm.target_states?.length > 0 && (
-                          <span className="text-xs bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full">{adForm.target_states.length} selected</span>
-                        )}
-                        {geoData.states.length > 0 && <span className="text-[10px] text-ink-400">{geoData.states.length} available</span>}
-                      </div>
-                      <span className="text-ink-400 text-xs">{collapseStates ? '▼ Show' : '▲ Hide'}</span>
-                    </button>
-                    {!collapseStates && (
-                      <div className="p-3 space-y-2">
-                        <input className="input text-xs w-full" placeholder="Search states..."
-                          value={geoSearch.state} onChange={e => setGeoSearch(s => ({ ...s, state: e.target.value }))} />
-                        {geoData.states.length === 0 ? (
-                          <p className="text-xs text-ink-400 bg-ink-50 p-2 rounded-lg">No state data yet</p>
-                        ) : (
-                          <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto">
-                            {filteredStates.map(s => (
-                              <button key={s} onClick={() => toggleGeo('target_states', s)}
-                                className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${adForm.target_states.includes(s) ? 'bg-violet-600 text-white border-transparent' : 'bg-white text-ink-600 border-ink-200 hover:border-ink-300'}`}>
-                                {s}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    {adForm.target_states?.length > 0 && collapseStates && (
-                      <div className="px-4 py-2 border-t border-ink-100">
-                        <p className="text-xs text-violet-600">✓ {adForm.target_states.join(', ')}</p>
-                      </div>
-                    )}
-                  </div>
+                  {/* STATE — only shown after country selected */}
+                  {adForm.target_countries?.length > 0 && (
+                    <div className="border border-ink-200 rounded-xl overflow-hidden">
+                      <button onClick={() => setCollapseStates(v => !v)}
+                        className="w-full flex items-center justify-between px-4 py-3 bg-ink-50 hover:bg-ink-100 transition-colors">
+                        <div className="flex items-center gap-2">
+                          <p className="text-xs font-semibold text-ink-700">🗺 State / Region</p>
+                          {geoLoadingStates && <span className="text-[10px] text-ink-400 animate-pulse">Loading...</span>}
+                          {!geoLoadingStates && adForm.target_states?.length > 0
+                            ? <span className="text-xs bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full">{adForm.target_states.join(', ')}</span>
+                            : !geoLoadingStates && <span className="text-[10px] text-ink-400">{geoStates.length} available · select to filter cities</span>}
+                        </div>
+                        <span className="text-ink-400 text-xs">{collapseStates ? '▼' : '▲'}</span>
+                      </button>
+                      {!collapseStates && (
+                        <div className="p-3 space-y-2">
+                          <input className="input text-xs w-full" placeholder="Search states..."
+                            value={geoSearch.state} onChange={e => setGeoSearch(s => ({ ...s, state: e.target.value }))} />
+                          {geoLoadingStates ? (
+                            <p className="text-xs text-ink-400 animate-pulse p-2">Loading states...</p>
+                          ) : geoStates.length === 0 ? (
+                            <p className="text-xs text-ink-400 bg-ink-50 p-2 rounded-lg">No state data for selected countries</p>
+                          ) : (
+                            <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto">
+                              {geoStates.filter(s => s.toLowerCase().includes(geoSearch.state.toLowerCase())).map(s => (
+                                <button key={s} onClick={() => toggleGeo('target_states', s)}
+                                  className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${adForm.target_states.includes(s) ? 'bg-violet-600 text-white border-transparent' : 'bg-white text-ink-600 border-ink-200 hover:border-ink-300'}`}>
+                                  {s}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
-                  <div className="border border-ink-200 rounded-xl overflow-hidden">
-                    <button onClick={() => setCollapseCities(v => !v)}
-                      className="w-full flex items-center justify-between px-4 py-3 bg-ink-50 hover:bg-ink-100 transition-colors">
-                      <div className="flex items-center gap-2">
-                        <p className="text-xs font-semibold text-ink-700">📍 Cities</p>
-                        {adForm.target_cities?.length > 0 && (
-                          <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">{adForm.target_cities.length} selected</span>
-                        )}
-                        {geoData.cities.length > 0 && <span className="text-[10px] text-ink-400">{geoData.cities.length} available</span>}
-                      </div>
-                      <span className="text-ink-400 text-xs">{collapseCities ? '▼ Show' : '▲ Hide'}</span>
-                    </button>
-                    {!collapseCities && (
-                      <div className="p-3 space-y-2">
-                        <input className="input text-xs w-full" placeholder="Search cities..."
-                          value={geoSearch.city} onChange={e => setGeoSearch(s => ({ ...s, city: e.target.value }))} />
-                        {geoData.cities.length === 0 ? (
-                          <p className="text-xs text-ink-400 bg-ink-50 p-2 rounded-lg">No city data yet</p>
-                        ) : (
-                          <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto">
-                            {filteredCities.map(c => (
-                              <button key={c} onClick={() => toggleGeo('target_cities', c)}
-                                className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${adForm.target_cities.includes(c) ? 'bg-green-600 text-white border-transparent' : 'bg-white text-ink-600 border-ink-200 hover:border-ink-300'}`}>
-                                {c}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    {adForm.target_cities?.length > 0 && collapseCities && (
-                      <div className="px-4 py-2 border-t border-ink-100">
-                        <p className="text-xs text-green-600">✓ {adForm.target_cities.join(', ')}</p>
-                      </div>
-                    )}
-                  </div>
+                  {/* CITY — only shown after state selected */}
+                  {adForm.target_states?.length > 0 && (
+                    <div className="border border-ink-200 rounded-xl overflow-hidden">
+                      <button onClick={() => setCollapseCities(v => !v)}
+                        className="w-full flex items-center justify-between px-4 py-3 bg-ink-50 hover:bg-ink-100 transition-colors">
+                        <div className="flex items-center gap-2">
+                          <p className="text-xs font-semibold text-ink-700">📍 City</p>
+                          {geoLoadingCities && <span className="text-[10px] text-ink-400 animate-pulse">Loading...</span>}
+                          {!geoLoadingCities && adForm.target_cities?.length > 0
+                            ? <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">{adForm.target_cities.join(', ')}</span>
+                            : !geoLoadingCities && <span className="text-[10px] text-ink-400">{geoCities.length} available</span>}
+                        </div>
+                        <span className="text-ink-400 text-xs">{collapseCities ? '▼' : '▲'}</span>
+                      </button>
+                      {!collapseCities && (
+                        <div className="p-3 space-y-2">
+                          <input className="input text-xs w-full" placeholder="Search cities..."
+                            value={geoSearch.city} onChange={e => setGeoSearch(s => ({ ...s, city: e.target.value }))} />
+                          {geoLoadingCities ? (
+                            <p className="text-xs text-ink-400 animate-pulse p-2">Loading cities...</p>
+                          ) : geoCities.length === 0 ? (
+                            <p className="text-xs text-ink-400 bg-ink-50 p-2 rounded-lg">No city data for selected states</p>
+                          ) : (
+                            <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto">
+                              {geoCities.filter(c => c.toLowerCase().includes(geoSearch.city.toLowerCase())).map(c => (
+                                <button key={c} onClick={() => toggleGeo('target_cities', c)}
+                                  className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${adForm.target_cities.includes(c) ? 'bg-green-600 text-white border-transparent' : 'bg-white text-ink-600 border-ink-200 hover:border-ink-300'}`}>
+                                  {c}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* Audience segments */}
                   {segments.length > 0 && (
@@ -686,6 +786,7 @@ export function DirectAdsPanel() {
                         <td className="px-3 py-3 text-right text-xs font-medium text-amber-600">{ad.cpm_rate_inr > 0 ? `₹${earned.toLocaleString()}` : '—'}</td>
                         <td className="px-3 py-3 text-center">
                           <div className="flex items-center justify-center gap-1">
+                            <button onClick={() => openReport(ad)} className="text-xs px-2 py-1 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100" title="View Report">📊</button>
                             <button onClick={() => openEdit(ad)} className="text-xs px-2 py-1 rounded-lg bg-ink-100 text-ink-600 hover:bg-ink-200">✏</button>
                             <button onClick={() => toggleAd(ad.id, ad.is_active)}
                               className={`text-xs px-2 py-1 rounded-lg ${ad.is_active ? 'bg-amber-50 text-amber-600' : 'bg-green-50 text-green-600'}`}>
@@ -832,6 +933,117 @@ export function DirectAdsPanel() {
             </div>
           )}
         </div>
+      )}
+
+      {/* ── REPORT MODAL ── */}
+      {reportModal && (
+        <>
+          <div className="fixed inset-0 bg-black/40 z-40" onClick={() => setReportModal(null)} />
+          <div className="fixed inset-0 flex items-center justify-center z-50 p-4 overflow-y-auto">
+            <div className="card p-6 w-full max-w-xl space-y-4 my-8">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-semibold text-ink-900">📊 Campaign Report</p>
+                  <p className="text-xs text-ink-400">{reportModal.campaign_name}</p>
+                </div>
+                <button onClick={() => setReportModal(null)} className="text-xs text-ink-400 hover:text-ink-600">✕</button>
+              </div>
+
+              {reportLoading ? (
+                <div className="h-32 bg-ink-50 rounded-xl flex items-center justify-center">
+                  <p className="text-xs text-ink-400 animate-pulse">Loading report...</p>
+                </div>
+              ) : reportData ? (
+                <div className="space-y-4">
+                  {/* Summary stats */}
+                  <div className="grid grid-cols-4 gap-3">
+                    {[
+                      { l: 'Impressions', v: reportData.summary.impressions.toLocaleString(), color: 'text-ink-900' },
+                      { l: 'Clicks', v: reportData.summary.clicks.toLocaleString(), color: 'text-ink-900' },
+                      { l: 'CTR', v: reportData.summary.ctr + '%', color: 'text-green-600' },
+                      { l: 'Earned', v: '₹' + reportData.summary.earned_inr, color: 'text-amber-600' },
+                    ].map(s => (
+                      <div key={s.l} className="bg-ink-50 rounded-xl p-3 text-center">
+                        <p className={`text-lg font-bold ${s.color}`}>{s.v}</p>
+                        <p className="text-xs text-ink-400 mt-0.5">{s.l}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* By site */}
+                  {reportData.by_site.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold text-ink-700 mb-2">By Site</p>
+                      <div className="rounded-xl border border-ink-100 overflow-hidden">
+                        <table className="w-full">
+                          <thead><tr className="bg-ink-50">
+                            <th className="text-left px-3 py-2 text-xs font-medium text-ink-500">Site</th>
+                            <th className="text-right px-3 py-2 text-xs font-medium text-ink-500">Impr.</th>
+                            <th className="text-right px-3 py-2 text-xs font-medium text-ink-500">Clicks</th>
+                            <th className="text-right px-3 py-2 text-xs font-medium text-ink-500">CTR</th>
+                          </tr></thead>
+                          <tbody>
+                            {reportData.by_site.map((s: any) => (
+                              <tr key={s.site} className="border-t border-ink-50">
+                                <td className="px-3 py-2 text-xs text-ink-700 truncate max-w-[160px]">{s.site}</td>
+                                <td className="px-3 py-2 text-xs text-right text-ink-600">{s.impressions.toLocaleString()}</td>
+                                <td className="px-3 py-2 text-xs text-right text-ink-600">{s.clicks}</td>
+                                <td className="px-3 py-2 text-xs text-right text-green-600 font-medium">{s.ctr}%</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* By day */}
+                  {reportData.by_day.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold text-ink-700 mb-2">Daily Breakdown</p>
+                      <div className="rounded-xl border border-ink-100 overflow-hidden max-h-40 overflow-y-auto">
+                        <table className="w-full">
+                          <thead><tr className="bg-ink-50 sticky top-0">
+                            <th className="text-left px-3 py-2 text-xs font-medium text-ink-500">Date</th>
+                            <th className="text-right px-3 py-2 text-xs font-medium text-ink-500">Impressions</th>
+                            <th className="text-right px-3 py-2 text-xs font-medium text-ink-500">Clicks</th>
+                          </tr></thead>
+                          <tbody>
+                            {reportData.by_day.map((d: any) => (
+                              <tr key={d.date} className="border-t border-ink-50">
+                                <td className="px-3 py-2 text-xs text-ink-700">{d.date}</td>
+                                <td className="px-3 py-2 text-xs text-right text-ink-600">{d.impressions.toLocaleString()}</td>
+                                <td className="px-3 py-2 text-xs text-right text-ink-600">{d.clicks}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Actions */}
+                  <div className="border-t border-ink-100 pt-4 space-y-3">
+                    <button onClick={downloadReportCSV} className="w-full text-xs px-4 py-2.5 bg-ink-100 text-ink-700 rounded-xl hover:bg-ink-200 font-medium">
+                      ⬇ Download CSV Report
+                    </button>
+                    <div className="flex gap-2">
+                      <input type="email" className="input flex-1 text-xs" value={reportEmail}
+                        onChange={e => setReportEmail(e.target.value)}
+                        placeholder="Send report to email..." />
+                      <button onClick={emailReport} disabled={!reportEmail || sendingReport}
+                        className="text-xs px-4 py-2 bg-accent text-white rounded-xl hover:bg-accent/90 disabled:opacity-50 font-medium">
+                        {sendingReport ? '...' : '✉ Send'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-xs text-ink-400 text-center py-8">No data available for this campaign</p>
+              )}
+            </div>
+          </div>
+        </>
       )}
 
       {/* ── EDIT MODAL ── */}
