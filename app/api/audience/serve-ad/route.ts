@@ -114,9 +114,7 @@ export async function POST(req: NextRequest) {
     admin.from('direct_ad_events').insert({
       ad_id: bestAd.id, fingerprint, event_type: 'impression', site_url,
     }),
-    admin.from('direct_ads').update({
-      impressions: (bestAd.impressions || 0) + 1,
-    }).eq('id', bestAd.id),
+admin.rpc('increment_ad_impressions', { p_ad_id: bestAd.id }),
   ]).catch(() => {})
 
   return NextResponse.json({
