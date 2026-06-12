@@ -1,4 +1,4 @@
-// app/api/audience/campaign-report/route.ts
+// app/api/audience/track/campaign-report/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
@@ -23,108 +23,135 @@ export async function GET(req: NextRequest) {
     .from('direct_ads').select('*').eq('id', campaignId).single()
   if (!campaign) return NextResponse.json({ error: 'Campaign not found' }, { status: 404 })
 
-  const { data: events } = await admin
-    .from('direct_ad_events')
-    .select('event_type, created_at, site_url')
-    .eq('ad_id', campaignId)
-    .order('created_at', { ascending: false })
-    .limit(10000)
+  // Use SQL aggregates via RPC to avoid row limit issues
+  const { data: summaryData } = await admin.rpc('get_campaign_summary', { p_ad_id: campaignId })
+  
+  // Fallback: paginate through events if RPC not available
+  let impressions = 0
+  let clicks = 0
 
-  const allEvents = events || []
-  const impressions = allEvents.filter(e => e.event_type === 'impression').length
-  const clicks      = allEvents.filter(e => e.event_type === 'click').length
-  const ctr         = impressions > 0 ? ((clicks / impressions) * 100).toFixed(2) : '0.00'
-  const earned      = campaign.cpm_rate_inr > 0
-    ? ((impressions / 1000) * campaign.cpm_rate_inr).toFixed(2)
-    : '0'
+  if (summaryData && summaryData[0]) {
+    impressions = parseInt(summaryData[0].impressions || 0)
+    clicks = parseInt(summaryData[0].clicks || 0)
+  } else {
+    // Paginate through all events
+    let page = 0
+    const pageSize = 1000
+    while (true) {
+      const { data: batch } = await admin
+        .from('direct_ad_events')
+        .select('event_type')
+        .eq('ad_id', campaignId)
+        .range(page * pageSize, (page + 1) * pageSize - 1)
+      if (!batch || batch.length === 0) break
+      impressions += batch.filter(e => e.event_type === 'impression').length
+      clicks += batch.filter(e => e.event_type === 'click').length
+      if (batch.length < pageSize) break
+      page++
+      if (page > 50) break // safety cap at 50k events
+    }
+  }
 
-  // Site breakdown
+  const ctr    = impressions > 0 ? ((clicks / impressions) * 100).toFixed(2) : '0.00'
+  const earned = campaign.cpm_rate_inr > 0 ? ((impressions / 1000) * campaign.cpm_rate_inr).toFixed(2) : '0'
+
+  // Site breakdown — paginated
   const siteMap: Record<string, { impressions: number; clicks: number }> = {}
-  for (const e of allEvents) {
-    const site = (e.site_url || 'unknown').replace(/^https?:\/\//, '').replace(/\/$/, '')
-    if (!siteMap[site]) siteMap[site] = { impressions: 0, clicks: 0 }
-    if (e.event_type === 'impression') siteMap[site].impressions++
-    if (e.event_type === 'click') siteMap[site].clicks++
+  let sitePage = 0
+  while (true) {
+    const { data: batch } = await admin
+      .from('direct_ad_events')
+      .select('event_type, site_url')
+      .eq('ad_id', campaignId)
+      .range(sitePage * 1000, (sitePage + 1) * 1000 - 1)
+    if (!batch || batch.length === 0) break
+    for (const e of batch) {
+      const site = (e.site_url || 'unknown').replace(/^https?:\/\//, '').replace(/\/$/, '')
+      if (!siteMap[site]) siteMap[site] = { impressions: 0, clicks: 0 }
+      if (e.event_type === 'impression') siteMap[site].impressions++
+      if (e.event_type === 'click') siteMap[site].clicks++
+    }
+    if (batch.length < 1000) break
+    sitePage++
+    if (sitePage > 50) break
   }
 
-  // Daily breakdown
+  // Daily breakdown — paginated
   const dayMap: Record<string, { impressions: number; clicks: number }> = {}
-  for (const e of allEvents) {
-    const day = (e.created_at || '').split('T')[0]
-    if (!day) continue
-    if (!dayMap[day]) dayMap[day] = { impressions: 0, clicks: 0 }
-    if (e.event_type === 'impression') dayMap[day].impressions++
-    if (e.event_type === 'click') dayMap[day].clicks++
+  let dayPage = 0
+  while (true) {
+    const { data: batch } = await admin
+      .from('direct_ad_events')
+      .select('event_type, created_at')
+      .eq('ad_id', campaignId)
+      .range(dayPage * 1000, (dayPage + 1) * 1000 - 1)
+    if (!batch || batch.length === 0) break
+    for (const e of batch) {
+      const day = (e.created_at || '').split('T')[0]
+      if (!day) continue
+      if (!dayMap[day]) dayMap[day] = { impressions: 0, clicks: 0 }
+      if (e.event_type === 'impression') dayMap[day].impressions++
+      if (e.event_type === 'click') dayMap[day].clicks++
+    }
+    if (batch.length < 1000) break
+    dayPage++
+    if (dayPage > 50) break
   }
 
-  const by_site = Object.entries(siteMap).map(([site, d]) => ({
-    site, ...d,
-    ctr: d.impressions > 0 ? ((d.clicks / d.impressions) * 100).toFixed(2) : '0.00'
-  })).sort((a, b) => b.impressions - a.impressions)
+  // Geo breakdown — join with audience_profiles via fingerprint (paginated)
+  const fingerprintSet = new Set<string>()
+  let fpPage = 0
+  while (true) {
+    const { data: batch } = await admin
+      .from('direct_ad_events')
+      .select('fingerprint')
+      .eq('ad_id', campaignId)
+      .eq('event_type', 'impression')
+      .range(fpPage * 1000, (fpPage + 1) * 1000 - 1)
+    if (!batch || batch.length === 0) break
+    batch.forEach(e => { if (e.fingerprint) fingerprintSet.add(e.fingerprint) })
+    if (batch.length < 1000) break
+    fpPage++
+    if (fpPage > 50) break
+  }
 
-  const by_day = Object.entries(dayMap)
-    .map(([date, d]) => ({ date, ...d }))
-    .sort((a, b) => a.date.localeCompare(b.date))
+  const fingerprints = [...fingerprintSet]
+  const countryMap: Record<string, number> = {}
+  const stateMap: Record<string, number> = {}
+  const cityMap: Record<string, number> = {}
 
-  // Geo breakdown — join with audience_profiles via fingerprint
-  const { data: geoEvents } = await admin
-    .from('direct_ad_events')
-    .select('event_type, fingerprint')
-    .eq('ad_id', campaignId)
-    .eq('event_type', 'impression')
-    .limit(10000)
-
-  const fingerprints = [...new Set((geoEvents || []).map(e => e.fingerprint).filter(Boolean))]
-
-  let by_country: { country: string; impressions: number }[] = []
-  let by_state: { state: string; impressions: number }[] = []
-  let by_city: { city: string; impressions: number }[] = []
-
-  if (fingerprints.length > 0) {
+  // Fetch profiles in chunks of 500
+  for (let i = 0; i < fingerprints.length; i += 500) {
+    const chunk = fingerprints.slice(i, i + 500)
     const { data: profiles } = await admin
       .from('audience_profiles')
       .select('fingerprint, country, state, city')
-      .in('fingerprint', fingerprints.slice(0, 1000))
-
-    const fpMap: Record<string, { country: string; state: string; city: string }> = {}
-    for (const p of profiles || []) fpMap[p.fingerprint] = p
-
-    const countryMap: Record<string, number> = {}
-    const stateMap: Record<string, number> = {}
-    const cityMap: Record<string, number> = {}
-
-    for (const e of geoEvents || []) {
-      const p = fpMap[e.fingerprint]
-      if (!p) continue
+      .in('fingerprint', chunk)
+    for (const p of profiles || []) {
       if (p.country) countryMap[p.country] = (countryMap[p.country] || 0) + 1
       if (p.state)   stateMap[p.state]     = (stateMap[p.state]   || 0) + 1
       if (p.city)    cityMap[p.city]       = (cityMap[p.city]     || 0) + 1
     }
-
-    by_country = Object.entries(countryMap).map(([country, impressions]) => ({ country, impressions })).sort((a, b) => b.impressions - a.impressions).slice(0, 20)
-    by_state   = Object.entries(stateMap).map(([state, impressions]) => ({ state, impressions })).sort((a, b) => b.impressions - a.impressions).slice(0, 20)
-    by_city    = Object.entries(cityMap).map(([city, impressions]) => ({ city, impressions })).sort((a, b) => b.impressions - a.impressions).slice(0, 20)
   }
+
+  const by_site    = Object.entries(siteMap).map(([site, d]) => ({ site, ...d, ctr: d.impressions > 0 ? ((d.clicks / d.impressions) * 100).toFixed(2) : '0.00' })).sort((a, b) => b.impressions - a.impressions)
+  const by_day     = Object.entries(dayMap).map(([date, d]) => ({ date, ...d })).sort((a, b) => a.date.localeCompare(b.date))
+  const by_country = Object.entries(countryMap).map(([country, imp]) => ({ country, impressions: imp })).sort((a, b) => b.impressions - a.impressions).slice(0, 20)
+  const by_state   = Object.entries(stateMap).map(([state, imp]) => ({ state, impressions: imp })).sort((a, b) => b.impressions - a.impressions).slice(0, 20)
+  const by_city    = Object.entries(cityMap).map(([city, imp]) => ({ city, impressions: imp })).sort((a, b) => b.impressions - a.impressions).slice(0, 20)
 
   return NextResponse.json({
     campaign: {
-      id: campaign.id,
-      name: campaign.campaign_name,
+      id: campaign.id, name: campaign.campaign_name,
       status: campaign.is_active ? 'Active' : 'Paused',
-      start_date: campaign.start_date,
-      end_date: campaign.end_date,
-      priority: campaign.priority,
-      cpm_rate_inr: campaign.cpm_rate_inr,
+      start_date: campaign.start_date, end_date: campaign.end_date,
+      priority: campaign.priority, cpm_rate_inr: campaign.cpm_rate_inr,
       target_sites: campaign.target_site_urls || [],
       target_countries: campaign.target_countries || [],
       target_gender: campaign.target_gender || 'all',
     },
     summary: { impressions, clicks, ctr, earned_inr: earned },
-    by_site,
-    by_day,
-    by_country,
-    by_state,
-    by_city,
+    by_site, by_day, by_country, by_state, by_city,
   }, { headers: CORS })
 }
 
@@ -141,34 +168,45 @@ export async function POST(req: NextRequest) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   )
 
-  // Fetch campaign + events directly (no self-fetch)
   const { data: campaign } = await admin.from('direct_ads').select('*').eq('id', campaign_id).single()
   if (!campaign) return NextResponse.json({ error: 'Campaign not found' }, { status: 404 })
 
-  const { data: events } = await admin
-    .from('direct_ad_events')
-    .select('event_type, created_at, site_url')
-    .eq('ad_id', campaign_id)
-    .limit(10000)
-
-  const allEvents = events || []
-  const impressions = allEvents.filter(e => e.event_type === 'impression').length
-  const clicks      = allEvents.filter(e => e.event_type === 'click').length
-  const ctr         = impressions > 0 ? ((clicks / impressions) * 100).toFixed(2) : '0.00'
-  const earned      = campaign.cpm_rate_inr > 0 ? ((impressions / 1000) * campaign.cpm_rate_inr).toFixed(2) : '0'
-
-  const siteMap: Record<string, { impressions: number; clicks: number }> = {}
-  for (const e of allEvents) {
-    const site = (e.site_url || 'unknown').replace(/^https?:\/\//, '').replace(/\/$/, '')
-    if (!siteMap[site]) siteMap[site] = { impressions: 0, clicks: 0 }
-    if (e.event_type === 'impression') siteMap[site].impressions++
-    if (e.event_type === 'click') siteMap[site].clicks++
+  // Paginate impressions + clicks
+  let impressions = 0, clicks = 0
+  let page = 0
+  while (true) {
+    const { data: batch } = await admin
+      .from('direct_ad_events').select('event_type')
+      .eq('ad_id', campaign_id)
+      .range(page * 1000, (page + 1) * 1000 - 1)
+    if (!batch || batch.length === 0) break
+    impressions += batch.filter(e => e.event_type === 'impression').length
+    clicks += batch.filter(e => e.event_type === 'click').length
+    if (batch.length < 1000) break
+    page++
+    if (page > 50) break
   }
 
-  const by_site = Object.entries(siteMap).map(([site, d]) => ({
-    site, ...d,
-    ctr: d.impressions > 0 ? ((d.clicks / d.impressions) * 100).toFixed(2) : '0.00'
-  })).sort((a, b) => b.impressions - a.impressions)
+  const ctr = impressions > 0 ? ((clicks / impressions) * 100).toFixed(2) : '0.00'
+  const earned = campaign.cpm_rate_inr > 0 ? ((impressions / 1000) * campaign.cpm_rate_inr).toFixed(2) : '0'
+
+  // Site breakdown paginated
+  const siteMap: Record<string, { impressions: number; clicks: number }> = {}
+  let sp = 0
+  while (true) {
+    const { data: batch } = await admin.from('direct_ad_events').select('event_type, site_url').eq('ad_id', campaign_id).range(sp * 1000, (sp + 1) * 1000 - 1)
+    if (!batch || batch.length === 0) break
+    for (const e of batch) {
+      const site = (e.site_url || 'unknown').replace(/^https?:\/\//, '').replace(/\/$/, '')
+      if (!siteMap[site]) siteMap[site] = { impressions: 0, clicks: 0 }
+      if (e.event_type === 'impression') siteMap[site].impressions++
+      if (e.event_type === 'click') siteMap[site].clicks++
+    }
+    if (batch.length < 1000) break
+    sp++
+    if (sp > 50) break
+  }
+  const by_site = Object.entries(siteMap).map(([site, d]) => ({ site, ...d, ctr: d.impressions > 0 ? ((d.clicks / d.impressions) * 100).toFixed(2) : '0.00' })).sort((a, b) => b.impressions - a.impressions)
 
   const siteRows = by_site.map(s =>
     `<tr><td style="padding:6px 12px;border-bottom:1px solid #e5e7eb">${s.site}</td><td style="padding:6px 12px;border-bottom:1px solid #e5e7eb;text-align:right">${s.impressions.toLocaleString()}</td><td style="padding:6px 12px;border-bottom:1px solid #e5e7eb;text-align:right">${s.clicks}</td><td style="padding:6px 12px;border-bottom:1px solid #e5e7eb;text-align:right">${s.ctr}%</td></tr>`
@@ -205,7 +243,7 @@ th{background:#1f2937;color:#fff;padding:8px 12px;text-align:left;font-size:12px
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${resendKey}` },
     body: JSON.stringify({
-      from: 'TrendingVerse <onboarding@resend.dev>',
+      from: 'TrendingVerse <noreply@trendingverse.online>',
       to: [email],
       subject: `Campaign Report: ${campaign.campaign_name} — ${new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`,
       html,
