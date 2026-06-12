@@ -110,12 +110,15 @@ export async function POST(req: NextRequest) {
   }
 
   // Log impression
-Promise.all([
+  Promise.all([
     admin.from('direct_ad_events').insert({
       ad_id: bestAd.id, fingerprint, event_type: 'impression', site_url,
     }),
-    admin.rpc('increment_ad_impressions', { p_ad_id: bestAd.id }),
+    admin.from('direct_ads').update({
+      impressions: (bestAd.impressions || 0) + 1,
+    }).eq('id', bestAd.id),
   ]).catch(() => {})
+
   return NextResponse.json({
     ad: {
       id: bestAd.id,
