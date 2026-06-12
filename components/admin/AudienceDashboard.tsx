@@ -542,7 +542,7 @@ export function AudienceDashboard() {
                         <span className="text-ink-400">{b.count} sessions ({b.percentage}%)</span>
                       </div>
                       <div className="h-3 bg-ink-100 rounded-full overflow-hidden">
-                        <div className={`h-3 rounded-full transition-all ${depthBg(b.min + 12)}`}
+                        <div className={`h-3 rounded-full transition-all ${depthBg(parseInt(b.label) || 50)}`}
                           style={{ width: `${b.percentage}%` }} />
                       </div>
                     </div>
