@@ -23,21 +23,20 @@ export async function POST(req: NextRequest) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   )
 
-  // Upsert — keep max scroll depth per fingerprint per page
-  await admin.from('scroll_events').upsert({
-    fingerprint,
-    site_url,
-    page_url: page_url || site_url,
-    scroll_depth: Math.min(100, Math.max(0, Math.round(scroll_depth))),
-  }, {
-    onConflict: 'fingerprint,page_url',
-    ignoreDuplicates: false,
-  }).then(async () => {
-    // Also update audience_profiles with latest scroll depth
+  const depth = Math.min(100, Math.max(0, Math.round(scroll_depth)))
+
+  try {
+    await admin.from('scroll_events').upsert({
+      fingerprint,
+      site_url,
+      page_url: page_url || site_url,
+      scroll_depth: depth,
+    }, { onConflict: 'fingerprint,page_url' })
+
     await admin.from('audience_profiles')
-      .update({ scroll_depth })
+      .update({ scroll_depth: depth })
       .eq('fingerprint', fingerprint)
-  }).catch(() => {})
+  } catch { /* silent */ }
 
   return NextResponse.json({ ok: true }, { headers: CORS })
 }
