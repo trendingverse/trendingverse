@@ -519,7 +519,7 @@ export function AudienceDashboard() {
                 </div>
                 <div className="card p-4 text-center">
                   <p className={`text-3xl font-bold ${depthColor(scrollStats.buckets.find(b => b.label === '75-90%' || b.label === '90-100%')?.percentage || 0)}`}>
-                    {(scrollStats.buckets.filter(b => b.min >= 75).reduce((s, b) => s + b.count, 0) / scrollStats.total_sessions * 100).toFixed(0)}%
+                    {(scrollStats.buckets.filter(b => b.label === '75-90%' || b.label === '90-100%').reduce((s, b) => s + b.count, 0) / scrollStats.total_sessions * 100).toFixed(0)}%
                   </p>
                   <p className="text-xs text-ink-400 mt-1">Read 75%+ of page</p>
                 </div>
