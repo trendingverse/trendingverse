@@ -77,18 +77,26 @@ export async function GET(req: NextRequest) {
     .sort((a, b) => b[1] - a[1]).slice(0, 10)
     .map(([interest, count]) => ({ interest, count }))
 
-  // ── DEVICE / GENDER / AGE ─────────────────────────────────────
-  const { data: breakdownRaw } = await siteCondition(
-    admin.from('audience_profiles').select('device_type, gender, age_range')
-  ).limit(10000)
-
+  // ── DEVICE / GENDER / AGE — paginate all rows ───────────────
   const deviceMap: Record<string, number> = {}
   const genderMap: Record<string, number> = {}
   const ageMap:    Record<string, number> = {}
-  for (const r of breakdownRaw || []) {
-    if (r.device_type) deviceMap[r.device_type] = (deviceMap[r.device_type] || 0) + 1
-    if (r.gender)      genderMap[r.gender]       = (genderMap[r.gender]       || 0) + 1
-    if (r.age_range)   ageMap[r.age_range]        = (ageMap[r.age_range]        || 0) + 1
+  let bdPage = 0
+  while (true) {
+    let q = admin.from('audience_profiles')
+      .select('device_type, gender, age_range')
+      .range(bdPage * 1000, (bdPage + 1) * 1000 - 1)
+    if (siteFilter) q = q.eq('source_site', siteFilter)
+    const { data: batch } = await q
+    if (!batch || batch.length === 0) break
+    for (const r of batch) {
+      if (r.device_type) deviceMap[r.device_type] = (deviceMap[r.device_type] || 0) + 1
+      if (r.gender)      genderMap[r.gender]       = (genderMap[r.gender]       || 0) + 1
+      if (r.age_range)   ageMap[r.age_range]        = (ageMap[r.age_range]        || 0) + 1
+    }
+    if (batch.length < 1000) break
+    bdPage++
+    if (bdPage > 20) break
   }
 
   // ── LEADS — with name, gender, age ───────────────────────────
