@@ -9,7 +9,7 @@ interface AudienceData {
   topCities: { city: string; count: number }[]
   topInterests: { interest: string; count: number }[]
   topSites: { site: string; views: number }[]
-  recentLeads: { email: string; name: string; city: string; gender: string; age_range: string; source_site: string; created_at: string }[]
+  recentLeads: { email: string; name: string; city: string; country: string; gender: string; age_range: string; source_site: string; created_at: string }[]
   chartData: { date: string; views: number }[]
 }
 
