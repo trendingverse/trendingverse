@@ -8,6 +8,12 @@ const WP_BASE     = (process.env.WP_URL || '').replace(/\/$/, '')
 const WP_AUTH     = Buffer.from(`${process.env.WP_USERNAME}:${process.env.WP_APP_PASSWORD}`).toString('base64')
 const WP_HEADERS  = { 'Authorization': `Basic ${WP_AUTH}`, 'Content-Type': 'application/json' }
 
+const VALID_CATEGORIES = [
+  'Politics', 'Business', 'Technology', 'Entertainment', 'Sports',
+  'Health', 'Science', 'Lifestyle', 'Education', 'World',
+  'Crime', 'India', 'Environment', 'Finance', 'Trending'
+]
+
 async function wpGet(path: string) {
   const res = await fetch(`${WP_BASE}/wp-json/wp/v2${path}`, { headers: WP_HEADERS })
   if (!res.ok) return null
@@ -19,6 +25,47 @@ async function wpUpdate(postId: number, data: object) {
     method: 'POST', headers: WP_HEADERS, body: JSON.stringify(data),
   })
   return res.ok
+}
+
+async function getOrCreateWpTag(tagName: string): Promise<number | null> {
+  try {
+    const slug = tagName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+    const searchRes = await fetch(`${WP_BASE}/wp-json/wp/v2/tags?search=${encodeURIComponent(tagName)}&per_page=5`, { headers: WP_HEADERS })
+    if (searchRes.ok) {
+      const tags = await searchRes.json()
+      const existing = tags.find((t: any) => t.name.toLowerCase() === tagName.toLowerCase() || t.slug === slug)
+      if (existing) return existing.id
+    }
+    const createRes = await fetch(`${WP_BASE}/wp-json/wp/v2/tags`, {
+      method: 'POST', headers: WP_HEADERS,
+      body: JSON.stringify({ name: tagName, slug }),
+    })
+    if (createRes.ok) {
+      const tag = await createRes.json()
+      return tag.id || null
+    }
+  } catch { /* skip */ }
+  return null
+}
+
+async function getOrCreateWpCategory(catName: string): Promise<number | null> {
+  try {
+    const searchRes = await fetch(`${WP_BASE}/wp-json/wp/v2/categories?search=${encodeURIComponent(catName)}&per_page=10`, { headers: WP_HEADERS })
+    if (searchRes.ok) {
+      const cats = await searchRes.json()
+      const existing = cats.find((c: any) => c.name.toLowerCase() === catName.toLowerCase())
+      if (existing) return existing.id
+    }
+    const createRes = await fetch(`${WP_BASE}/wp-json/wp/v2/categories`, {
+      method: 'POST', headers: WP_HEADERS,
+      body: JSON.stringify({ name: catName, slug: catName.toLowerCase() }),
+    })
+    if (createRes.ok) {
+      const cat = await createRes.json()
+      return cat.id || null
+    }
+  } catch { /* skip */ }
+  return null
 }
 
 async function geminiRewrite(posts: any[], geminiKey: string) {
@@ -39,16 +86,17 @@ Rules:
 - seo_title: under 60 chars, primary keyword near the start
 - meta_description: exactly 150-155 chars, include a call to action
 - focus_keyword: 2-4 words, what someone would Google to find this article
+- keywords: array of 5-8 relevant tags/keywords for this article
+- category: one of: ${VALID_CATEGORIES.join(', ')}
 - seo_score_before: estimate current SEO quality 0-100
 - seo_score_after: your improved score 0-100
 - Never use ALL CAPS. No emoji in headlines. Be accurate — no clickbait.
-- Use power words: reveals, breaks, surges, sparks, wins, hits, faces, launches, exposes, confirms
 
 Articles:
 ${JSON.stringify(batch)}
 
-Return ONLY a valid JSON array — no markdown, no explanation:
-[{"id":1,"discover_headline":"...","seo_title":"...","meta_description":"...","focus_keyword":"...","seo_score_before":40,"seo_score_after":78}]`
+Return ONLY a valid JSON array:
+[{"id":1,"discover_headline":"...","seo_title":"...","meta_description":"...","focus_keyword":"...","keywords":["tag1","tag2"],"category":"Politics","seo_score_before":40,"seo_score_after":78}]`
 
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
@@ -109,8 +157,7 @@ export async function GET(req: NextRequest) {
   if (action === 'analyze') {
     const geminiKey = process.env.GEMINI_API_KEY!
     const limit = parseInt(searchParams.get('limit') || '20')
-
-const offset = parseInt(searchParams.get('offset') || '0')
+    const offset = parseInt(searchParams.get('offset') || '0')
     const wpPage = Math.floor(offset / 100) + 1
     const wpOffset = offset % 100
     const raw = await wpGet(`/posts?per_page=100&page=${wpPage}&status=publish&_fields=id,title,excerpt&orderby=date&order=desc`)
@@ -119,38 +166,26 @@ const offset = parseInt(searchParams.get('offset') || '0')
     }
     const posts = raw.slice(wpOffset, wpOffset + limit)
     if (!posts.length) {
-      return NextResponse.json({ error: 'No posts fetched from WordPress', analyzed: 0 })
+      return NextResponse.json({ error: 'No posts in range', analyzed: 0 })
     }
 
     const allResults: any[] = []
     const BATCH_SIZE = 10
-
-for (let i = 0; i < posts.length; i += BATCH_SIZE) {
+    for (let i = 0; i < posts.length; i += BATCH_SIZE) {
       const chunk = posts.slice(i, i + BATCH_SIZE)
-try {
+      try {
         const rewrites = await geminiRewrite(chunk, geminiKey)
-        if (!rewrites.length) {
-          return NextResponse.json({ error: 'Gemini returned empty array for chunk ' + i, analyzed: 0, posts_sent: chunk.length, chunk_sample: chunk[0] })
-        }
+        if (!rewrites.length) return NextResponse.json({ error: 'Gemini returned empty array', analyzed: 0 })
         allResults.push(...rewrites)
       } catch (e) {
-        return NextResponse.json({ error: (e as Error).message, analyzed: 0, chunk_index: i })
+        return NextResponse.json({ error: (e as Error).message, analyzed: 0 })
       }
-      if (i + BATCH_SIZE < raw.length) await new Promise(r => setTimeout(r, 1000))
+      if (i + BATCH_SIZE < posts.length) await new Promise(r => setTimeout(r, 1000))
     }
 
-    if (!allResults.length) {
-      return NextResponse.json({ error: 'Gemini returned no results', analyzed: 0 })
-    }
-
-    // Save to Supabase
-    // Save to Supabase
     let saved = 0
     for (const r of allResults) {
-      // Try update first, then insert
-      const { data: existing } = await admin
-        .from('seo_metadata').select('article_id').eq('post_id', r.id.toString()).single()
-
+      const { data: existing } = await admin.from('seo_metadata').select('article_id').eq('post_id', r.id.toString()).single()
       if (existing) {
         const { error } = await admin.from('seo_metadata').update({
           discover_headline: r.discover_headline || '',
@@ -164,7 +199,7 @@ try {
         }).eq('post_id', r.id.toString())
         if (!error) saved++
       } else {
-        const { error, data } = await admin.from('seo_metadata').insert({
+        const { error } = await admin.from('seo_metadata').insert({
           post_id: r.id.toString(),
           discover_headline: r.discover_headline || '',
           seo_title: r.seo_title || '',
@@ -175,19 +210,123 @@ try {
           status: 'pending',
           updated_at: new Date().toISOString(),
         })
-      if (!error) saved++
-        else return NextResponse.json({ insert_error: error, sample_record: { post_id: r.id.toString() } })
+        if (!error) saved++
+      }
+    }
+    return NextResponse.json({ analyzed: allResults.length, saved, results: allResults })
+  }
+
+  // ── BULK FIX — categorize + tag + SEO rewrite all articles ───
+  if (action === 'bulk_fix') {
+    const geminiKey = process.env.GEMINI_API_KEY!
+    const limit = parseInt(searchParams.get('limit') || '20')
+    const offset = parseInt(searchParams.get('offset') || '0')
+
+    // Fetch WP posts with content for categorization
+    const wpPage = Math.floor(offset / 50) + 1
+    const wpOffset = offset % 50
+    const raw = await wpGet(`/posts?per_page=50&page=${wpPage}&status=publish&_fields=id,title,excerpt,categories,tags&orderby=date&order=desc`)
+    if (!Array.isArray(raw) || raw.length === 0) {
+      return NextResponse.json({ error: 'No posts found', fixed: 0 })
+    }
+    const posts = raw.slice(wpOffset, wpOffset + limit)
+
+    // Fetch existing WP categories
+    const wpCatsRaw = await wpGet('/categories?per_page=100')
+    const wpCategoryMap: Record<string, number> = {}
+    for (const c of wpCatsRaw || []) {
+      wpCategoryMap[c.name.toLowerCase()] = c.id
+    }
+
+    // Run AI analysis — get category + keywords + SEO for each post
+    const allResults: any[] = []
+    const BATCH_SIZE = 10
+    for (let i = 0; i < posts.length; i += BATCH_SIZE) {
+      const chunk = posts.slice(i, i + BATCH_SIZE)
+      try {
+        const rewrites = await geminiRewrite(chunk, geminiKey)
+        allResults.push(...rewrites)
+      } catch (e) {
+        return NextResponse.json({ error: (e as Error).message, fixed: 0 })
+      }
+      if (i + BATCH_SIZE < posts.length) await new Promise(r => setTimeout(r, 1000))
+    }
+
+    // Apply each result to WordPress
+    let fixed = 0, failed = 0
+    const results = []
+
+    for (const r of allResults) {
+      try {
+        // Get or create category in WP
+        const catName = VALID_CATEGORIES.includes(r.category) ? r.category : 'News'
+        let catId = wpCategoryMap[catName.toLowerCase()]
+        if (!catId) {
+          const newCatId = await getOrCreateWpCategory(catName)
+          if (newCatId) { catId = newCatId; wpCategoryMap[catName.toLowerCase()] = newCatId }
+        }
+
+        // Get or create tags in WP
+        const tagNames: string[] = [
+          ...(Array.isArray(r.keywords) ? r.keywords : []),
+          r.focus_keyword,
+          catName,
+        ].filter(Boolean).slice(0, 10)
+
+        const tagIdPromises = tagNames.map((t: string) => getOrCreateWpTag(t))
+        const tagIds = (await Promise.all(tagIdPromises)).filter((id): id is number => id !== null)
+
+        // Update WP post — category + tags + SEO
+        const ok = await wpUpdate(r.id, {
+          title: r.discover_headline || undefined,
+          categories: catId ? [catId] : undefined,
+          tags: tagIds,
+          meta: {
+            _yoast_wpseo_title: r.seo_title + ' - TrendingVerse',
+            _yoast_wpseo_metadesc: r.meta_description,
+            _yoast_wpseo_focuskw: r.focus_keyword,
+          },
+        })
+
+        // Also update seo_metadata in Supabase
+        await admin.from('seo_metadata').upsert({
+          post_id: r.id.toString(),
+          discover_headline: r.discover_headline || '',
+          seo_title: r.seo_title || '',
+          meta_description: r.meta_description || '',
+          focus_keyword: r.focus_keyword || '',
+          score_before: r.seo_score_before || 0,
+          score_after: r.seo_score_after || 0,
+          status: 'applied',
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'post_id' })
+
+        // Update articles table category
+        await admin.from('articles').update({
+          category_name: catName,
+          keywords: Array.isArray(r.keywords) ? r.keywords : [],
+          focus_keyword: r.focus_keyword || '',
+          seo_title: r.seo_title || '',
+          meta_description: r.meta_description || '',
+        }).eq('seo_title', r.seo_title || '').limit(1)
+
+        if (ok) { fixed++; results.push({ id: r.id, category: catName, tags: tagNames.length, ok: true }) }
+        else { failed++; results.push({ id: r.id, ok: false }) }
+
+        await new Promise(resolve => setTimeout(resolve, 400)) // rate limit
+      } catch (e) {
+        failed++
+        results.push({ id: r.id, ok: false, error: (e as Error).message })
       }
     }
 
-    return NextResponse.json({ analyzed: allResults.length, saved, results: allResults })
+    return NextResponse.json({ fixed, failed, total: allResults.length, results })
   }
 
   // ── APPLY ALL APPROVED ───────────────────────────────────────
   if (action === 'apply') {
     const applyAll = searchParams.get('all') === 'true'
     const postId   = searchParams.get('post_id')
-
     let toApply: any[] = []
     if (applyAll) {
       const { data } = await admin.from('seo_metadata').select('*').eq('status', 'approved')
@@ -196,7 +335,6 @@ try {
       const { data } = await admin.from('seo_metadata').select('*').eq('post_id', postId)
       toApply = data || []
     }
-
     let applied = 0, failed = 0
     for (const item of toApply) {
       const ok = await wpUpdate(parseInt(item.post_id), {
@@ -207,19 +345,15 @@ try {
           _yoast_wpseo_focuskw: item.focus_keyword,
         },
       })
-      if (ok) {
-        applied++
-        await admin.from('seo_metadata').update({ status: 'applied' }).eq('post_id', item.post_id)
-      } else {
-        failed++
-      }
+      if (ok) { applied++; await admin.from('seo_metadata').update({ status: 'applied' }).eq('post_id', item.post_id) }
+      else failed++
       await new Promise(r => setTimeout(r, 300))
     }
     return NextResponse.json({ applied, failed })
   }
 
   // ── STATUS ───────────────────────────────────────────────────
- if (action === 'status') {
+  if (action === 'status') {
     const { data } = await admin.from('seo_metadata')
       .select('*').order('updated_at', { ascending: false }).limit(200)
       .not('post_id', 'is', null)
