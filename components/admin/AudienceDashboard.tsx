@@ -28,20 +28,24 @@ export function AudienceDashboard() {
   const [activeTab, setActiveTab] = useState<'overview' | 'geo' | 'leads' | 'scroll'>('overview')
   const [selectedSite, setSelectedSite] = useState<string>('all')
   const [scrollDays, setScrollDays] = useState(7)
+  const [dateFrom, setDateFrom] = useState(() => {
+    const d = new Date(); d.setDate(d.getDate() - 30)
+    return d.toISOString().split('T')[0]
+  })
+  const [dateTo, setDateTo] = useState(() => new Date().toISOString().split('T')[0])
   const [sendingEmail, setSendingEmail] = useState(false)
   const [emailAddr, setEmailAddr] = useState('')
   const [showEmailInput, setShowEmailInput] = useState(false)
 
-  useEffect(() => { loadData() }, [selectedSite])
+  useEffect(() => { loadData() }, [selectedSite, dateFrom, dateTo])
   useEffect(() => { if (activeTab === 'scroll') loadScrollStats() }, [activeTab, scrollDays, selectedSite])
 
   async function loadData() {
     setLoading(true)
     try {
-      const url = selectedSite === 'all'
-        ? '/api/audience/dashboard'
-        : `/api/audience/dashboard?site=${encodeURIComponent(selectedSite)}`
-      const res = await fetch(url)
+      const params = new URLSearchParams({ from: dateFrom, to: dateTo })
+      if (selectedSite !== 'all') params.set('site', selectedSite)
+      const res = await fetch(`/api/audience/dashboard?${params}`)
       setData(await res.json())
     } finally {
       setLoading(false)
@@ -151,6 +155,26 @@ export function AudienceDashboard() {
               <option key={s.site} value={s.site}>{s.site}</option>
             ))}
           </select>
+          <div className="flex items-center gap-2">
+            <input type="date" className="input text-xs" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
+            <span className="text-xs text-ink-400">to</span>
+            <input type="date" className="input text-xs" value={dateTo} onChange={e => setDateTo(e.target.value)} />
+          </div>
+          <div className="flex gap-1 p-1 bg-ink-100 rounded-xl">
+            {[
+              { l: '7d', days: 7 }, { l: '30d', days: 30 },
+              { l: '90d', days: 90 }, { l: 'All', days: 365 },
+            ].map(opt => (
+              <button key={opt.l} onClick={() => {
+                const to = new Date().toISOString().split('T')[0]
+                const from = new Date(Date.now() - opt.days * 86400000).toISOString().split('T')[0]
+                setDateFrom(from); setDateTo(to)
+              }}
+                className="px-3 py-1.5 text-xs font-medium rounded-lg transition-colors bg-white shadow text-ink-900 hover:bg-ink-50">
+                {opt.l}
+              </button>
+            ))}
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={downloadCSV} disabled={!data?.recentLeads?.length}
@@ -450,8 +474,8 @@ export function AudienceDashboard() {
               <table className="w-full text-sm">
                 <thead><tr className="bg-ink-50 border-b border-ink-100">
                   <th className="text-left px-4 py-2 text-xs font-medium text-ink-500">Email</th>
-                  <th className="text-left px-4 py-2 text-xs font-medium text-ink-500">Name</th>
                   <th className="text-left px-4 py-2 text-xs font-medium text-ink-500">City</th>
+                  <th className="text-left px-4 py-2 text-xs font-medium text-ink-500">Country</th>
                   <th className="text-center px-3 py-2 text-xs font-medium text-ink-500">Gender</th>
                   <th className="text-center px-3 py-2 text-xs font-medium text-ink-500">Age</th>
                   <th className="text-left px-4 py-2 text-xs font-medium text-ink-500">Source Site</th>
@@ -461,8 +485,8 @@ export function AudienceDashboard() {
                   {recentLeads.map((l, i) => (
                     <tr key={i} className="border-b border-ink-50 hover:bg-ink-50/50">
                       <td className="px-4 py-2.5 text-xs text-ink-900 font-medium">{l.email}</td>
-                      <td className="px-4 py-2.5 text-xs text-ink-600">{l.name || '—'}</td>
                       <td className="px-4 py-2.5 text-xs text-ink-600">{l.city || '—'}</td>
+                      <td className="px-4 py-2.5 text-xs text-ink-600">{l.country || '—'}</td>
                       <td className="px-3 py-2.5 text-xs text-center capitalize">{l.gender || '—'}</td>
                       <td className="px-3 py-2.5 text-xs text-center">{l.age_range || '—'}</td>
                       <td className="px-4 py-2.5 text-xs text-blue-600 truncate max-w-xs">{l.source_site}</td>
@@ -519,7 +543,7 @@ export function AudienceDashboard() {
                 </div>
                 <div className="card p-4 text-center">
                   <p className={`text-3xl font-bold ${depthColor(scrollStats.buckets.find(b => b.label === '75-90%' || b.label === '90-100%')?.percentage || 0)}`}>
-                    {(scrollStats.buckets.filter(b => b.label === '75-90%' || b.label === '90-100%').reduce((s, b) => s + b.count, 0) / scrollStats.total_sessions * 100).toFixed(0)}%
+                    {(scrollStats.buckets.filter(b => b.min >= 75).reduce((s, b) => s + b.count, 0) / scrollStats.total_sessions * 100).toFixed(0)}%
                   </p>
                   <p className="text-xs text-ink-400 mt-1">Read 75%+ of page</p>
                 </div>
@@ -542,7 +566,7 @@ export function AudienceDashboard() {
                         <span className="text-ink-400">{b.count} sessions ({b.percentage}%)</span>
                       </div>
                       <div className="h-3 bg-ink-100 rounded-full overflow-hidden">
-                        <div className={`h-3 rounded-full transition-all ${depthBg(parseInt(b.label) || 50)}`}
+                        <div className={`h-3 rounded-full transition-all ${depthBg(b.min + 12)}`}
                           style={{ width: `${b.percentage}%` }} />
                       </div>
                     </div>
