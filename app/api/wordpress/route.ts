@@ -60,7 +60,6 @@ async function wpFetch(url: string, auth: string, options: RequestInit = {}) {
     headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json', ...options.headers },
   })
   const text = await res.text()
-  // Check if response is HTML (error page)
   if (text.trim().startsWith('<') || text.trim().startsWith('<!')) {
     throw new Error(`WordPress returned HTML instead of JSON (HTTP ${res.status}). Check your WordPress URL and credentials.`)
   }
@@ -69,6 +68,28 @@ async function wpFetch(url: string, auth: string, options: RequestInit = {}) {
   } catch {
     throw new Error(`Invalid JSON from WordPress (HTTP ${res.status}): ${text.slice(0, 100)}`)
   }
+}
+
+// Get or create a tag in WordPress, return its ID
+async function getOrCreateTag(base: string, auth: string, tagName: string): Promise<number | null> {
+  try {
+    const slug = tagName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+    // Check if tag exists
+    const searchRes = await wpFetch(`${base}/wp-json/wp/v2/tags?search=${encodeURIComponent(tagName)}&per_page=5`, auth)
+    if (searchRes.ok && Array.isArray(searchRes.data)) {
+      const existing = searchRes.data.find((t: { name: string; slug: string }) =>
+        t.name.toLowerCase() === tagName.toLowerCase() || t.slug === slug
+      )
+      if (existing) return existing.id
+    }
+    // Create tag
+    const createRes = await wpFetch(`${base}/wp-json/wp/v2/tags`, auth, {
+      method: 'POST',
+      body: JSON.stringify({ name: tagName, slug }),
+    })
+    if (createRes.ok && createRes.data?.id) return createRes.data.id
+  } catch { /* skip failed tag */ }
+  return null
 }
 
 export async function POST(req: NextRequest) {
@@ -98,7 +119,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    // Test credentials first
+    // Test credentials
     const authTest = await wpFetch(`${base}/wp-json/wp/v2/users/me`, auth)
     if (!authTest.ok) {
       return NextResponse.json({
@@ -120,14 +141,38 @@ export async function POST(req: NextRequest) {
       if (exact) return NextResponse.json({ error: 'Duplicate: same title exists', duplicate: true, existing_url: exact.link }, { status: 409 })
     }
 
-    // Get WP categories
+    // Get WP category ID
     const catRes = await wpFetch(`${base}/wp-json/wp/v2/categories?per_page=100`, auth)
     const wpCats = catRes.ok ? catRes.data : []
     const catName = article.categories?.name || article.category_name || ''
     const matched = wpCats.find((c: { name: string; id: number }) => c.name.toLowerCase() === catName.toLowerCase())
     const categoryIds = matched ? [matched.id] : []
 
-    // Publish
+    // Process tags — from article.keywords array
+    const tagIds: number[] = []
+    const rawTags: string[] = []
+
+    // Use keywords as tags
+    if (Array.isArray(article.keywords) && article.keywords.length > 0) {
+      rawTags.push(...article.keywords.slice(0, 10)) // max 10 tags
+    }
+    // Also add focus keyword as tag if not already included
+    if (article.focus_keyword && !rawTags.includes(article.focus_keyword)) {
+      rawTags.unshift(article.focus_keyword)
+    }
+    // Add category as tag
+    if (catName && !rawTags.includes(catName)) {
+      rawTags.push(catName)
+    }
+
+    // Get or create each tag in WordPress
+    if (rawTags.length > 0) {
+      const tagPromises = rawTags.slice(0, 10).map(tag => getOrCreateTag(base, auth, tag))
+      const resolvedIds = await Promise.all(tagPromises)
+      tagIds.push(...resolvedIds.filter((id): id is number => id !== null))
+    }
+
+    // Publish post
     const wpRes = await wpFetch(`${base}/wp-json/wp/v2/posts`, auth, {
       method: 'POST',
       body: JSON.stringify({
@@ -137,6 +182,7 @@ export async function POST(req: NextRequest) {
         status: 'publish',
         slug: article.slug,
         categories: categoryIds,
+        tags: tagIds,
         ...(featured_media ? { featured_media } : {}),
         meta: {
           _yoast_wpseo_title: article.seo_title || article.title,
@@ -150,7 +196,13 @@ export async function POST(req: NextRequest) {
 
     await supabase.from('articles').update({ status: 'published', published_at: new Date().toISOString() }).eq('id', article_id)
 
-    return NextResponse.json({ success: true, wp_post_id: wpRes.data.id, wp_url: wpRes.data.link, ads_injected: !!site?.id })
+    return NextResponse.json({
+      success: true,
+      wp_post_id: wpRes.data.id,
+      wp_url: wpRes.data.link,
+      ads_injected: !!site?.id,
+      tags_added: tagIds.length,
+    })
 
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 })
