@@ -17,9 +17,8 @@ export async function GET(req: NextRequest) {
   )
 
   const { searchParams } = new URL(req.url)
-  const siteFilter = searchParams.get('site') // optional site filter
+  const siteFilter = searchParams.get('site')
 
-  // Build site filter condition
   const siteCondition = siteFilter
     ? (q: any) => q.eq('source_site', siteFilter)
     : (q: any) => q
@@ -38,20 +37,39 @@ export async function GET(req: NextRequest) {
     { data: dailyEvents },
     { data: topSitesRaw },
   ] = await Promise.all([
+    // Total profiles
     siteCondition(admin.from('audience_profiles').select('*', { count: 'exact', head: true })),
-    siteCondition(admin.from('audience_leads').select('*', { count: 'exact', head: true })),
+    // Leads = profiles with email — from audience_profiles not audience_leads
+    siteCondition(admin.from('audience_profiles').select('*', { count: 'exact', head: true }))
+      .not('email', 'is', null).not('email', 'eq', ''),
+    // Mobile
     siteCondition(admin.from('audience_profiles').select('*', { count: 'exact', head: true })).eq('device_type', 'mobile'),
+    // Desktop
     siteCondition(admin.from('audience_profiles').select('*', { count: 'exact', head: true })).eq('device_type', 'desktop'),
+    // Cities
     siteCondition(admin.from('audience_profiles').select('city')).not('city', 'is', null).not('city', 'eq', ''),
+    // Interests
     siteCondition(admin.from('audience_profiles').select('interests')).not('interests', 'is', null),
+    // Device
     siteCondition(admin.from('audience_profiles').select('device_type')).not('device_type', 'is', null),
+    // Gender
     siteCondition(admin.from('audience_profiles').select('gender')).not('gender', 'is', null),
+    // Age
     siteCondition(admin.from('audience_profiles').select('age_range')).not('age_range', 'is', null),
-    siteCondition(admin.from('audience_leads').select('email, name, city, gender, age_range, source_site, created_at'))
-      .order('created_at', { ascending: false }).limit(50),
-    siteCondition(admin.from('audience_events').select('created_at, event_type')
-      .gte('created_at', new Date(Date.now() - 30 * 86400000).toISOString()))
-      .eq('event_type', 'pageview'),
+    // Recent leads — from audience_profiles with email
+    siteCondition(
+      admin.from('audience_profiles')
+        .select('email, city, country, source_site, created_at')
+        .not('email', 'is', null)
+        .not('email', 'eq', '')
+    ).order('created_at', { ascending: false }).limit(50),
+    // Daily pageviews
+    siteCondition(
+      admin.from('audience_events')
+        .select('created_at, event_type')
+        .gte('created_at', new Date(Date.now() - 30 * 86400000).toISOString())
+    ).eq('event_type', 'pageview'),
+    // Top sites
     admin.from('audience_events').select('site_url').eq('event_type', 'pageview'),
   ])
 
@@ -125,7 +143,15 @@ export async function GET(req: NextRequest) {
     topCities,
     topInterests,
     topSites,
-    recentLeads: recentLeads || [],
+    recentLeads: (recentLeads || []).map((l: any) => ({
+      email: l.email,
+      name: l.name || '',
+      city: l.city || '',
+      gender: l.gender || '',
+      age_range: l.age_range || '',
+      source_site: l.source_site || '',
+      created_at: l.created_at,
+    })),
     chartData: Object.entries(dayMap).map(([date, views]) => ({ date, views })),
   })
 }
