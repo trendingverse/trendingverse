@@ -306,7 +306,7 @@ export function AudienceDashboard() {
                     </div>
                   )
                 })}
-                {Object.keys(genderBreakdown).length === 0 && <p className="text-xs text-ink-300">Collected via subscribe form</p>}
+                {Object.keys(genderBreakdown).length === 0 && <p className="text-xs text-ink-300">No gender data yet</p>}
               </div>
             </div>
 
@@ -328,7 +328,7 @@ export function AudienceDashboard() {
                     </div>
                   )
                 })}
-                {Object.keys(ageBreakdown).length === 0 && <p className="text-xs text-ink-300">Collected via subscribe form</p>}
+                {Object.keys(ageBreakdown).length === 0 && <p className="text-xs text-ink-300">No age data yet</p>}
               </div>
             </div>
           </div>
