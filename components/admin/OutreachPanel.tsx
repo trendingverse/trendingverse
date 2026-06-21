@@ -7,7 +7,7 @@ interface Publisher {
   category: string; region: string; language: string
   monthly_audience: string; contact_email: string; contact_phone: string
   contact_name?: string; notes?: string; status?: string
-  why?: string; fit_score?: number; contact_verified?: boolean
+  why?: string; fit_score?: number; contact_verified?: boolean; contact_source?: string
 }
 
 interface Campaign {
@@ -426,9 +426,13 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
                             <div className="flex items-center gap-3 mt-1 flex-wrap">
                               <span className="text-xs text-ink-500">📧 {pub.contact_email}</span>
                               <span className="text-xs text-ink-500">📞 {pub.contact_phone}</span>
-                              {!pub.contact_verified && (
-                                <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-medium" title="AI-suggested contact — not from a verified directory. Confirm before sending.">
-                                  ⚠️ Unverified — confirm before sending
+                              {pub.contact_verified ? (
+                                <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-medium" title={pub.contact_source}>
+                                  ✓ Found on site
+                                </span>
+                              ) : (
+                                <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-medium" title={pub.contact_source || 'AI estimate — not found on site, please verify'}>
+                                  ⚠️ Not found on site — verify
                                 </span>
                               )}
                             </div>
