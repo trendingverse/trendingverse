@@ -7,7 +7,7 @@ interface Publisher {
   category: string; region: string; language: string
   monthly_audience: string; contact_email: string; contact_phone: string
   contact_name?: string; notes?: string; status?: string
-  why?: string; fit_score?: number
+  why?: string; fit_score?: number; contact_verified?: boolean
 }
 
 interface Campaign {
@@ -244,11 +244,11 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
   }
 
   function downloadCSV(pubs: Publisher[]) {
-    const headers = ['Publisher Name','Website','Category','Region','Language','Monthly Audience','Contact Email','Phone','Fit Score','Why','Status']
+    const headers = ['Publisher Name','Website','Category','Region','Language','Monthly Audience','Contact Email','Contact Verified','Phone','Fit Score','Why','Status']
     const rows = pubs.map(p => [
       p.name, p.site || p.site_url || '', p.category, p.region, p.language,
-      p.monthly_audience, p.contact_email, p.contact_phone,
-      p.fit_score ? p.fit_score + '%' : '—', p.why || '', p.status || 'prospect',
+      p.monthly_audience, p.contact_email, p.contact_verified ? 'Yes' : 'No — confirm before use',
+      p.contact_phone, p.fit_score ? p.fit_score + '%' : '—', p.why || '', p.status || 'prospect',
     ])
     const csv = [headers, ...rows].map(r => r.map(v => `"${(v||'').toString().replace(/"/g,'""')}"`).join(',')).join('\n')
     const blob = new Blob([csv], { type: 'text/csv' })
@@ -423,9 +423,14 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
                               {(pub as any).pmp_supported && <span className="text-[10px] bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded-full font-medium">🔒 PMP</span>}
                             </div>
                             {pub.why && <p className="text-xs text-blue-600 mt-1">{pub.why}</p>}
-                            <div className="flex items-center gap-3 mt-1">
+                            <div className="flex items-center gap-3 mt-1 flex-wrap">
                               <span className="text-xs text-ink-500">📧 {pub.contact_email}</span>
                               <span className="text-xs text-ink-500">📞 {pub.contact_phone}</span>
+                              {!pub.contact_verified && (
+                                <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-medium" title="AI-suggested contact — not from a verified directory. Confirm before sending.">
+                                  ⚠️ Unverified — confirm before sending
+                                </span>
+                              )}
                             </div>
                           </div>
                         </div>
