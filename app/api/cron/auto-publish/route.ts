@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 
-export const maxDuration = 60
+export const maxDuration = 300 // Vercel will clamp to your plan's actual max if lower
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'khan.khan.yusuf@gmail.com'
 
@@ -322,7 +322,7 @@ async function runCurrencyRatesUpdate(
   }
 
   // Step 4 — run AI generation + WordPress push for all tasks, 5 at a time in parallel
-  const taskResults = await mapWithConcurrency(tasks, 5, async (task) => {
+  const taskResults = await mapWithConcurrency(tasks, 8, async (task) => {
     const { base, target, rate, prevRate, langKey } = task
     const changePct = prevRate > 0 ? ((rate - prevRate) / prevRate) * 100 : 0
     const slug = `${base.toLowerCase()}-${target.toLowerCase()}-rate-today-${langKey}`
@@ -372,6 +372,115 @@ async function runCurrencyRatesUpdate(
 // ── MAIN CRON HANDLER ──────────────────────────────────────────────
 // ════════════════════════════════════════════════════════════════
 
+async function runArticlePublish(
+  supabase: any, geminiKey: string, pexelsKey: string | undefined, newsApiKey: string | undefined,
+  wpBase: string, auth: string, wpUrl: string, adminUserId: string | null, langParam: string, regionParam: string
+): Promise<{ result: any; log: string[] }> {
+  const log: string[] = []
+  try {
+    log.push(`Starting auto-publish | lang: ${langParam} | region: ${regionParam}`)
+    log.push('Fetching trending topic...')
+    const trend = await getTrendingTopic(geminiKey, newsApiKey, regionParam)
+    log.push(`Topic: ${trend.title}`)
+
+    const slug = slugify(trend.title)
+    const isDuplicate = await checkDuplicate(slug, trend.title, wpBase, auth)
+    if (isDuplicate) {
+      log.push(`Duplicate detected — skipping`)
+      await supabase.from('cron_logs').insert({ status: 'skipped', title: trend.title, wp_url: wpUrl, log, user_id: adminUserId })
+      return { result: { success: false, skipped: true, reason: 'duplicate' }, log }
+    }
+
+    log.push(`Generating article in ${LANGUAGES[langParam] || 'English'}...`)
+    const article = await generateArticle(trend.title, trend.keywords, trend.category, geminiKey, langParam)
+    log.push(`Article: ${article.title}`)
+
+    let wpMediaId: number | null = null
+    if (pexelsKey) {
+      log.push('Fetching photo from Pexels...')
+      const photo = await fetchPexelsImage(trend.keywords.slice(0, 2).join(' '), pexelsKey)
+      if (photo) {
+        try {
+          const imgRes = await fetch(photo.src.large || photo.src.original)
+          if (imgRes.ok) {
+            const imgBuffer = Buffer.from(await imgRes.arrayBuffer())
+            const filename = `${slug}-${Date.now()}.jpg`
+            const uploadRes = await fetch(`${wpBase}/wp-json/wp/v2/media`, {
+              method: 'POST',
+              headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'image/jpeg', 'Content-Disposition': `attachment; filename="${filename}"` },
+              body: imgBuffer,
+            })
+            if (uploadRes.ok) {
+              const media = await uploadRes.json()
+              wpMediaId = media.id
+              log.push(`Photo uploaded (ID: ${wpMediaId})`)
+            }
+          }
+        } catch { log.push('Photo upload failed — continuing') }
+      }
+    }
+
+    const catRes = await fetch(`${wpBase}/wp-json/wp/v2/categories?per_page=100`, { headers: { Authorization: `Basic ${auth}` } })
+    const wpCats = catRes.ok ? await catRes.json() : []
+    const matched = wpCats.find((c: { name: string }) => c.name.toLowerCase() === (trend.category || 'news').toLowerCase())
+    const categoryIds = matched ? [matched.id] : []
+
+    log.push('Publishing to WordPress...')
+    const wpRes = await fetch(`${wpBase}/wp-json/wp/v2/posts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Basic ${auth}` },
+      body: JSON.stringify({
+        title: article.title,
+        content: article.content,
+        excerpt: article.excerpt,
+        status: 'publish',
+        slug: slugify(article.title),
+        categories: categoryIds,
+        ...(wpMediaId ? { featured_media: wpMediaId } : {}),
+        meta: {
+          _yoast_wpseo_title: article.seo_title || article.title,
+          _yoast_wpseo_metadesc: article.meta_description || '',
+          _yoast_wpseo_focuskw: article.focus_keyword || '',
+        }
+      }),
+    })
+    const wpData = await wpRes.json()
+    if (!wpRes.ok) throw new Error(wpData.message || 'WordPress publish failed')
+    log.push(`Published: ${wpData.link}`)
+
+    await supabase.from('articles').insert({
+      title: article.title,
+      slug: slugify(article.title),
+      content: article.content,
+      excerpt: article.excerpt,
+      seo_title: article.seo_title,
+      meta_description: article.meta_description,
+      focus_keyword: article.focus_keyword,
+      keywords: article.keywords || [],
+      status: 'published',
+      ai_generated: true,
+      source: 'cron',
+      user_id: adminUserId,
+      author_name: 'TrendingVerse AI',
+      word_count: (article.content || '').replace(/<[^>]+>/g, '').split(' ').length,
+      reading_time_min: article.reading_time || 4,
+      published_at: new Date().toISOString(),
+    })
+
+    await supabase.from('cron_logs').insert({
+      status: 'success', title: article.title, wp_url: wpData.link, log, user_id: adminUserId,
+    })
+
+    return { result: { success: true, title: article.title, wp_url: wpData.link, wp_post_id: wpData.id, language: LANGUAGES[langParam] }, log }
+  } catch (e) {
+    log.push(`Error: ${(e as Error).message}`)
+    try {
+      await supabase.from('cron_logs').insert({ status: 'failed', error: (e as Error).message, wp_url: wpUrl, log, user_id: adminUserId })
+    } catch { /* ignore log errors */ }
+    return { result: { success: false, error: (e as Error).message }, log }
+  }
+}
+
 export async function GET(req: NextRequest) {
   if (!isAuthorized(req)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -389,7 +498,6 @@ export async function GET(req: NextRequest) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   )
 
-  // Get admin user_id so cron logs are linked to admin account
   const { data: { users } } = await supabase.auth.admin.listUsers()
   const adminUserId = users?.find(u => u.email === ADMIN_EMAIL)?.id || null
 
@@ -402,133 +510,20 @@ export async function GET(req: NextRequest) {
 
   const wpBase = wpUrl.replace(/\/$/, '')
   const auth = Buffer.from(`${wpUsername}:${wpPassword}`).toString('base64')
-  const log: string[] = []
 
-  let articleResult: any = { success: false }
+  // ── Run article publishing AND currency rates update CONCURRENTLY ──
+  // (previously sequential — total time was article_time + currency_time;
+  // now it's max(article_time, currency_time), roughly halving wall-clock time)
+  const [articleOutcome, currencyOutcome] = await Promise.all([
+    runArticlePublish(supabase, geminiKey, pexelsKey, newsApiKey, wpBase, auth, wpUrl, adminUserId, langParam, regionParam),
+    runCurrencyRatesUpdate(supabase, geminiKey, wpBase, auth).catch((e) => ({ updated: 0, failed: 0, log: [`Currency rates error: ${(e as Error).message}`] })),
+  ])
 
-  try {
-    log.push(`Starting auto-publish | lang: ${langParam} | region: ${regionParam}`)
-
-    log.push('Fetching trending topic...')
-    const trend = await getTrendingTopic(geminiKey, newsApiKey, regionParam)
-    log.push(`Topic: ${trend.title}`)
-
-    const slug = slugify(trend.title)
-    const isDuplicate = await checkDuplicate(slug, trend.title, wpBase, auth)
-    if (isDuplicate) {
-      log.push(`Duplicate detected — skipping`)
-      await supabase.from('cron_logs').insert({
-        status: 'skipped', title: trend.title, wp_url: wpUrl, log, user_id: adminUserId,
-      })
-      articleResult = { success: false, skipped: true, reason: 'duplicate', log }
-    } else {
-      log.push(`Generating article in ${LANGUAGES[langParam] || 'English'}...`)
-      const article = await generateArticle(trend.title, trend.keywords, trend.category, geminiKey, langParam)
-      log.push(`Article: ${article.title}`)
-
-      let wpMediaId: number | null = null
-      if (pexelsKey) {
-        log.push('Fetching photo from Pexels...')
-        const photo = await fetchPexelsImage(trend.keywords.slice(0, 2).join(' '), pexelsKey)
-        if (photo) {
-          try {
-            const imgRes = await fetch(photo.src.large || photo.src.original)
-            if (imgRes.ok) {
-              const imgBuffer = Buffer.from(await imgRes.arrayBuffer())
-              const filename = `${slug}-${Date.now()}.jpg`
-              const uploadRes = await fetch(`${wpBase}/wp-json/wp/v2/media`, {
-                method: 'POST',
-                headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'image/jpeg', 'Content-Disposition': `attachment; filename="${filename}"` },
-                body: imgBuffer,
-              })
-              if (uploadRes.ok) {
-                const media = await uploadRes.json()
-                wpMediaId = media.id
-                log.push(`Photo uploaded (ID: ${wpMediaId})`)
-              }
-            }
-          } catch { log.push('Photo upload failed — continuing') }
-        }
-      }
-
-      const catRes = await fetch(`${wpBase}/wp-json/wp/v2/categories?per_page=100`, { headers: { Authorization: `Basic ${auth}` } })
-      const wpCats = catRes.ok ? await catRes.json() : []
-      const matched = wpCats.find((c: { name: string }) => c.name.toLowerCase() === (trend.category || 'news').toLowerCase())
-      const categoryIds = matched ? [matched.id] : []
-
-      log.push('Publishing to WordPress...')
-      const wpRes = await fetch(`${wpBase}/wp-json/wp/v2/posts`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Basic ${auth}` },
-        body: JSON.stringify({
-          title: article.title,
-          content: article.content,
-          excerpt: article.excerpt,
-          status: 'publish',
-          slug: slugify(article.title),
-          categories: categoryIds,
-          ...(wpMediaId ? { featured_media: wpMediaId } : {}),
-          meta: {
-            _yoast_wpseo_title: article.seo_title || article.title,
-            _yoast_wpseo_metadesc: article.meta_description || '',
-            _yoast_wpseo_focuskw: article.focus_keyword || '',
-          }
-        }),
-      })
-      const wpData = await wpRes.json()
-      if (!wpRes.ok) throw new Error(wpData.message || 'WordPress publish failed')
-      log.push(`Published: ${wpData.link}`)
-
-      await supabase.from('articles').insert({
-        title: article.title,
-        slug: slugify(article.title),
-        content: article.content,
-        excerpt: article.excerpt,
-        seo_title: article.seo_title,
-        meta_description: article.meta_description,
-        focus_keyword: article.focus_keyword,
-        keywords: article.keywords || [],
-        status: 'published',
-        ai_generated: true,
-        source: 'cron',
-        user_id: adminUserId,
-        author_name: 'TrendingVerse AI',
-        word_count: (article.content || '').replace(/<[^>]+>/g, '').split(' ').length,
-        reading_time_min: article.reading_time || 4,
-        published_at: new Date().toISOString(),
-      })
-
-      await supabase.from('cron_logs').insert({
-        status: 'success', title: article.title, wp_url: wpData.link, log, user_id: adminUserId,
-      })
-
-      articleResult = { success: true, title: article.title, wp_url: wpData.link, wp_post_id: wpData.id, language: LANGUAGES[langParam] }
-    }
-  } catch (e) {
-    log.push(`Error: ${(e as Error).message}`)
-    try {
-      await supabase.from('cron_logs').insert({
-        status: 'failed', error: (e as Error).message, wp_url: wpUrl, log, user_id: adminUserId,
-      })
-    } catch { /* ignore log errors */ }
-    articleResult = { success: false, error: (e as Error).message }
-  }
-
-  // ── CURRENCY RATES — runs after the article step, same cron execution ──
-  let currencyResult: any = { skipped: true }
-  try {
-    log.push('Starting currency rates update...')
-    currencyResult = await runCurrencyRatesUpdate(supabase, geminiKey, wpBase, auth)
-    log.push(...currencyResult.log)
-    log.push(`Currency rates: ${currencyResult.updated} updated, ${currencyResult.failed} failed`)
-  } catch (e) {
-    log.push(`Currency rates error: ${(e as Error).message}`)
-    currencyResult = { error: (e as Error).message }
-  }
+  const log = [...articleOutcome.log, ...currencyOutcome.log]
 
   return NextResponse.json({
-    article: articleResult,
-    currency: currencyResult,
+    article: articleOutcome.result,
+    currency: { updated: currencyOutcome.updated, failed: currencyOutcome.failed },
     log,
   })
 }
