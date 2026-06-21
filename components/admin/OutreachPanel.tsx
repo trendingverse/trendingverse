@@ -151,27 +151,46 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
     setSuggesting(false)
   }
 
+  // ── FIXED: always builds campaign_summary from the campaign that's
+  // actually relevant to this draft — never reuses a stale `summary`
+  // left over from a different campaign's "Find Publishers" run.
   async function draftEmail(pub: Publisher, campaignOverride?: Campaign) {
     setDraftingFor(pub)
     setDraftLoading(true)
     setEmailDraft('')
     setSendModal(false)
 
-    // Build campaign summary from: active summary → campaignOverride → selectedCampaignId → most recent campaign
-    let campaignSummary = summary
-    const sourceC = campaignOverride || campaigns.find(c => c.id === selectedCampaignId) || activeCampaign || campaigns[0]
-    if (!campaignSummary && sourceC) {
-      campaignSummary = {
-        brand: sourceC.brand,
-        category: sourceC.category,
-        target_audience: sourceC.target_audience,
-        regions: sourceC.regions,
-        budget_range: sourceC.budget_range,
-        key_message: (sourceC as any).key_message || '',
-        campaign_type: (sourceC as any).campaign_type || '',
-        brief: sourceC.brief,
-      }
-    }
+    // Determine which campaign this draft is actually for:
+    // 1. Explicit override (e.g. passed in directly)
+    // 2. The campaign currently active in the Campaigns tab suggestions view
+    // 3. The campaign chosen in the dropdown on the Publishers tab
+    // 4. Fallback to the most recent campaign
+    const sourceC =
+      campaignOverride ||
+      activeCampaign ||
+      campaigns.find(c => c.id === selectedCampaignId) ||
+      campaigns[0]
+
+    // Only trust the AI-parsed `summary` state if it was generated for
+    // THIS specific campaign (i.e. we're actively viewing its suggestions).
+    // Otherwise always rebuild from the saved campaign record — this is
+    // what prevents drafting an email with a different campaign's details.
+    const summaryMatchesSource = !!activeCampaign && !campaignOverride && activeCampaign.id === sourceC?.id
+
+    const campaignSummary = summaryMatchesSource && summary
+      ? { ...summary, brief: sourceC?.brief || summary.brief }
+      : sourceC
+        ? {
+            brand: sourceC.brand,
+            category: sourceC.category,
+            target_audience: sourceC.target_audience,
+            regions: sourceC.regions,
+            budget_range: sourceC.budget_range,
+            key_message: (sourceC as any).key_message || '',
+            campaign_type: (sourceC as any).campaign_type || '',
+            brief: sourceC.brief,
+          }
+        : null
 
     const res = await fetch('/api/outreach/draft-email', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -276,7 +295,7 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
             <button onClick={() => setShowCampaignForm(true)} className="btn-primary text-xs px-4 py-2">+ New Campaign</button>
           )}
           {tab === 'campaigns' && activeCampaign && (
-            <button onClick={() => { setActiveCampaign(null); setSuggestions([]) }}
+            <button onClick={() => { setActiveCampaign(null); setSuggestions([]); setSummary(null) }}
               className="text-xs px-4 py-2 bg-ink-100 text-ink-600 rounded-xl hover:bg-ink-200">← All Campaigns</button>
           )}
           {tab === 'publishers' && (
@@ -613,12 +632,12 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
           {!emailDraft && !draftLoading && (
             <div className="grid grid-cols-2 gap-3 mb-4 p-3 bg-ink-50 rounded-xl">
               <div>
-                <label className="label">Your Name</label>
-                <input className="input" value={senderName} onChange={e => setSenderName(e.target.value)} placeholder="Bhanu Prakash" />
+                <label className="label">Your Name (optional)</label>
+                <input className="input" value={senderName} onChange={e => setSenderName(e.target.value)} placeholder="Leave blank for generic sign-off" />
               </div>
               <div>
-                <label className="label">Your Title</label>
-                <input className="input" value={senderTitle} onChange={e => setSenderTitle(e.target.value)} placeholder="Head of Media Buying" />
+                <label className="label">Your Title (optional)</label>
+                <input className="input" value={senderTitle} onChange={e => setSenderTitle(e.target.value)} placeholder="Leave blank for generic sign-off" />
               </div>
             </div>
           )}
