@@ -191,7 +191,7 @@ async function fetchCurrencyRate(base: string, target: string): Promise<number |
 async function generateCurrencyContent(
   base: string, target: string, rate: number, prevRate: number, changePct: number,
   langKey: string, geminiKey: string
-) {
+): Promise<{ title?: string; seo_title?: string; meta_description?: string; focus_keyword?: string; content?: string; __error?: string }> {
   const langName = CURRENCY_LANGUAGES[langKey] || 'English'
   const direction = changePct > 0.05 ? 'risen' : changePct < -0.05 ? 'fallen' : 'remained largely stable'
 
@@ -228,14 +228,40 @@ Return ONLY valid JSON, no markdown:
       }
     )
     const data = await res.json()
+    if (data.error) {
+      return { __error: `Gemini API error (${data.error.code || res.status}): ${data.error.message || JSON.stringify(data.error).slice(0, 150)}` }
+    }
     const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+    if (!raw) {
+      const finishReason = data.candidates?.[0]?.finishReason
+      return { __error: `Empty response from Gemini${finishReason ? ` (finishReason: ${finishReason})` : ''}` }
+    }
     const cleaned = raw.replace(/```json\n?|```/g, '').trim()
     const match = cleaned.match(/\{[\s\S]*\}/)
-    if (!match) return null
-    return JSON.parse(match[0])
-  } catch {
-    return null
+    if (!match) return { __error: 'No JSON found in Gemini response: ' + raw.slice(0, 120) }
+    const parsed = JSON.parse(match[0])
+    if (!parsed.content) return { __error: 'Parsed JSON missing content field' }
+    return parsed
+  } catch (e) {
+    return { __error: `Request failed: ${(e as Error).message}` }
   }
+}
+
+// Retry wrapper — transient rate-limit/network errors often succeed on retry
+async function generateCurrencyContentWithRetry(
+  base: string, target: string, rate: number, prevRate: number, changePct: number,
+  langKey: string, geminiKey: string, maxRetries = 2
+): Promise<{ title?: string; seo_title?: string; meta_description?: string; focus_keyword?: string; content?: string; __error?: string }> {
+  let lastError = 'Unknown error'
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const result = await generateCurrencyContent(base, target, rate, prevRate, changePct, langKey, geminiKey)
+    if (result && !result.__error && result.content) return result
+    lastError = result.__error || 'AI returned no content'
+    if (attempt < maxRetries) {
+      await new Promise(r => setTimeout(r, 1200 * (attempt + 1))) // 1.2s, then 2.4s backoff
+    }
+  }
+  return { __error: lastError }
 }
 
 async function pushCurrencyToWordPress(existingWpPostId: number | null, pageData: any, wpBase: string, auth: string) {
@@ -322,7 +348,7 @@ async function runCurrencyRatesUpdate(
   }
 
   // Step 4 — run AI generation + WordPress push for all tasks, 5 at a time in parallel
-  const taskResults = await mapWithConcurrency(tasks, 8, async (task) => {
+  const taskResults = await mapWithConcurrency(tasks, 4, async (task) => {
     const { base, target, rate, prevRate, langKey } = task
     const changePct = prevRate > 0 ? ((rate - prevRate) / prevRate) * 100 : 0
     const slug = `${base.toLowerCase()}-${target.toLowerCase()}-rate-today-${langKey}`
@@ -332,9 +358,9 @@ async function runCurrencyRatesUpdate(
       .eq('base_currency', base).eq('target_currency', target).eq('language', langKey)
       .single()
 
-    const ai = await generateCurrencyContent(base, target, rate, prevRate, changePct, langKey, geminiKey)
+    const ai = await generateCurrencyContentWithRetry(base, target, rate, prevRate, changePct, langKey, geminiKey)
     if (!ai || !ai.content) {
-      return { ok: false, base, langKey, error: 'AI content generation failed' }
+      return { ok: false, base, langKey, error: ai?.__error || 'AI content generation failed (unknown reason)' }
     }
 
     const pageData = {
