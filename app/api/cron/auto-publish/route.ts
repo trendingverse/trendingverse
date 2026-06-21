@@ -261,9 +261,37 @@ async function generateCurrencyContentWithRetry(
   return { __error: lastError }
 }
 
-async function pushCurrencyToWordPress(existingWpPostId: number | null, pageData: any, wpBase: string, auth: string) {
+// ── GET OR CREATE WORDPRESS CATEGORY (with optional parent) ──────
+async function getOrCreateCategory(wpBase: string, auth: string, name: string, parentId?: number): Promise<number | null> {
+  try {
+    const searchRes = await fetch(`${wpBase}/wp-json/wp/v2/categories?search=${encodeURIComponent(name)}&per_page=10`, {
+      headers: { Authorization: `Basic ${auth}` },
+    })
+    if (searchRes.ok) {
+      const cats = await searchRes.json()
+      const existing = cats.find((c: any) =>
+        c.name.toLowerCase() === name.toLowerCase() && (parentId === undefined || c.parent === parentId)
+      )
+      if (existing) return existing.id
+    }
+    const body: any = { name, slug: name.toLowerCase().replace(/[^a-z0-9]+/g, '-') }
+    if (parentId) body.parent = parentId
+    const createRes = await fetch(`${wpBase}/wp-json/wp/v2/categories`, {
+      method: 'POST',
+      headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    if (createRes.ok) {
+      const cat = await createRes.json()
+      return cat.id || null
+    }
+  } catch { /* ignore */ }
+  return null
+}
+
+async function pushCurrencyToWordPress(existingWpPostId: number | null, pageData: any, wpBase: string, auth: string, categoryId?: number | null) {
   const headers = { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' }
-  const body = {
+  const body: any = {
     title: pageData.title,
     content: pageData.ai_content,
     slug: pageData.slug,
@@ -274,6 +302,7 @@ async function pushCurrencyToWordPress(existingWpPostId: number | null, pageData
       _yoast_wpseo_focuskw: pageData.focus_keyword,
     },
   }
+  if (categoryId) body.categories = [categoryId]
   try {
     const url = existingWpPostId
       ? `${wpBase}/wp-json/wp/v2/posts/${existingWpPostId}`
@@ -337,6 +366,14 @@ async function runCurrencyRatesUpdate(
     })
   )
 
+  // Resolve "Finance → Currency Rates" category once (not per task)
+  let currencyCategoryId: number | null = null
+  try {
+    const financeCatId = await getOrCreateCategory(wpBase, auth, 'Finance')
+    currencyCategoryId = await getOrCreateCategory(wpBase, auth, 'Currency Rates', financeCatId || undefined)
+    if (currencyCategoryId) log.push(`[currency] Using category ID ${currencyCategoryId} (Finance → Currency Rates)`)
+  } catch { log.push('[currency] Category setup failed — publishing without category') }
+
   // Step 3 — build flat list of (corridor × language) tasks
   type Task = { base: string; target: string; rate: number; prevRate: number; langKey: string }
   const tasks: Task[] = []
@@ -372,7 +409,7 @@ async function runCurrencyRatesUpdate(
     }
 
     // Always publish to trendingverse.online — never to other publisher sites
-    const wpResult = await pushCurrencyToWordPress(existing?.wp_post_id || null, pageData, wpBase, auth)
+    const wpResult = await pushCurrencyToWordPress(existing?.wp_post_id || null, pageData, wpBase, auth, currencyCategoryId)
 
     pageData.wp_post_id = wpResult.ok ? wpResult.wp_post_id : existing?.wp_post_id
     pageData.wp_url = wpResult.ok ? wpResult.wp_url : undefined
