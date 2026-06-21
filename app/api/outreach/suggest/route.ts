@@ -98,8 +98,16 @@ ${scopeInstruction}
 
 Keep ALL field values SHORT. "why" = max 12 words. "monthly_audience" = format like "5M/mo".
 
+IMPORTANT — CONTACT INFO HONESTY:
+You do not have access to a live, verified contacts directory. For "contact_email", do NOT invent a specific-looking personal or department email (e.g. "programmatic@oneindia.com") unless you are highly confident it is publicly documented and real.
+Instead:
+- If you know the publisher's REAL, publicly documented ad-sales contact, use it and set "contact_verified": true
+- Otherwise, use a generic, commonly-used pattern for that domain such as "ads@[domain]" or "advertise@[domain]" or "partnerships@[domain]" and set "contact_verified": false
+- Set "contact_phone" to "N/A" unless you are confident of a real published number — do not invent phone numbers
+- Never fabricate a plausible-sounding but unverified email and present it as if it were confirmed
+
 Return ONLY a JSON array, no markdown:
-[{"name":"","site":"","category":"","region":"","language":"","monthly_audience":"","ctv_available":false,"pmp_supported":false,"contact_email":"","contact_phone":"","why":"","fit_score":85}]`
+[{"name":"","site":"","category":"","region":"","language":"","monthly_audience":"","ctv_available":false,"pmp_supported":false,"contact_email":"","contact_phone":"","contact_verified":false,"why":"","fit_score":85}]`
 
   try {
     const res = await fetch(
@@ -133,6 +141,12 @@ Return ONLY a JSON array, no markdown:
     if (!suggestions || !Array.isArray(suggestions)) {
       return NextResponse.json({ error: 'Could not parse suggestions', raw_preview: raw.slice(0, 300) }, { status: 500 })
     }
+
+    // Default contact_verified to false if model omitted it — never assume verified
+    suggestions = suggestions.map((s: any) => ({
+      ...s,
+      contact_verified: s.contact_verified === true,
+    }))
 
     const { data: existingPubs } = await admin.from('publishers_db').select('*').limit(50)
     return NextResponse.json({ summary, suggestions, existing_count: existingPubs?.length || 0 })
