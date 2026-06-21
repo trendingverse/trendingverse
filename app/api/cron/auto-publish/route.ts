@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 
+export const maxDuration = 60
+
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'khan.khan.yusuf@gmail.com'
 
 const LANGUAGES: Record<string, string> = {
@@ -153,6 +155,182 @@ async function checkDuplicate(slug: string, title: string, wpBase: string, auth:
   return false
 }
 
+// ════════════════════════════════════════════════════════════════
+// ── CURRENCY RATES MODULE — merged into this cron (Vercel Hobby
+// only allows 1 daily cron, so this runs right after the article
+// publish step instead of as a separate cron job) ─────────────────
+// ════════════════════════════════════════════════════════════════
+
+const CURRENCY_CORRIDORS = [
+  { base: 'AED', target: 'INR' },
+  { base: 'SAR', target: 'INR' },
+  { base: 'USD', target: 'INR' },
+  { base: 'GBP', target: 'INR' },
+  { base: 'QAR', target: 'INR' },
+]
+
+const CURRENCY_LANGUAGES: Record<string, string> = {
+  malayalam: 'Malayalam',
+  tamil: 'Tamil',
+  hindi: 'Hindi',
+  kannada: 'Kannada',
+}
+
+async function fetchCurrencyRate(base: string, target: string): Promise<number | null> {
+  try {
+    const res = await fetch(`https://open.er-api.com/v6/latest/${base}`)
+    const data = await res.json()
+    if (data.result !== 'success') return null
+    const rate = data.rates?.[target]
+    return typeof rate === 'number' ? rate : null
+  } catch {
+    return null
+  }
+}
+
+async function generateCurrencyContent(
+  base: string, target: string, rate: number, prevRate: number, changePct: number,
+  langKey: string, geminiKey: string
+) {
+  const langName = CURRENCY_LANGUAGES[langKey] || 'English'
+  const direction = changePct > 0.05 ? 'risen' : changePct < -0.05 ? 'fallen' : 'remained largely stable'
+
+  const prompt = `You are a financial content writer for an Indian news platform serving the NRI diaspora.
+
+Write a complete, SEO-optimized article in ${langName} (native script) about today's ${base} to ${target} exchange rate.
+
+DATA (use ONLY these numbers, do not invent any other historical data or statistics):
+- Today's rate: 1 ${base} = ${rate.toFixed(2)} ${target}
+- Yesterday's rate: 1 ${base} = ${prevRate.toFixed(2)} ${target}
+- Change: ${changePct.toFixed(2)}% (the rate has ${direction})
+
+Write entirely in ${langName}:
+1. title — engaging headline mentioning ${base} to ${target} and "today"
+2. seo_title — under 60 characters
+3. meta_description — 150-160 characters with a call to action
+4. focus_keyword — 2-4 words, what someone searching would actually type
+5. content — 500-600 word article covering: today's rate clearly stated upfront, comparison to yesterday, what this means practically for someone sending money from a ${base}-using country to India, 3-4 practical tips for getting a good remittance rate, brief plain-language context on what generally moves this currency pair, and a short FAQ section with 3 questions and answers about this currency pair.
+
+Add this exact disclaimer line (translated into ${langName}) at the end of the content: "Rates are indicative and sourced from public exchange rate data; please check with your bank or remittance provider for the exact live rate before transferring money."
+
+Return ONLY valid JSON, no markdown:
+{"title":"","seo_title":"","meta_description":"","focus_keyword":"","content":""}`
+
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+      {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.4, maxOutputTokens: 4096 },
+        }),
+      }
+    )
+    const data = await res.json()
+    const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+    const cleaned = raw.replace(/```json\n?|```/g, '').trim()
+    const match = cleaned.match(/\{[\s\S]*\}/)
+    if (!match) return null
+    return JSON.parse(match[0])
+  } catch {
+    return null
+  }
+}
+
+async function pushCurrencyToWordPress(existingWpPostId: number | null, pageData: any, wpBase: string, auth: string) {
+  const headers = { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' }
+  const body = {
+    title: pageData.title,
+    content: pageData.ai_content,
+    slug: pageData.slug,
+    status: 'publish',
+    meta: {
+      _yoast_wpseo_title: pageData.seo_title,
+      _yoast_wpseo_metadesc: pageData.meta_description,
+      _yoast_wpseo_focuskw: pageData.focus_keyword,
+    },
+  }
+  try {
+    const url = existingWpPostId
+      ? `${wpBase}/wp-json/wp/v2/posts/${existingWpPostId}`
+      : `${wpBase}/wp-json/wp/v2/posts`
+    const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) })
+    const text = await res.text()
+    if (text.trim().startsWith('<')) return { ok: false, error: `WordPress returned HTML (HTTP ${res.status})` }
+    const data = JSON.parse(text)
+    if (!res.ok) return { ok: false, error: data.message || 'WP publish failed' }
+    return { ok: true, wp_post_id: data.id, wp_url: data.link }
+  } catch (e) {
+    return { ok: false, error: (e as Error).message }
+  }
+}
+
+async function runCurrencyRatesUpdate(
+  supabase: ReturnType<typeof createServiceClient>, geminiKey: string, wpBase: string, auth: string
+): Promise<{ updated: number; failed: number; log: string[] }> {
+  const log: string[] = []
+  const today = new Date().toISOString().split('T')[0]
+  const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0]
+  let updated = 0, failed = 0
+
+  for (const { base, target } of CURRENCY_CORRIDORS) {
+    const rate = await fetchCurrencyRate(base, target)
+    if (!rate) { log.push(`[currency] ${base}→${target}: rate fetch failed`); failed++; continue }
+
+    await supabase.from('currency_rates').upsert({
+      base_currency: base, target_currency: target, rate, rate_date: today,
+    }, { onConflict: 'base_currency,target_currency,rate_date' })
+
+    const { data: prevRow } = await supabase.from('currency_rates')
+      .select('rate').eq('base_currency', base).eq('target_currency', target).eq('rate_date', yesterday).single()
+    const prevRate = prevRow?.rate || rate
+    const changePct = prevRate > 0 ? ((rate - prevRate) / prevRate) * 100 : 0
+
+    for (const langKey of Object.keys(CURRENCY_LANGUAGES)) {
+      const slug = `${base.toLowerCase()}-${target.toLowerCase()}-rate-today-${langKey}`
+      const { data: existing } = await supabase.from('currency_pages')
+        .select('id, wp_post_id')
+        .eq('base_currency', base).eq('target_currency', target).eq('language', langKey)
+        .single()
+
+      const ai = await generateCurrencyContent(base, target, rate, prevRate, changePct, langKey, geminiKey)
+      if (!ai || !ai.content) { log.push(`[currency] ${base}-${langKey}: AI generation failed`); failed++; continue }
+
+      const pageData = {
+        base_currency: base, target_currency: target, language: langKey, slug,
+        title: ai.title, seo_title: ai.seo_title, meta_description: ai.meta_description,
+        focus_keyword: ai.focus_keyword, ai_content: ai.content,
+        current_rate: rate, previous_rate: prevRate, rate_change_pct: changePct,
+        last_updated_at: new Date().toISOString(),
+      }
+
+      const wpResult = await pushCurrencyToWordPress(existing?.wp_post_id || null, pageData, wpBase, auth)
+
+      const finalData = {
+        ...pageData,
+        wp_post_id: wpResult.ok ? wpResult.wp_post_id : existing?.wp_post_id,
+        wp_url: wpResult.ok ? wpResult.wp_url : undefined,
+        status: wpResult.ok ? 'published' : 'pending',
+      }
+
+      if (existing) await supabase.from('currency_pages').update(finalData).eq('id', existing.id)
+      else await supabase.from('currency_pages').insert(finalData)
+
+      if (wpResult.ok) { updated++; log.push(`[currency] ${base}-${langKey}: published`) }
+      else { failed++; log.push(`[currency] ${base}-${langKey}: ${wpResult.error}`) }
+
+      await new Promise(r => setTimeout(r, 500))
+    }
+  }
+
+  return { updated, failed, log }
+}
+
+// ════════════════════════════════════════════════════════════════
+// ── MAIN CRON HANDLER ──────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════
+
 export async function GET(req: NextRequest) {
   if (!isAuthorized(req)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -171,16 +349,6 @@ export async function GET(req: NextRequest) {
   )
 
   // Get admin user_id so cron logs are linked to admin account
-  const { data: adminUser } = await supabase
-    .from('user_profiles')
-    .select('id')
-    .eq('id', (
-      await supabase.auth.admin.listUsers()
-        .then(({ data }) => data?.users?.find(u => u.email === ADMIN_EMAIL)?.id || '')
-    ))
-    .single()
-
-  // Fallback — get admin directly from auth
   const { data: { users } } = await supabase.auth.admin.listUsers()
   const adminUserId = users?.find(u => u.email === ADMIN_EMAIL)?.id || null
 
@@ -195,6 +363,8 @@ export async function GET(req: NextRequest) {
   const auth = Buffer.from(`${wpUsername}:${wpPassword}`).toString('base64')
   const log: string[] = []
 
+  let articleResult: any = { success: false }
+
   try {
     log.push(`Starting auto-publish | lang: ${langParam} | region: ${regionParam}`)
 
@@ -207,114 +377,117 @@ export async function GET(req: NextRequest) {
     if (isDuplicate) {
       log.push(`Duplicate detected — skipping`)
       await supabase.from('cron_logs').insert({
-        status: 'skipped',
-        title: trend.title,
-        wp_url: wpUrl,
-        log,
-        user_id: adminUserId,
+        status: 'skipped', title: trend.title, wp_url: wpUrl, log, user_id: adminUserId,
       })
-      return NextResponse.json({ success: false, skipped: true, reason: 'duplicate', log })
-    }
+      articleResult = { success: false, skipped: true, reason: 'duplicate', log }
+    } else {
+      log.push(`Generating article in ${LANGUAGES[langParam] || 'English'}...`)
+      const article = await generateArticle(trend.title, trend.keywords, trend.category, geminiKey, langParam)
+      log.push(`Article: ${article.title}`)
 
-    log.push(`Generating article in ${LANGUAGES[langParam] || 'English'}...`)
-    const article = await generateArticle(trend.title, trend.keywords, trend.category, geminiKey, langParam)
-    log.push(`Article: ${article.title}`)
-
-    let wpMediaId: number | null = null
-    if (pexelsKey) {
-      log.push('Fetching photo from Pexels...')
-      const photo = await fetchPexelsImage(trend.keywords.slice(0, 2).join(' '), pexelsKey)
-      if (photo) {
-        try {
-          const imgRes = await fetch(photo.src.large || photo.src.original)
-          if (imgRes.ok) {
-            const imgBuffer = Buffer.from(await imgRes.arrayBuffer())
-            const filename = `${slug}-${Date.now()}.jpg`
-            const uploadRes = await fetch(`${wpBase}/wp-json/wp/v2/media`, {
-              method: 'POST',
-              headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'image/jpeg', 'Content-Disposition': `attachment; filename="${filename}"` },
-              body: imgBuffer,
-            })
-            if (uploadRes.ok) {
-              const media = await uploadRes.json()
-              wpMediaId = media.id
-              log.push(`Photo uploaded (ID: ${wpMediaId})`)
+      let wpMediaId: number | null = null
+      if (pexelsKey) {
+        log.push('Fetching photo from Pexels...')
+        const photo = await fetchPexelsImage(trend.keywords.slice(0, 2).join(' '), pexelsKey)
+        if (photo) {
+          try {
+            const imgRes = await fetch(photo.src.large || photo.src.original)
+            if (imgRes.ok) {
+              const imgBuffer = Buffer.from(await imgRes.arrayBuffer())
+              const filename = `${slug}-${Date.now()}.jpg`
+              const uploadRes = await fetch(`${wpBase}/wp-json/wp/v2/media`, {
+                method: 'POST',
+                headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'image/jpeg', 'Content-Disposition': `attachment; filename="${filename}"` },
+                body: imgBuffer,
+              })
+              if (uploadRes.ok) {
+                const media = await uploadRes.json()
+                wpMediaId = media.id
+                log.push(`Photo uploaded (ID: ${wpMediaId})`)
+              }
             }
-          }
-        } catch { log.push('Photo upload failed — continuing') }
+          } catch { log.push('Photo upload failed — continuing') }
+        }
       }
-    }
 
-    const catRes = await fetch(`${wpBase}/wp-json/wp/v2/categories?per_page=100`, { headers: { Authorization: `Basic ${auth}` } })
-    const wpCats = catRes.ok ? await catRes.json() : []
-    const matched = wpCats.find((c: { name: string }) => c.name.toLowerCase() === (trend.category || 'news').toLowerCase())
-    const categoryIds = matched ? [matched.id] : []
+      const catRes = await fetch(`${wpBase}/wp-json/wp/v2/categories?per_page=100`, { headers: { Authorization: `Basic ${auth}` } })
+      const wpCats = catRes.ok ? await catRes.json() : []
+      const matched = wpCats.find((c: { name: string }) => c.name.toLowerCase() === (trend.category || 'news').toLowerCase())
+      const categoryIds = matched ? [matched.id] : []
 
-    log.push('Publishing to WordPress...')
-    const wpRes = await fetch(`${wpBase}/wp-json/wp/v2/posts`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Basic ${auth}` },
-      body: JSON.stringify({
+      log.push('Publishing to WordPress...')
+      const wpRes = await fetch(`${wpBase}/wp-json/wp/v2/posts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Basic ${auth}` },
+        body: JSON.stringify({
+          title: article.title,
+          content: article.content,
+          excerpt: article.excerpt,
+          status: 'publish',
+          slug: slugify(article.title),
+          categories: categoryIds,
+          ...(wpMediaId ? { featured_media: wpMediaId } : {}),
+          meta: {
+            _yoast_wpseo_title: article.seo_title || article.title,
+            _yoast_wpseo_metadesc: article.meta_description || '',
+            _yoast_wpseo_focuskw: article.focus_keyword || '',
+          }
+        }),
+      })
+      const wpData = await wpRes.json()
+      if (!wpRes.ok) throw new Error(wpData.message || 'WordPress publish failed')
+      log.push(`Published: ${wpData.link}`)
+
+      await supabase.from('articles').insert({
         title: article.title,
+        slug: slugify(article.title),
         content: article.content,
         excerpt: article.excerpt,
-        status: 'publish',
-        slug: slugify(article.title),
-        categories: categoryIds,
-        ...(wpMediaId ? { featured_media: wpMediaId } : {}),
-        meta: {
-          _yoast_wpseo_title: article.seo_title || article.title,
-          _yoast_wpseo_metadesc: article.meta_description || '',
-          _yoast_wpseo_focuskw: article.focus_keyword || '',
-        }
-      }),
-    })
-    const wpData = await wpRes.json()
-    if (!wpRes.ok) throw new Error(wpData.message || 'WordPress publish failed')
-    log.push(`Published: ${wpData.link}`)
+        seo_title: article.seo_title,
+        meta_description: article.meta_description,
+        focus_keyword: article.focus_keyword,
+        keywords: article.keywords || [],
+        status: 'published',
+        ai_generated: true,
+        source: 'cron',
+        user_id: adminUserId,
+        author_name: 'TrendingVerse AI',
+        word_count: (article.content || '').replace(/<[^>]+>/g, '').split(' ').length,
+        reading_time_min: article.reading_time || 4,
+        published_at: new Date().toISOString(),
+      })
 
-    // Save article with admin user_id + source cron
-    await supabase.from('articles').insert({
-      title: article.title,
-      slug: slugify(article.title),
-      content: article.content,
-      excerpt: article.excerpt,
-      seo_title: article.seo_title,
-      meta_description: article.meta_description,
-      focus_keyword: article.focus_keyword,
-      keywords: article.keywords || [],
-      status: 'published',
-      ai_generated: true,
-      source: 'cron',
-      user_id: adminUserId,
-      author_name: 'TrendingVerse AI',
-      word_count: (article.content || '').replace(/<[^>]+>/g, '').split(' ').length,
-      reading_time_min: article.reading_time || 4,
-      published_at: new Date().toISOString(),
-    })
+      await supabase.from('cron_logs').insert({
+        status: 'success', title: article.title, wp_url: wpData.link, log, user_id: adminUserId,
+      })
 
-    // Save cron log with admin user_id
-    await supabase.from('cron_logs').insert({
-      status: 'success',
-      title: article.title,
-      wp_url: wpData.link,
-      log,
-      user_id: adminUserId,
-    })
-
-    return NextResponse.json({ success: true, title: article.title, wp_url: wpData.link, wp_post_id: wpData.id, language: LANGUAGES[langParam], log })
-
+      articleResult = { success: true, title: article.title, wp_url: wpData.link, wp_post_id: wpData.id, language: LANGUAGES[langParam] }
+    }
   } catch (e) {
     log.push(`Error: ${(e as Error).message}`)
     try {
       await supabase.from('cron_logs').insert({
-        status: 'failed',
-        error: (e as Error).message,
-        wp_url: wpUrl,
-        log,
-        user_id: adminUserId,
+        status: 'failed', error: (e as Error).message, wp_url: wpUrl, log, user_id: adminUserId,
       })
     } catch { /* ignore log errors */ }
-    return NextResponse.json({ success: false, error: (e as Error).message, log }, { status: 500 })
+    articleResult = { success: false, error: (e as Error).message }
   }
+
+  // ── CURRENCY RATES — runs after the article step, same cron execution ──
+  let currencyResult: any = { skipped: true }
+  try {
+    log.push('Starting currency rates update...')
+    currencyResult = await runCurrencyRatesUpdate(supabase, geminiKey, wpBase, auth)
+    log.push(...currencyResult.log)
+    log.push(`Currency rates: ${currencyResult.updated} updated, ${currencyResult.failed} failed`)
+  } catch (e) {
+    log.push(`Currency rates error: ${(e as Error).message}`)
+    currencyResult = { error: (e as Error).message }
+  }
+
+  return NextResponse.json({
+    article: articleResult,
+    currency: currencyResult,
+    log,
+  })
 }
