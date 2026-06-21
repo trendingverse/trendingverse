@@ -27,17 +27,19 @@ export async function POST(req: NextRequest) {
 
   const geminiKey = process.env.GEMINI_API_KEY!
 
-  // ── SENDER IDENTITY — pull from advertiser profile by default ──
-  // Explicit sender_name/sender_title/sender_company passed in only override the profile when set.
+  // ── SENDER IDENTITY ──────────────────────────────────────────
+  // Generic by default — only use a personal name/title if explicitly typed into this specific campaign's form.
+  // Never auto-pull or invent a name/designation.
   const company = (sender_company && sender_company.trim()) || profile?.company_name || 'our team'
-  const name    = (sender_name    && sender_name.trim())    || profile?.full_name    || ''
-  const title   = (sender_title   && sender_title.trim())   || profile?.designation  || ''
+  const name    = (sender_name  && sender_name.trim())  || ''
+  const title   = (sender_title && sender_title.trim()) || ''
   const hasPersonalSender = !!name
 
   const cs = campaign_summary || {}
 
   // Detect campaign signals for correct terminology
   const rawBrief = cs.brief || cs.campaign_brief || cs.raw_brief || ''
+  const dealType = cs.deal_type || cs.campaign_type || ''
   const isCTV    = (cs.device || rawBrief).toLowerCase().includes('ctv') ||
                    (cs.device || rawBrief).toLowerCase().includes('connected tv')
   const isDV360  = (cs.integration || rawBrief).toLowerCase().includes('dv360')
@@ -50,7 +52,7 @@ export async function POST(req: NextRequest) {
     regions                       ? `• Geography: ${regions}` : null,
     cs.device                     ? `• Device: ${cs.device}` : null,
     cs.creative_length             ? `• Creative Length: ${cs.creative_length}` : null,
-    cs.deal_type                   ? `• Deal Type: ${cs.deal_type}` : null,
+    dealType                       ? `• Deal Type: ${dealType}` : null,
     cs.integration                  ? `• Integration: ${cs.integration}` : null,
     cs.budget_range                 ? `• Budget: ${cs.budget_range}` : null,
     cs.key_message                  ? `• Campaign Goal: ${cs.key_message}` : null,
@@ -98,10 +100,9 @@ Use standard digital advertising terminology appropriate for this publisher type
     ? `Sign off using EXACTLY this name and title, verbatim, with no modification, no invented designation:
 ${name}${title ? '\n' + title : ''}
 ${company}`
-    : `No sender name is on file. Sign off simply as:
-${name || 'the Partnerships Team'}
-${company}
-Do NOT invent a personal title or designation (e.g. do not write "Head of ${company}" or any made-up role). Keep the sign-off generic and professional.`
+    : `Sign off generically — no personal name, no title, no designation of any kind. Sign off exactly as:
+The ${company} Team
+Do NOT invent or include any person's name, "Head of X", "Partnerships Team", or any role/designation. Just the company name on its own.`
 
   const prompt = `You are writing on behalf of ${company} — a programmatic advertising / ad tech company — to pitch a specific advertising campaign to a publisher named ${publisher.name}.
 
@@ -121,8 +122,10 @@ CRITICAL RULES:
 - Every campaign-specific claim in the email MUST trace back to the campaign details/brief given above. Never invent product names, budgets, or audience details not mentioned.
 - NEVER restate the publisher's own audience size, monthly users, or traffic stats back to them as if informing them of their own numbers.
 - No vague filler like "we can help monetize your audience"
+- Never wrap brand names, product names, or publisher names in quotation marks — write them as plain proper nouns (e.g. "the Nykaa campaign" not "the 'Nykaa' campaign")
 - Total body: 130-160 words
 - Tone: confident, peer-to-peer, media industry professional
+- If only minimal campaign details are available (e.g. just a brand/region with no specifics), write a SHORTER, more natural 90-110 word email rather than stretching thin details across multiple padded paragraphs. A short, honest email reads more professional than a long one full of filler.
 
 ${signatureInstruction}
 
@@ -148,7 +151,7 @@ Best regards,
     const data = await res.json()
     const draft = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
     if (!draft) return NextResponse.json({ error: 'Email generation failed' }, { status: 500 })
-    return NextResponse.json({ draft, debug: { hasBrief, hasStructured, hasRawBrief, hasPersonalSender, name, title, company } })
+    return NextResponse.json({ draft, debug: { hasBrief, hasStructured, hasRawBrief, hasPersonalSender, name, title, company, dealType } })
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 })
   }
