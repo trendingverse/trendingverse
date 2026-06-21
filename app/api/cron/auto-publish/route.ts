@@ -266,6 +266,21 @@ async function pushCurrencyToWordPress(existingWpPostId: number | null, pageData
   }
 }
 
+// ── Concurrency-limited parallel executor ──────────────────────
+async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length)
+  let idx = 0
+  async function worker() {
+    while (idx < items.length) {
+      const current = idx++
+      results[current] = await fn(items[current])
+    }
+  }
+  const workers = Array(Math.min(limit, items.length)).fill(0).map(() => worker())
+  await Promise.all(workers)
+  return results
+}
+
 async function runCurrencyRatesUpdate(
   supabase: any, geminiKey: string, wpBase: string, auth: string
 ): Promise<{ updated: number; failed: number; log: string[] }> {
@@ -274,54 +289,80 @@ async function runCurrencyRatesUpdate(
   const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0]
   let updated = 0, failed = 0
 
-  for (const { base, target } of CURRENCY_CORRIDORS) {
-    const rate = await fetchCurrencyRate(base, target)
-    if (!rate) { log.push(`[currency] ${base}→${target}: rate fetch failed`); failed++; continue }
+  // Step 1 — fetch all 5 corridor rates in parallel (fast HTTP calls, no AI)
+  const corridorRates = await Promise.all(
+    CURRENCY_CORRIDORS.map(async (c) => {
+      const rate = await fetchCurrencyRate(c.base, c.target)
+      return { ...c, rate }
+    })
+  )
 
-    await supabase.from('currency_rates').upsert({
-      base_currency: base, target_currency: target, rate, rate_date: today,
-    }, { onConflict: 'base_currency,target_currency,rate_date' })
+  // Step 2 — upsert today's rate + fetch yesterday's rate, in parallel
+  const corridorData = await Promise.all(
+    corridorRates.map(async ({ base, target, rate }) => {
+      if (!rate) return { base, target, rate: null as number | null, prevRate: null as number | null }
+      await supabase.from('currency_rates').upsert({
+        base_currency: base, target_currency: target, rate, rate_date: today,
+      }, { onConflict: 'base_currency,target_currency,rate_date' })
+      const { data: prevRow } = await supabase.from('currency_rates')
+        .select('rate').eq('base_currency', base).eq('target_currency', target).eq('rate_date', yesterday).single()
+      const prevRate = prevRow?.rate || rate
+      return { base, target, rate, prevRate }
+    })
+  )
 
-    const { data: prevRow } = await supabase.from('currency_rates')
-      .select('rate').eq('base_currency', base).eq('target_currency', target).eq('rate_date', yesterday).single()
-    const prevRate = prevRow?.rate || rate
-    const changePct = prevRate > 0 ? ((rate - prevRate) / prevRate) * 100 : 0
-
+  // Step 3 — build flat list of (corridor × language) tasks
+  type Task = { base: string; target: string; rate: number; prevRate: number; langKey: string }
+  const tasks: Task[] = []
+  for (const c of corridorData) {
+    if (!c.rate) { failed += Object.keys(CURRENCY_LANGUAGES).length; log.push(`[currency] ${c.base}→${c.target}: rate fetch failed`); continue }
     for (const langKey of Object.keys(CURRENCY_LANGUAGES)) {
-      const slug = `${base.toLowerCase()}-${target.toLowerCase()}-rate-today-${langKey}`
-      const { data: existing } = await supabase.from('currency_pages')
-        .select('id, wp_post_id')
-        .eq('base_currency', base).eq('target_currency', target).eq('language', langKey)
-        .single()
-
-      const ai = await generateCurrencyContent(base, target, rate, prevRate, changePct, langKey, geminiKey)
-      if (!ai || !ai.content) { log.push(`[currency] ${base}-${langKey}: AI generation failed`); failed++; continue }
-
-      const pageData = {
-        base_currency: base, target_currency: target, language: langKey, slug,
-        title: ai.title, seo_title: ai.seo_title, meta_description: ai.meta_description,
-        focus_keyword: ai.focus_keyword, ai_content: ai.content,
-        current_rate: rate, previous_rate: prevRate, rate_change_pct: changePct,
-        last_updated_at: new Date().toISOString(),
-      }
-
-      const wpResult = await pushCurrencyToWordPress(existing?.wp_post_id || null, pageData, wpBase, auth)
-
-      const finalData = {
-        ...pageData,
-        wp_post_id: wpResult.ok ? wpResult.wp_post_id : existing?.wp_post_id,
-        wp_url: wpResult.ok ? wpResult.wp_url : undefined,
-        status: wpResult.ok ? 'published' : 'pending',
-      }
-
-      if (existing) await supabase.from('currency_pages').update(finalData).eq('id', existing.id)
-      else await supabase.from('currency_pages').insert(finalData)
-
-      if (wpResult.ok) { updated++; log.push(`[currency] ${base}-${langKey}: published`) }
-      else { failed++; log.push(`[currency] ${base}-${langKey}: ${wpResult.error}`) }
-
-      await new Promise(r => setTimeout(r, 500))
+      tasks.push({ base: c.base, target: c.target, rate: c.rate, prevRate: c.prevRate || c.rate, langKey })
     }
+  }
+
+  // Step 4 — run AI generation + WordPress push for all tasks, 5 at a time in parallel
+  const taskResults = await mapWithConcurrency(tasks, 5, async (task) => {
+    const { base, target, rate, prevRate, langKey } = task
+    const changePct = prevRate > 0 ? ((rate - prevRate) / prevRate) * 100 : 0
+    const slug = `${base.toLowerCase()}-${target.toLowerCase()}-rate-today-${langKey}`
+
+    const { data: existing } = await supabase.from('currency_pages')
+      .select('id, wp_post_id')
+      .eq('base_currency', base).eq('target_currency', target).eq('language', langKey)
+      .single()
+
+    const ai = await generateCurrencyContent(base, target, rate, prevRate, changePct, langKey, geminiKey)
+    if (!ai || !ai.content) {
+      return { ok: false, base, langKey, error: 'AI content generation failed' }
+    }
+
+    const pageData = {
+      base_currency: base, target_currency: target, language: langKey, slug,
+      title: ai.title, seo_title: ai.seo_title, meta_description: ai.meta_description,
+      focus_keyword: ai.focus_keyword, ai_content: ai.content,
+      current_rate: rate, previous_rate: prevRate, rate_change_pct: changePct,
+      last_updated_at: new Date().toISOString(),
+    }
+
+    const wpResult = await pushCurrencyToWordPress(existing?.wp_post_id || null, pageData, wpBase, auth)
+
+    const finalData = {
+      ...pageData,
+      wp_post_id: wpResult.ok ? wpResult.wp_post_id : existing?.wp_post_id,
+      wp_url: wpResult.ok ? wpResult.wp_url : undefined,
+      status: wpResult.ok ? 'published' : 'pending',
+    }
+
+    if (existing) await supabase.from('currency_pages').update(finalData).eq('id', existing.id)
+    else await supabase.from('currency_pages').insert(finalData)
+
+    return { ok: wpResult.ok, base, langKey, error: wpResult.ok ? null : wpResult.error }
+  })
+
+  for (const r of taskResults) {
+    if (r.ok) { updated++; log.push(`[currency] ${r.base}-${r.langKey}: published`) }
+    else { failed++; log.push(`[currency] ${r.base}-${r.langKey}: ${r.error}`) }
   }
 
   return { updated, failed, log }
