@@ -267,7 +267,7 @@ async function pushCurrencyToWordPress(existingWpPostId: number | null, pageData
 }
 
 async function runCurrencyRatesUpdate(
-  supabase: ReturnType<typeof createServiceClient>, geminiKey: string, wpBase: string, auth: string
+  supabase: any, geminiKey: string, wpBase: string, auth: string
 ): Promise<{ updated: number; failed: number; log: string[] }> {
   const log: string[] = []
   const today = new Date().toISOString().split('T')[0]
