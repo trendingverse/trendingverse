@@ -216,7 +216,54 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ analyzed: allResults.length, saved, results: allResults })
   }
 
-  // ── BULK FIX — categorize + tag + SEO rewrite all articles ───
+  // ── RECATEGORIZE ONLY — verify + correct category per article ───
+// Unlike bulk_fix, this NEVER touches title, tags, or SEO metadata.
+// It only checks whether the current category is appropriate for the
+// content, and corrects it if not.
+async function geminiCategoryCheck(posts: any[], geminiKey: string) {
+  const batch = posts.map(p => ({
+    id: p.id,
+    title: p.title?.rendered?.replace(/<[^>]+>/g, '').replace(/&#[0-9]+;/g, '').trim() || '',
+    excerpt: p.excerpt?.rendered?.replace(/<[^>]+>/g, '').slice(0, 200).trim() || '',
+    current_category: p.current_category || 'Uncategorized',
+  })).filter(p => p.title.length > 5)
+
+  if (!batch.length) return []
+
+  const prompt = `You are auditing news article categorization for TrendingVerse, an Indian news site.
+
+For each article below, you are given its title, excerpt, and CURRENTLY ASSIGNED category.
+Determine the single best-fit category from EXACTLY this list (use this exact spelling/casing):
+${VALID_CATEGORIES.join(', ')}
+
+Be conservative — only flag needs_change as true if the current category is clearly wrong for the content. Minor stylistic disagreement (e.g. "Business" vs "Finance" for a markets story) should NOT be flagged unless one is clearly incorrect.
+
+Articles:
+${JSON.stringify(batch)}
+
+Return ONLY a valid JSON array, no markdown:
+[{"id":1,"current_category":"Politics","correct_category":"World","needs_change":true,"reason":"short reason"}]`
+
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.2, maxOutputTokens: 4096 },
+      }),
+    }
+  )
+  const data = await res.json()
+  const raw  = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+  const cleaned = raw.replace(/```json\n?|```/g, '').trim()
+  const match = cleaned.match(/\[[\s\S]*\]/)
+  if (!match) throw new Error('No JSON array in Gemini response: ' + raw.slice(0, 200))
+  return JSON.parse(match[0])
+}
+
+// ── BULK FIX — categorize + tag + SEO rewrite all articles ───
   if (action === 'bulk_fix') {
     const geminiKey = process.env.GEMINI_API_KEY!
     const limit = parseInt(searchParams.get('limit') || '20')
@@ -315,6 +362,100 @@ export async function GET(req: NextRequest) {
     }
 
     return NextResponse.json({ fixed, failed, total: allResults.length, results })
+  }
+
+  // ── RECATEGORIZE — category-only audit & correction ──────────
+  if (action === 'recategorize') {
+    const geminiKey = process.env.GEMINI_API_KEY!
+    const limit = parseInt(searchParams.get('limit') || '20')
+    const offset = parseInt(searchParams.get('offset') || '0')
+    const dryRun = searchParams.get('dry_run') === 'true'
+
+    const wpPage = Math.floor(offset / 50) + 1
+    const wpOffset = offset % 50
+    const raw = await wpGet(`/posts?per_page=50&page=${wpPage}&status=publish&_fields=id,title,excerpt,categories,slug&orderby=date&order=desc`)
+    if (!Array.isArray(raw) || raw.length === 0) {
+      return NextResponse.json({ error: 'No posts found', checked: 0 })
+    }
+    const posts = raw.slice(wpOffset, wpOffset + limit)
+    if (!posts.length) return NextResponse.json({ error: 'No posts in range', checked: 0 })
+
+    const wpCatsRaw = await wpGet('/categories?per_page=100')
+    const catIdToName: Record<number, string> = {}
+    const catNameToId: Record<string, number> = {}
+    for (const c of wpCatsRaw || []) {
+      catIdToName[c.id] = c.name
+      catNameToId[c.name.toLowerCase()] = c.id
+    }
+
+    const postsWithCurrentCat = posts.map((p: any) => ({
+      ...p,
+      current_category: (p.categories || []).map((id: number) => catIdToName[id]).filter(Boolean)[0] || 'Uncategorized',
+    }))
+
+    const allResults: any[] = []
+    const BATCH_SIZE = 10
+    for (let i = 0; i < postsWithCurrentCat.length; i += BATCH_SIZE) {
+      const chunk = postsWithCurrentCat.slice(i, i + BATCH_SIZE)
+      try {
+        const checks = await geminiCategoryCheck(chunk, geminiKey)
+        allResults.push(...checks)
+      } catch (e) {
+        return NextResponse.json({ error: (e as Error).message, checked: 0 })
+      }
+      if (i + BATCH_SIZE < postsWithCurrentCat.length) await new Promise(r => setTimeout(r, 1000))
+    }
+
+    let changed = 0, unchanged = 0, failed = 0
+    const changes: any[] = []
+
+    for (const r of allResults) {
+      if (!r.needs_change) { unchanged++; continue }
+      const correctCat = VALID_CATEGORIES.find(c => c.toLowerCase() === (r.correct_category || '').toLowerCase())
+      if (!correctCat) { unchanged++; continue }
+
+      changes.push({
+        id: r.id,
+        from: r.current_category,
+        to: correctCat,
+        reason: r.reason || '',
+        applied: !dryRun,
+      })
+
+      if (dryRun) continue
+
+      try {
+        let catId = catNameToId[correctCat.toLowerCase()]
+        if (!catId) {
+          const newCatId = await getOrCreateWpCategory(correctCat)
+          if (newCatId) { catId = newCatId; catNameToId[correctCat.toLowerCase()] = newCatId }
+        }
+        if (!catId) { failed++; continue }
+
+        // Only update categories — title, tags, SEO metadata untouched
+        const ok = await wpUpdate(r.id, { categories: [catId] })
+
+        if (ok) {
+          await admin.from('articles').update({ category_name: correctCat }).eq('wp_post_id', r.id)
+          changed++
+        } else {
+          failed++
+        }
+      } catch {
+        failed++
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 300))
+    }
+
+    return NextResponse.json({
+      checked: allResults.length,
+      changed,
+      unchanged,
+      failed,
+      dry_run: dryRun,
+      changes,
+    })
   }
 
   // ── APPLY ALL APPROVED ───────────────────────────────────────
