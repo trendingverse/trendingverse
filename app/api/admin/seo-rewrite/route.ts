@@ -420,15 +420,18 @@ Return ONLY a valid JSON array, no markdown, no commentary before or after:
       const correctCat = VALID_CATEGORIES.find(c => c.toLowerCase() === (r.correct_category || '').toLowerCase())
       if (!correctCat) { unchanged++; continue }
 
-      changes.push({
+      // Build the change record first, but DON'T assume success yet —
+      // `applied` and `error` get filled in below based on the actual outcome.
+      const changeRecord: any = {
         id: r.id,
         from: r.current_category,
         to: correctCat,
         reason: r.reason || '',
-        applied: !dryRun,
-      })
+        applied: false,
+      }
+      changes.push(changeRecord)
 
-      if (dryRun) continue
+      if (dryRun) { changeRecord.applied = false; changeRecord.note = 'dry run — not applied'; continue }
 
       try {
         let catId = catNameToId[correctCat.toLowerCase()]
@@ -436,7 +439,13 @@ Return ONLY a valid JSON array, no markdown, no commentary before or after:
           const newCatId = await getOrCreateWpCategory(correctCat)
           if (newCatId) { catId = newCatId; catNameToId[correctCat.toLowerCase()] = newCatId }
         }
-        if (!catId) { failed++; continue }
+        if (!catId) {
+          failed++
+          changeRecord.applied = false
+          changeRecord.error = 'Could not resolve category ID'
+          await new Promise(resolve => setTimeout(resolve, 300))
+          continue
+        }
 
         // Only update categories — title, tags, SEO metadata untouched
         const ok = await wpUpdate(r.id, { categories: [catId] })
@@ -444,11 +453,16 @@ Return ONLY a valid JSON array, no markdown, no commentary before or after:
         if (ok) {
           await admin.from('articles').update({ category_name: correctCat }).eq('wp_post_id', r.id)
           changed++
+          changeRecord.applied = true
         } else {
           failed++
+          changeRecord.applied = false
+          changeRecord.error = 'WordPress update failed'
         }
-      } catch {
+      } catch (e) {
         failed++
+        changeRecord.applied = false
+        changeRecord.error = (e as Error).message
       }
 
       await new Promise(resolve => setTimeout(resolve, 300))
