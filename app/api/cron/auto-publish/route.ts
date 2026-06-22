@@ -31,7 +31,15 @@ function isAuthorized(req: NextRequest): boolean {
 }
 
 function slugify(text: string): string {
-  return text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80)
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 80)
+    .replace(/^-|-$/g, '') // trim again — slicing to 80 can land exactly on a hyphen,
+                            // and WordPress's own slug sanitizer strips that trailing
+                            // hyphen on save, which was causing a mismatch with the
+                            // slug stored in Supabase.
 }
 
 async function getTrendingTopic(geminiKey: string, newsApiKey?: string, region = 'India') {
