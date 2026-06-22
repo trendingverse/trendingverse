@@ -222,7 +222,6 @@ export async function GET(req: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '20')
     const offset = parseInt(searchParams.get('offset') || '0')
 
-    // Fetch WP posts with content for categorization
     const wpPage = Math.floor(offset / 50) + 1
     const wpOffset = offset % 50
     const raw = await wpGet(`/posts?per_page=50&page=${wpPage}&status=publish&_fields=id,title,excerpt,categories,tags&orderby=date&order=desc`)
@@ -231,14 +230,12 @@ export async function GET(req: NextRequest) {
     }
     const posts = raw.slice(wpOffset, wpOffset + limit)
 
-    // Fetch existing WP categories
     const wpCatsRaw = await wpGet('/categories?per_page=100')
     const wpCategoryMap: Record<string, number> = {}
     for (const c of wpCatsRaw || []) {
       wpCategoryMap[c.name.toLowerCase()] = c.id
     }
 
-    // Run AI analysis — get category + keywords + SEO for each post
     const allResults: any[] = []
     const BATCH_SIZE = 10
     for (let i = 0; i < posts.length; i += BATCH_SIZE) {
@@ -252,13 +249,11 @@ export async function GET(req: NextRequest) {
       if (i + BATCH_SIZE < posts.length) await new Promise(r => setTimeout(r, 1000))
     }
 
-    // Apply each result to WordPress
     let fixed = 0, failed = 0
     const results = []
 
     for (const r of allResults) {
       try {
-        // Get or create category in WP
         const catName = VALID_CATEGORIES.includes(r.category) ? r.category : 'News'
         let catId = wpCategoryMap[catName.toLowerCase()]
         if (!catId) {
@@ -266,7 +261,6 @@ export async function GET(req: NextRequest) {
           if (newCatId) { catId = newCatId; wpCategoryMap[catName.toLowerCase()] = newCatId }
         }
 
-        // Get or create tags in WP
         const tagNames: string[] = [
           ...(Array.isArray(r.keywords) ? r.keywords : []),
           r.focus_keyword,
@@ -276,7 +270,6 @@ export async function GET(req: NextRequest) {
         const tagIdPromises = tagNames.map((t: string) => getOrCreateWpTag(t))
         const tagIds = (await Promise.all(tagIdPromises)).filter((id): id is number => id !== null)
 
-        // Update WP post — category + tags + SEO
         const ok = await wpUpdate(r.id, {
           title: r.discover_headline || undefined,
           categories: catId ? [catId] : undefined,
@@ -288,7 +281,6 @@ export async function GET(req: NextRequest) {
           },
         })
 
-        // Also update seo_metadata in Supabase
         await admin.from('seo_metadata').upsert({
           post_id: r.id.toString(),
           discover_headline: r.discover_headline || '',
@@ -301,19 +293,21 @@ export async function GET(req: NextRequest) {
           updated_at: new Date().toISOString(),
         }, { onConflict: 'post_id' })
 
-        // Update articles table category
+        // Update articles table — match by wp_post_id (reliable) instead of
+        // the old seo_title match, which compared against the NEW seo_title
+        // before it was saved and therefore almost never matched anything.
         await admin.from('articles').update({
           category_name: catName,
           keywords: Array.isArray(r.keywords) ? r.keywords : [],
           focus_keyword: r.focus_keyword || '',
           seo_title: r.seo_title || '',
           meta_description: r.meta_description || '',
-        }).eq('seo_title', r.seo_title || '').limit(1)
+        }).eq('wp_post_id', r.id)
 
         if (ok) { fixed++; results.push({ id: r.id, category: catName, tags: tagNames.length, ok: true }) }
         else { failed++; results.push({ id: r.id, ok: false }) }
 
-        await new Promise(resolve => setTimeout(resolve, 400)) // rate limit
+        await new Promise(resolve => setTimeout(resolve, 400))
       } catch (e) {
         failed++
         results.push({ id: r.id, ok: false, error: (e as Error).message })
