@@ -238,11 +238,13 @@ ${VALID_CATEGORIES.join(', ')}
 
 Be conservative — only flag needs_change as true if the current category is clearly wrong for the content. Minor stylistic disagreement (e.g. "Business" vs "Finance" for a markets story) should NOT be flagged unless one is clearly incorrect.
 
+IMPORTANT: keep "reason" to 5 words maximum — this keeps the output compact.
+
 Articles:
 ${JSON.stringify(batch)}
 
-Return ONLY a valid JSON array, no markdown:
-[{"id":1,"current_category":"Politics","correct_category":"World","needs_change":true,"reason":"short reason"}]`
+Return ONLY a valid JSON array, no markdown, no commentary before or after:
+[{"id":1,"current_category":"Politics","correct_category":"World","needs_change":true,"reason":"max 5 words"}]`
 
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
@@ -251,15 +253,19 @@ Return ONLY a valid JSON array, no markdown:
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.2, maxOutputTokens: 4096 },
+        generationConfig: { temperature: 0.2, maxOutputTokens: 8192 },
       }),
     }
   )
   const data = await res.json()
   const raw  = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+  const finishReason = data.candidates?.[0]?.finishReason || ''
   const cleaned = raw.replace(/```json\n?|```/g, '').trim()
   const match = cleaned.match(/\[[\s\S]*\]/)
-  if (!match) throw new Error('No JSON array in Gemini response: ' + raw.slice(0, 200))
+  if (!match) {
+    const truncatedNote = finishReason === 'MAX_TOKENS' ? ' [TRUNCATED — hit token limit, try a smaller batch]' : ''
+    throw new Error(`No JSON array in Gemini response${truncatedNote}. finishReason=${finishReason}, length=${raw.length}. Tail: ${raw.slice(-200)}`)
+  }
   return JSON.parse(match[0])
 }
 
@@ -394,14 +400,14 @@ Return ONLY a valid JSON array, no markdown:
     }))
 
     const allResults: any[] = []
-    const BATCH_SIZE = 10
+    const BATCH_SIZE = 8
     for (let i = 0; i < postsWithCurrentCat.length; i += BATCH_SIZE) {
       const chunk = postsWithCurrentCat.slice(i, i + BATCH_SIZE)
       try {
         const checks = await geminiCategoryCheck(chunk, geminiKey)
         allResults.push(...checks)
       } catch (e) {
-        return NextResponse.json({ error: (e as Error).message, checked: 0 })
+        return NextResponse.json({ error: (e as Error).message, checked: 0, partial_results: allResults })
       }
       if (i + BATCH_SIZE < postsWithCurrentCat.length) await new Promise(r => setTimeout(r, 1000))
     }
