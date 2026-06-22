@@ -74,7 +74,6 @@ async function wpFetch(url: string, auth: string, options: RequestInit = {}) {
 async function getOrCreateTag(base: string, auth: string, tagName: string): Promise<number | null> {
   try {
     const slug = tagName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
-    // Check if tag exists
     const searchRes = await wpFetch(`${base}/wp-json/wp/v2/tags?search=${encodeURIComponent(tagName)}&per_page=5`, auth)
     if (searchRes.ok && Array.isArray(searchRes.data)) {
       const existing = searchRes.data.find((t: { name: string; slug: string }) =>
@@ -82,7 +81,6 @@ async function getOrCreateTag(base: string, auth: string, tagName: string): Prom
       )
       if (existing) return existing.id
     }
-    // Create tag
     const createRes = await wpFetch(`${base}/wp-json/wp/v2/tags`, auth, {
       method: 'POST',
       body: JSON.stringify({ name: tagName, slug }),
@@ -119,7 +117,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    // Test credentials
+    // Test credentials first
     const authTest = await wpFetch(`${base}/wp-json/wp/v2/users/me`, auth)
     if (!authTest.ok) {
       return NextResponse.json({
@@ -141,7 +139,7 @@ export async function POST(req: NextRequest) {
       if (exact) return NextResponse.json({ error: 'Duplicate: same title exists', duplicate: true, existing_url: exact.link }, { status: 409 })
     }
 
-    // Get WP category ID
+    // Get WP categories
     const catRes = await wpFetch(`${base}/wp-json/wp/v2/categories?per_page=100`, auth)
     const wpCats = catRes.ok ? catRes.data : []
     const catName = article.categories?.name || article.category_name || ''
@@ -152,27 +150,23 @@ export async function POST(req: NextRequest) {
     const tagIds: number[] = []
     const rawTags: string[] = []
 
-    // Use keywords as tags
     if (Array.isArray(article.keywords) && article.keywords.length > 0) {
-      rawTags.push(...article.keywords.slice(0, 10)) // max 10 tags
+      rawTags.push(...article.keywords.slice(0, 10))
     }
-    // Also add focus keyword as tag if not already included
     if (article.focus_keyword && !rawTags.includes(article.focus_keyword)) {
       rawTags.unshift(article.focus_keyword)
     }
-    // Add category as tag
     if (catName && !rawTags.includes(catName)) {
       rawTags.push(catName)
     }
 
-    // Get or create each tag in WordPress
     if (rawTags.length > 0) {
       const tagPromises = rawTags.slice(0, 10).map(tag => getOrCreateTag(base, auth, tag))
       const resolvedIds = await Promise.all(tagPromises)
       tagIds.push(...resolvedIds.filter((id): id is number => id !== null))
     }
 
-    // Publish post
+    // Publish
     const wpRes = await wpFetch(`${base}/wp-json/wp/v2/posts`, auth, {
       method: 'POST',
       body: JSON.stringify({
@@ -194,7 +188,13 @@ export async function POST(req: NextRequest) {
 
     if (!wpRes.ok) return NextResponse.json({ error: wpRes.data.message || 'WordPress publish failed', code: wpRes.data.code }, { status: wpRes.status })
 
-    await supabase.from('articles').update({ status: 'published', published_at: new Date().toISOString() }).eq('id', article_id)
+    // Save wp_post_id back to Supabase — this is THE fix that keeps category/tag
+    // data reliably linked between the CMS and the live WordPress post going forward.
+    await supabase.from('articles').update({
+      status: 'published',
+      published_at: new Date().toISOString(),
+      wp_post_id: wpRes.data.id,
+    }).eq('id', article_id)
 
     return NextResponse.json({
       success: true,
