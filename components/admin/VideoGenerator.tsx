@@ -48,7 +48,7 @@ export function VideoGenerator() {
     setGenerating(true)
     setScenes(null)
     try {
-      const res = await fetch('/api/video/generate-assets', {
+      const res = await fetch('/api/ai/video/generate-assets', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ article_id: selectedId, include_voiceover: includeVoiceover, voice }),
       })
