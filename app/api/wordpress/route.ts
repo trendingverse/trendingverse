@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 
+const VALID_CATEGORIES = [
+  'Politics', 'Business', 'Technology', 'Entertainment', 'Sports',
+  'Health', 'Science', 'Lifestyle', 'Education', 'World',
+  'Crime', 'India', 'Environment', 'Finance', 'Trending'
+]
+
 interface AdUnit {
   id: string; ad_type: 'gam' | 'direct'; position: string; ad_code: string
   gam_network_code?: string; gam_unit_path?: string; size_width: number; size_height: number
@@ -90,6 +96,54 @@ async function getOrCreateTag(base: string, auth: string, tagName: string): Prom
   return null
 }
 
+// Get or create a CATEGORY in WordPress, return its ID — never silently
+// drops to "Uncategorized" when a category name doesn't exist yet.
+async function getOrCreateCategory(base: string, auth: string, name: string): Promise<number | null> {
+  try {
+    const searchRes = await wpFetch(`${base}/wp-json/wp/v2/categories?search=${encodeURIComponent(name)}&per_page=10`, auth)
+    if (searchRes.ok && Array.isArray(searchRes.data)) {
+      const existing = searchRes.data.find((c: { name: string }) => c.name.toLowerCase() === name.toLowerCase())
+      if (existing) return existing.id
+    }
+    const createRes = await wpFetch(`${base}/wp-json/wp/v2/categories`, auth, {
+      method: 'POST',
+      body: JSON.stringify({ name, slug: name.toLowerCase().replace(/[^a-z0-9]+/g, '-') }),
+    })
+    if (createRes.ok && createRes.data?.id) return createRes.data.id
+  } catch { /* skip */ }
+  return null
+}
+
+// Determines the correct category from the article's actual content —
+// never just trusts whatever category_name happens to already be set
+// (which is how dozens of articles ended up Uncategorized previously).
+async function determineCategory(title: string, excerpt: string, geminiKey: string): Promise<string> {
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${geminiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: `Categorize this news article into EXACTLY one of these categories: ${VALID_CATEGORIES.join(', ')}.
+
+Title: ${title}
+Excerpt: ${excerpt}
+
+Return ONLY the category name, nothing else — no punctuation, no explanation.` }] }],
+          generationConfig: { temperature: 0.1, maxOutputTokens: 20 },
+        }),
+      }
+    )
+    const data = await res.json()
+    const text = (data.candidates?.[0]?.content?.parts?.[0]?.text || '').trim()
+    const matched = VALID_CATEGORIES.find(c => c.toLowerCase() === text.toLowerCase())
+    return matched || 'World'
+  } catch {
+    return 'World'
+  }
+}
+
 export async function POST(req: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -106,6 +160,7 @@ export async function POST(req: NextRequest) {
 
   const base = wp_url.replace(/\/$/, '')
   const auth = Buffer.from(`${wp_username}:${wp_password}`).toString('base64')
+  const geminiKey = process.env.GEMINI_API_KEY!
 
   const admin = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
   const { data: site } = await admin.from('sites').select('id').eq('user_id', user.id).eq('site_url', base).single()
@@ -139,12 +194,11 @@ export async function POST(req: NextRequest) {
       if (exact) return NextResponse.json({ error: 'Duplicate: same title exists', duplicate: true, existing_url: exact.link }, { status: 409 })
     }
 
-    // Get WP categories
-    const catRes = await wpFetch(`${base}/wp-json/wp/v2/categories?per_page=100`, auth)
-    const wpCats = catRes.ok ? catRes.data : []
-    const catName = article.categories?.name || article.category_name || ''
-    const matched = wpCats.find((c: { name: string; id: number }) => c.name.toLowerCase() === catName.toLowerCase())
-    const categoryIds = matched ? [matched.id] : []
+    // Determine the correct category from the actual content, then
+    // auto-create it on WordPress if it doesn't already exist there.
+    const aiCategory = await determineCategory(article.title, article.excerpt || '', geminiKey)
+    const catId = await getOrCreateCategory(base, auth, aiCategory)
+    const categoryIds = catId ? [catId] : []
 
     // Process tags — from article.keywords array
     const tagIds: number[] = []
@@ -156,8 +210,8 @@ export async function POST(req: NextRequest) {
     if (article.focus_keyword && !rawTags.includes(article.focus_keyword)) {
       rawTags.unshift(article.focus_keyword)
     }
-    if (catName && !rawTags.includes(catName)) {
-      rawTags.push(catName)
+    if (aiCategory && !rawTags.includes(aiCategory)) {
+      rawTags.push(aiCategory)
     }
 
     if (rawTags.length > 0) {
@@ -188,18 +242,21 @@ export async function POST(req: NextRequest) {
 
     if (!wpRes.ok) return NextResponse.json({ error: wpRes.data.message || 'WordPress publish failed', code: wpRes.data.code }, { status: wpRes.status })
 
-    // Save wp_post_id back to Supabase — this is THE fix that keeps category/tag
-    // data reliably linked between the CMS and the live WordPress post going forward.
+    // Save wp_post_id AND the actual category used — keeps Supabase and
+    // WordPress reliably in sync going forward.
     await supabase.from('articles').update({
       status: 'published',
       published_at: new Date().toISOString(),
       wp_post_id: wpRes.data.id,
+      category_name: aiCategory,
     }).eq('id', article_id)
 
     return NextResponse.json({
       success: true,
       wp_post_id: wpRes.data.id,
       wp_url: wpRes.data.link,
+      category: aiCategory,
+      category_auto_created: !!catId,
       ads_injected: !!site?.id,
       tags_added: tagIds.length,
     })
