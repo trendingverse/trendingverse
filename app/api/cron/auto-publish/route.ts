@@ -18,6 +18,42 @@ const LANGUAGES: Record<string, string> = {
   'pa': 'Punjabi (ਪੰਜਾਬੀ)',
 }
 
+const VALID_CATEGORIES = [
+  'Politics', 'Business', 'Technology', 'Entertainment', 'Sports',
+  'Health', 'Science', 'Lifestyle', 'Education', 'World',
+  'Crime', 'India', 'Environment', 'Finance', 'Trending'
+]
+
+// Determines the correct category from the actual generated content —
+// never trust an upstream guess blindly. Falls back to 'World' (never
+// leaves a post Uncategorized) if the AI call fails for any reason.
+async function determineCategory(title: string, excerpt: string, geminiKey: string): Promise<string> {
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${geminiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: `Categorize this news article into EXACTLY one of these categories: ${VALID_CATEGORIES.join(', ')}.
+
+Title: ${title}
+Excerpt: ${excerpt}
+
+Return ONLY the category name, nothing else — no punctuation, no explanation.` }] }],
+          generationConfig: { temperature: 0.1, maxOutputTokens: 20 },
+        }),
+      }
+    )
+    const data = await res.json()
+    const text = (data.candidates?.[0]?.content?.parts?.[0]?.text || '').trim()
+    const matched = VALID_CATEGORIES.find(c => c.toLowerCase() === text.toLowerCase())
+    return matched || 'World'
+  } catch {
+    return 'World'
+  }
+}
+
 function isAuthorized(req: NextRequest): boolean {
   const cronSecret = process.env.CRON_SECRET
   if (!cronSecret) return true
@@ -485,10 +521,11 @@ async function runArticlePublish(
       }
     }
 
-    const catRes = await fetch(`${wpBase}/wp-json/wp/v2/categories?per_page=100`, { headers: { Authorization: `Basic ${auth}` } })
-    const wpCats = catRes.ok ? await catRes.json() : []
-    const matched = wpCats.find((c: { name: string }) => c.name.toLowerCase() === (trend.category || 'news').toLowerCase())
-    const categoryIds = matched ? [matched.id] : []
+    log.push('Determining correct category from content...')
+    const aiCategory = await determineCategory(article.title, article.excerpt || '', geminiKey)
+    const catId = await getOrCreateCategory(wpBase, auth, aiCategory)
+    const categoryIds = catId ? [catId] : []
+    log.push(`Category: ${aiCategory}${catId ? '' : ' (could not create — publishing uncategorized)'}`)
 
     log.push('Publishing to WordPress...')
     const wpRes = await fetch(`${wpBase}/wp-json/wp/v2/posts`, {
@@ -531,6 +568,7 @@ async function runArticlePublish(
       reading_time_min: article.reading_time || 4,
       published_at: new Date().toISOString(),
       wp_post_id: wpData.id,
+      category_name: aiCategory,
     })
 
     await supabase.from('cron_logs').insert({
