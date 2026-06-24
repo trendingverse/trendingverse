@@ -116,7 +116,7 @@ Style: photorealistic, natural lighting, professional editorial photography, no 
     let finalBuffer = buffer
     try {
       const sharp = (await import('sharp')).default
-      finalBuffer = await sharp(buffer).resize(1280, 720, { fit: 'cover' }).jpeg({ quality: 78 }).toBuffer()
+      finalBuffer = (await sharp(buffer).resize(1280, 720, { fit: 'cover' }).jpeg({ quality: 78 }).toBuffer()) as Buffer
     } catch { /* use original if sharp unavailable */ }
 
     return `data:image/jpeg;base64,${finalBuffer.toString('base64')}`
