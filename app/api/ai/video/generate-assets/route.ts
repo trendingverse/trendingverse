@@ -88,6 +88,46 @@ Return ONLY valid JSON, no markdown:
   return parsed.scenes || []
 }
 
+// ── Generate ready-to-paste YouTube + Instagram upload metadata ───
+async function generateUploadMetadata(title: string, content: string, geminiKey: string) {
+  const prompt = `You are a YouTube and Instagram growth expert. Based on this news article, generate optimized upload metadata for manually uploading a short video to both platforms.
+
+Title: ${title}
+Content: ${content.slice(0, 1500)}
+
+Generate:
+1. youtube_title — compelling, under 100 characters, includes the key topic, optimized for search and click-through. Accurate, not misleading/clickbait.
+2. youtube_description — write as one string with \n for line breaks: a 1-line hook, then a 2-3 sentence summary of the story, then a line "📰 Read the full story at TrendingVerse.online", then a line of 6-8 relevant hashtags.
+3. youtube_tags — array of 12-15 short search keyword phrases (no # symbol), the kind YouTube uses in its tags field.
+4. instagram_caption — write as one string with \n for line breaks: a punchy 1-line hook (shows before "more" is clicked), then 2-3 sentences of context, then a call-to-action line, then a block of 15-20 relevant hashtags (mix of broad and niche, no spaces within a hashtag).
+5. discover_keywords — array of 5-8 trending search-style keywords related to this topic, for Google/YouTube Discover optimization.
+
+Return ONLY valid JSON, no markdown:
+{"youtube_title":"","youtube_description":"","youtube_tags":[],"instagram_caption":"","discover_keywords":[]}`
+
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.5, maxOutputTokens: 1536 },
+        }),
+      }
+    )
+    const data = await res.json()
+    const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+    const cleaned = raw.replace(/```json\n?|```/g, '').trim()
+    const match = cleaned.match(/\{[\s\S]*\}/)
+    if (!match) return null
+    return JSON.parse(match[0])
+  } catch {
+    return null
+  }
+}
+
 // ── Generate one scene's image (Nano Banana), compressed to lightweight JPEG ──
 async function generateSceneImage(prompt: string, geminiKey: string): Promise<string | null> {
   try {
@@ -170,7 +210,10 @@ export async function POST(req: NextRequest) {
   const plainContent = (article.content || article.excerpt || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
 
   try {
-    const scriptScenes = await generateScript(article.title, plainContent, geminiKey)
+    const [scriptScenes, uploadMetadata] = await Promise.all([
+      generateScript(article.title, plainContent, geminiKey),
+      generateUploadMetadata(article.title, plainContent, geminiKey),
+    ])
     if (!scriptScenes.length) return NextResponse.json({ error: 'Script generation returned no scenes' }, { status: 500 })
 
     const sceneResults = await mapWithConcurrency(scriptScenes, 3, async (scene: any) => {
@@ -190,6 +233,7 @@ export async function POST(req: NextRequest) {
       title: article.title,
       scenes: sceneResults,
       voiceover_included: !!include_voiceover,
+      metadata: uploadMetadata,
     })
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 })
