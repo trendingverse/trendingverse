@@ -24,6 +24,7 @@ export function VideoGenerator() {
   const [playing, setPlaying] = useState(false)
   const [recording, setRecording] = useState(false)
   const [currentScene, setCurrentScene] = useState(0)
+  const [metadata, setMetadata] = useState<any>(null)
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const recordedChunks = useRef<Blob[]>([])
@@ -56,6 +57,7 @@ export function VideoGenerator() {
       if (!res.ok) throw new Error(data.error || 'Generation failed')
       setScenes(data.scenes)
       setVideoTitle(data.title)
+      setMetadata(data.metadata || null)
       toast.success(`${data.scenes.length} scenes generated!`)
     } catch (e) {
       toast.error((e as Error).message)
@@ -231,6 +233,11 @@ export function VideoGenerator() {
     }
   }
 
+  function copyText(text: string, label: string) {
+    navigator.clipboard.writeText(text)
+    toast.success(`${label} copied!`)
+  }
+
   function stopPlayback() {
     stopRequested.current = true
   }
@@ -322,6 +329,70 @@ export function VideoGenerator() {
           <p className="text-xs text-ink-400 text-center">
             Downloads as .webm (works for direct upload to YouTube/Instagram). Recording takes roughly as long as the video itself since it captures in real time. Best supported in Chrome/Edge.
           </p>
+        </div>
+      )}
+
+      {/* Upload metadata — ready to copy-paste into YouTube Studio / Instagram */}
+      {metadata && (
+        <div className="card p-5 space-y-5">
+          <h3 className="font-semibold text-ink-900">📋 Upload Metadata — copy into YouTube / Instagram</h3>
+
+          {/* YouTube Title */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="label">YouTube Title</label>
+              <button onClick={() => copyText(metadata.youtube_title, 'Title')}
+                className="text-xs px-2 py-1 bg-ink-100 text-ink-600 rounded-lg hover:bg-ink-200">⎘ Copy</button>
+            </div>
+            <input className="input text-sm" readOnly value={metadata.youtube_title || ''} />
+            <p className="text-xs text-ink-400 mt-1">{(metadata.youtube_title || '').length} / 100 characters</p>
+          </div>
+
+          {/* YouTube Description */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="label">YouTube Description</label>
+              <button onClick={() => copyText(metadata.youtube_description, 'Description')}
+                className="text-xs px-2 py-1 bg-ink-100 text-ink-600 rounded-lg hover:bg-ink-200">⎘ Copy</button>
+            </div>
+            <textarea className="input text-sm resize-none" rows={6} readOnly value={metadata.youtube_description || ''} />
+          </div>
+
+          {/* YouTube Tags */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="label">YouTube Tags</label>
+              <button onClick={() => copyText((metadata.youtube_tags || []).join(', '), 'Tags')}
+                className="text-xs px-2 py-1 bg-ink-100 text-ink-600 rounded-lg hover:bg-ink-200">⎘ Copy All</button>
+            </div>
+            <div className="flex flex-wrap gap-1.5 p-3 bg-ink-50 rounded-xl">
+              {(metadata.youtube_tags || []).map((t: string, i: number) => (
+                <span key={i} className="text-xs bg-white border border-ink-200 text-ink-700 px-2 py-1 rounded-lg">{t}</span>
+              ))}
+            </div>
+          </div>
+
+          {/* Discover keywords */}
+          {metadata.discover_keywords?.length > 0 && (
+            <div>
+              <label className="label">Discover Keywords</label>
+              <div className="flex flex-wrap gap-1.5">
+                {metadata.discover_keywords.map((k: string, i: number) => (
+                  <span key={i} className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded-lg">{k}</span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="border-t border-ink-100 pt-4">
+            {/* Instagram Caption */}
+            <div className="flex items-center justify-between mb-1">
+              <label className="label">📱 Instagram Caption (with hashtags)</label>
+              <button onClick={() => copyText(metadata.instagram_caption, 'Instagram caption')}
+                className="text-xs px-2 py-1 bg-ink-100 text-ink-600 rounded-lg hover:bg-ink-200">⎘ Copy</button>
+            </div>
+            <textarea className="input text-sm resize-none" rows={8} readOnly value={metadata.instagram_caption || ''} />
+          </div>
         </div>
       )}
     </div>
