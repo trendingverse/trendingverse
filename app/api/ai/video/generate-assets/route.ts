@@ -75,15 +75,22 @@ Return ONLY valid JSON, no markdown:
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.5, maxOutputTokens: 2048 },
+        generationConfig: { temperature: 0.5, maxOutputTokens: 4096 },
       }),
     }
   )
   const data = await res.json()
+  if (data.error) {
+    throw new Error(`Gemini API error (${data.error.code || res.status}): ${data.error.message || JSON.stringify(data.error).slice(0, 150)}`)
+  }
   const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+  const finishReason = data.candidates?.[0]?.finishReason || ''
   const cleaned = raw.replace(/```json\n?|```/g, '').trim()
   const match = cleaned.match(/\{[\s\S]*\}/)
-  if (!match) throw new Error('Could not parse script from Gemini response')
+  if (!match) {
+    const truncatedNote = finishReason === 'MAX_TOKENS' ? ' [TRUNCATED — hit token limit]' : ''
+    throw new Error(`Could not parse script from Gemini response${truncatedNote}. finishReason=${finishReason}, length=${raw.length}. Tail: ${raw.slice(-200) || '(empty response)'}`)
+  }
   const parsed = JSON.parse(match[0])
   return parsed.scenes || []
 }
@@ -113,11 +120,12 @@ Return ONLY valid JSON, no markdown:
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.5, maxOutputTokens: 1536 },
+          generationConfig: { temperature: 0.5, maxOutputTokens: 2048 },
         }),
       }
     )
     const data = await res.json()
+    if (data.error) return null
     const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
     const cleaned = raw.replace(/```json\n?|```/g, '').trim()
     const match = cleaned.match(/\{[\s\S]*\}/)
