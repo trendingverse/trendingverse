@@ -1,6 +1,7 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
 import toast from 'react-hot-toast'
+import { createClient } from '@/lib/supabase/client'
 
 interface Scene {
   narration: string
@@ -25,13 +26,25 @@ export function VideoGenerator() {
   const [recording, setRecording] = useState(false)
   const [currentScene, setCurrentScene] = useState(0)
   const [metadata, setMetadata] = useState<any>(null)
+  const [library, setLibrary] = useState<any[]>([])
+  const [savingToLibrary, setSavingToLibrary] = useState(false)
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const recordedChunks = useRef<Blob[]>([])
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const stopRequested = useRef(false)
 
-  useEffect(() => { fetchArticles() }, [])
+  useEffect(() => { fetchArticles(); fetchLibrary() }, [])
+
+  async function fetchLibrary() {
+    try {
+      const res = await fetch('/api/video/list')
+      if (res.ok) {
+        const data = await res.json()
+        setLibrary(data.videos || [])
+      }
+    } catch { /* silent */ }
+  }
 
   async function fetchArticles() {
     try {
@@ -161,16 +174,53 @@ export function VideoGenerator() {
         : 'video/webm'
       const mr = new MediaRecorder(combinedStream, { mimeType })
       mr.ondataavailable = (e) => { if (e.data.size > 0) recordedChunks.current.push(e.data) }
-      mr.onstop = () => {
+      mr.onstop = async () => {
         const blob = new Blob(recordedChunks.current, { type: 'video/webm' })
+        const filename = `${videoTitle.slice(0, 40).replace(/[^\w\s]/g, '').trim().replace(/\s+/g, '-')}-${format.replace(':', 'x')}.webm`
+
+        // Immediate local download
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url
-        a.download = `${videoTitle.slice(0, 40).replace(/[^\w\s]/g, '').trim().replace(/\s+/g, '-')}-${format.replace(':', 'x')}.webm`
+        a.download = filename
         a.click()
         URL.revokeObjectURL(url)
         toast.success('Video downloaded!')
         setRecording(false)
+
+        // Also save to the video library (Supabase Storage + DB record) —
+        // uploads directly from the browser to Supabase, not through our
+        // own API route, so there's no server-side upload size limit.
+        setSavingToLibrary(true)
+        try {
+          const supabase = createClient()
+          const storagePath = `${Date.now()}-${filename}`
+          const { error: uploadError } = await supabase.storage
+            .from('generated-videos')
+            .upload(storagePath, blob, { contentType: 'video/webm' })
+          if (uploadError) throw new Error(uploadError.message)
+
+          const { data: urlData } = supabase.storage.from('generated-videos').getPublicUrl(storagePath)
+
+          await fetch('/api/video/save-record', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              article_id: selectedId,
+              article_title: videoTitle,
+              format,
+              file_url: urlData.publicUrl,
+              file_size_kb: Math.round(blob.size / 1024),
+              voiceover_included: includeVoiceover,
+              metadata,
+            }),
+          })
+
+          toast.success('Saved to video library!')
+          fetchLibrary()
+        } catch (e) {
+          toast.error(`Library save failed: ${(e as Error).message} — video still downloaded locally`)
+        }
+        setSavingToLibrary(false)
       }
       mediaRecorderRef.current = mr
       mr.start()
@@ -392,6 +442,40 @@ export function VideoGenerator() {
                 className="text-xs px-2 py-1 bg-ink-100 text-ink-600 rounded-lg hover:bg-ink-200">⎘ Copy</button>
             </div>
             <textarea className="input text-sm resize-none" rows={8} readOnly value={metadata.instagram_caption || ''} />
+          </div>
+        </div>
+      )}
+
+      {savingToLibrary && (
+        <div className="card p-4 flex items-center gap-3">
+          <span className="w-4 h-4 border-2 border-accent/30 border-t-accent rounded-full animate-spin" />
+          <p className="text-sm text-ink-600">Saving to video library...</p>
+        </div>
+      )}
+
+      {/* Video Library — everything previously generated, persists across page visits */}
+      {library.length > 0 && (
+        <div className="card p-5 space-y-3">
+          <h3 className="font-semibold text-ink-900">📚 Video Library ({library.length})</h3>
+          <div className="space-y-2 max-h-96 overflow-y-auto">
+            {library.map((v) => (
+              <div key={v.id} className="flex items-center gap-3 p-3 bg-ink-50 rounded-xl">
+                <div className="w-10 h-10 rounded-lg bg-ink-900 text-white flex items-center justify-center text-lg shrink-0">
+                  {v.format === '9:16' ? '📱' : '📺'}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-ink-900 truncate">{v.article_title || 'Untitled'}</p>
+                  <p className="text-xs text-ink-400">
+                    {v.format} · {v.file_size_kb ? `${(v.file_size_kb / 1024).toFixed(1)}MB` : ''} · {new Date(v.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' })}
+                    {v.voiceover_included && ' · 🔊 voiceover'}
+                  </p>
+                </div>
+                <a href={v.file_url} target="_blank" rel="noreferrer"
+                  className="text-xs px-3 py-1.5 bg-ink-900 text-white rounded-lg hover:bg-ink-800 shrink-0">▶ Play</a>
+                <a href={v.file_url} download
+                  className="text-xs px-3 py-1.5 bg-ink-100 text-ink-700 rounded-lg hover:bg-ink-200 shrink-0">⬇</a>
+              </div>
+            ))}
           </div>
         </div>
       )}
