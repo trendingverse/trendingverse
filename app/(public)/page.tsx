@@ -1,9 +1,30 @@
 import Link from 'next/link'
+import { createClient as createServiceClient } from '@supabase/supabase-js'
 
-export default function LandingPage() {
+async function getRecentArticles() {
+  try {
+    const supabase = createServiceClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    )
+    const { data } = await supabase
+      .from('articles')
+      .select('id, title, excerpt, category_name, published_at, wp_url')
+      .eq('status', 'published')
+      .not('wp_url', 'is', null)
+      .order('published_at', { ascending: false })
+      .limit(6)
+    return data || []
+  } catch {
+    return []
+  }
+}
+
+export default async function LandingPage() {
+  const recentArticles = await getRecentArticles()
   const pulseItems = [
     { type: 'PUBLISH', typeCls: 'bg-blue-500/20 text-blue-300', text: 'Article auto-published: "GRSE Conferred Navratna Status" — trendingverse.online', time: 'just now' },
-    { type: 'AD', typeCls: 'bg-amber-500/20 text-amber-300', text: 'AdCandid campaign served 2,982 impressions · geo-targeted · India', time: '2m ago' },
+    { type: 'AD', typeCls: 'bg-amber-500/20 text-amber-300', text: 'Brand campaign served 2,982 impressions · geo-targeted · Mumbai, Delhi, Bangalore', time: '2m ago' },
     { type: 'RATES', typeCls: 'bg-green-500/20 text-green-300', text: 'AED → INR updated · 1 AED = 22.84 INR · Finance / Currency Rates', time: '4m ago' },
     { type: 'AUDIENCE', typeCls: 'bg-violet-500/20 text-violet-300', text: '17,884 audience profiles tracked · scroll depth · city-level geo · email leads', time: '6m ago' },
     { type: 'SEO', typeCls: 'bg-rose-500/20 text-rose-300', text: 'SEO rewrite complete · 21 articles re-categorized · Discover scores updated', time: '9m ago' },
@@ -251,6 +272,61 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
+
+      {/* ── LIVE FROM THE CMS ────────────────────────── */}
+      {recentArticles.length > 0 && (
+        <section className="max-w-6xl mx-auto px-6 py-16">
+          <div className="flex items-center justify-between mb-10">
+            <div>
+              <div className="text-xs font-mono font-medium tracking-widest uppercase text-blue-600 mb-2">Live from the platform</div>
+              <h2 className="text-3xl font-bold text-gray-900 tracking-tight">Articles published by TrendingVerse</h2>
+              <p className="text-gray-500 mt-2 text-sm">Real articles, auto-published by the AI cron — live on trendingverse.online</p>
+            </div>
+            <a href="https://trendingverse.online" target="_blank" rel="noreferrer"
+              className="hidden md:inline-flex items-center gap-2 text-sm text-blue-600 font-medium hover:underline shrink-0">
+              View all articles ↗
+            </a>
+          </div>
+          <div className="grid md:grid-cols-3 gap-5">
+            {recentArticles.map((article: any) => (
+              <a
+                key={article.id}
+                href={article.wp_url || 'https://trendingverse.online'}
+                target="_blank" rel="noreferrer"
+                className="group block border border-gray-100 rounded-2xl p-5 hover:border-blue-200 hover:shadow-md transition-all"
+              >
+                {article.category_name && (
+                  <span className="inline-block text-[11px] font-semibold uppercase tracking-wider text-blue-600 bg-blue-50 px-2 py-0.5 rounded mb-3">
+                    {article.category_name}
+                  </span>
+                )}
+                <h3 className="font-semibold text-gray-900 leading-snug mb-2 group-hover:text-blue-600 transition-colors line-clamp-2">
+                  {article.title}
+                </h3>
+                {article.excerpt && (
+                  <p className="text-sm text-gray-500 leading-relaxed line-clamp-2 mb-3">
+                    {article.excerpt.replace(/<[^>]+>/g, '')}
+                  </p>
+                )}
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-400">
+                    {article.published_at
+                      ? new Date(article.published_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' })
+                      : ''}
+                  </span>
+                  <span className="text-xs text-blue-500 font-medium opacity-0 group-hover:opacity-100 transition-opacity">Read →</span>
+                </div>
+              </a>
+            ))}
+          </div>
+          <div className="text-center mt-8 md:hidden">
+            <a href="https://trendingverse.online" target="_blank" rel="noreferrer"
+              className="text-sm text-blue-600 font-medium hover:underline">
+              View all articles on trendingverse.online ↗
+            </a>
+          </div>
+        </section>
+      )}
 
       {/* ── PRICING ─────────────────────────────────────── */}
       <section id="pricing" className="bg-gray-50 py-24 px-6">
