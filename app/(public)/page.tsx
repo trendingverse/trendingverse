@@ -9,12 +9,17 @@ async function getRecentArticles() {
     )
     const { data } = await supabase
       .from('articles')
-      .select('id, title, excerpt, category_name, published_at, wp_url')
+      .select('id, title, excerpt, category_name, published_at, slug')
       .eq('status', 'published')
-      .not('wp_url', 'is', null)
+      .not('slug', 'is', null)
+      .not('slug', 'eq', '')
       .order('published_at', { ascending: false })
       .limit(6)
-    return data || []
+    // Construct the live WordPress URL from slug
+    return (data || []).map((a: any) => ({
+      ...a,
+      wp_url: `https://trendingverse.online/${a.slug}/`,
+    }))
   } catch {
     return []
   }
