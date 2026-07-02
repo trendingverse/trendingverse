@@ -277,7 +277,7 @@ async function generateAndUploadAIImage(
     const uploadRes = await fetch(`${wpBase}/wp-json/wp/v2/media`, {
       method: 'POST',
       headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'image/jpeg', 'Content-Disposition': `attachment; filename="${filename}"` },
-      body: compressed as unknown as Uint8Array,
+      body: new Blob([compressed], { type: 'image/jpeg' }),
     })
     if (!uploadRes.ok) { log.push('AI image upload to WordPress failed — continuing without image'); return null }
     const media = await uploadRes.json()
