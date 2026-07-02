@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TrendingVerse — The Publishing Platform Built for Indian Media</title>
+<meta name="description" content="TrendingVerse is the only Indian CMS with a built-in direct ad marketplace, audience intelligence, and AI publishing tools — in 10+ languages.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,700;0,9..144,900;1,9..144,300&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --navy:   #0B1120;
+  --navy-2: #141E33;
+  --navy-3: #1E2D4A;
+  --blue:   #3B6EF8;
+  --blue-2: #2554E0;
+  --amber:  #F0A500;
+  --amber-2:#C98A00;
+  --green:  #10B981;
+  --white:  #FFFFFF;
+  --off:    #F8F9FC;
+  --ink:    #0F111A;
+  --ink-2:  #374151;
+  --ink-3:  #6B7280;
+  --rule:   #E5E7EB;
+  --rule-2: rgba(255,255,255,0.08);
+}
+
+html { scroll-behavior: smooth; }
+body { font-family: 'Inter', sans-serif; background: var(--white); color: var(--ink); line-height: 1.6; overflow-x: hidden; }
+
+/* ── NAV ───────────────────────────────────────────────── */
+nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 5vw; height: 64px;
+  background: rgba(11,17,32,0.95);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--rule-2);
+}
+.logo {
+  font-family: 'Fraunces', serif; font-weight: 900; font-size: 1.3rem;
+  color: var(--white); text-decoration: none; letter-spacing: -0.03em;
+}
+.logo em { font-style: normal; color: var(--amber); }
+.nav-links { display: flex; gap: 2rem; align-items: center; }
+.nav-links a {
+  color: rgba(255,255,255,0.55); text-decoration: none;
+  font-size: 0.82rem; font-weight: 500; letter-spacing: 0.04em;
+  text-transform: uppercase; transition: color 0.2s;
+}
+.nav-links a:hover { color: var(--white); }
+.nav-cta {
+  background: var(--blue) !important; color: var(--white) !important;
+  padding: 0.5rem 1.25rem; border-radius: 6px;
+  font-size: 0.82rem !important; font-weight: 600 !important;
+  letter-spacing: 0.02em !important; text-transform: none !important;
+  transition: background 0.2s !important;
+}
+.nav-cta:hover { background: var(--blue-2) !important; }
+
+/* ── HERO ──────────────────────────────────────────────── */
+.hero {
+  min-height: 100vh; background: var(--navy);
+  display: flex; flex-direction: column;
+  justify-content: center; align-items: center;
+  text-align: center;
+  padding: 120px 5vw 80px;
+  position: relative; overflow: hidden;
+}
+.hero::before {
+  content: '';
+  position: absolute; top: -20%; left: -10%; right: -10%; bottom: 0;
+  background: radial-gradient(ellipse at 50% 30%, rgba(59,110,248,0.18) 0%, transparent 65%);
+  pointer-events: none;
+}
+.hero::after {
+  content: '';
+  position: absolute; bottom: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--blue), var(--amber), transparent);
+}
+.eyebrow {
+  display: inline-flex; align-items: center; gap: 0.6rem;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.72rem; font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--amber); margin-bottom: 1.75rem;
+  border: 1px solid rgba(240,165,0,0.25);
+  padding: 0.35rem 0.85rem; border-radius: 100px;
+  background: rgba(240,165,0,0.06);
+}
+.eyebrow::before { content: '●'; font-size: 0.55rem; animation: pulse 2s ease-in-out infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+.hero h1 {
+  font-family: 'Fraunces', serif; font-weight: 900;
+  font-size: clamp(2.6rem, 6.5vw, 5.8rem);
+  line-height: 1.0; letter-spacing: -0.03em;
+  color: var(--white); max-width: 900px;
+  margin-bottom: 1.5rem;
+}
+.hero h1 .blue { color: var(--blue); }
+.hero h1 .amber { color: var(--amber); }
+.hero-sub {
+  font-size: clamp(1rem, 1.8vw, 1.15rem);
+  color: rgba(255,255,255,0.55);
+  max-width: 540px; margin-bottom: 2.5rem; line-height: 1.75;
+}
+
+.hero-actions { display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center; margin-bottom: 4rem; }
+.btn-primary {
+  background: var(--blue); color: var(--white);
+  padding: 0.9rem 2rem; border-radius: 8px;
+  font-weight: 600; font-size: 0.95rem;
+  text-decoration: none; border: none; cursor: pointer;
+  transition: background 0.2s, transform 0.15s;
+  display: inline-block;
+}
+.btn-primary:hover { background: var(--blue-2); transform: translateY(-1px); }
+.btn-outline {
+  background: transparent; color: rgba(255,255,255,0.8);
+  padding: 0.9rem 2rem; border-radius: 8px;
+  font-weight: 500; font-size: 0.95rem;
+  text-decoration: none;
+  border: 1px solid rgba(255,255,255,0.15);
+  transition: border-color 0.2s; display: inline-block;
+}
+.btn-outline:hover { border-color: rgba(255,255,255,0.4); }
+
+/* Platform Pulse */
+.pulse-container {
+  width: 100%; max-width: 680px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--rule-2);
+  border-radius: 12px; overflow: hidden;
+}
+.pulse-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0.75rem 1.25rem;
+  border-bottom: 1px solid var(--rule-2);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.7rem; color: rgba(255,255,255,0.3);
+}
+.pulse-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--green); box-shadow: 0 0 0 2px rgba(16,185,129,0.25);
+  animation: pulse 2s ease-in-out infinite;
+}
+.pulse-live { display: flex; align-items: center; gap: 0.4rem; color: var(--green); font-size: 0.68rem; }
+.pulse-feed { padding: 0.5rem 0; }
+.pulse-item {
+  display: flex; align-items: center; gap: 0.9rem;
+  padding: 0.55rem 1.25rem;
+  font-size: 0.78rem; color: rgba(255,255,255,0.5);
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+  transition: background 0.2s;
+  animation: fadeIn 0.5s ease-out both;
+}
+@keyframes fadeIn { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:none} }
+.pulse-item:last-child { border-bottom: none; }
+.pulse-type {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.65rem; font-weight: 500;
+  padding: 0.2rem 0.55rem; border-radius: 4px;
+  white-space: nowrap; flex-shrink: 0;
+}
+.type-publish { background: rgba(59,110,248,0.2); color: #7EA8FF; }
+.type-ad      { background: rgba(240,165,0,0.2);  color: var(--amber); }
+.type-rate    { background: rgba(16,185,129,0.2); color: var(--green); }
+.type-audience{ background: rgba(167,139,250,0.2);color: #C4B5FD; }
+.pulse-time { margin-left: auto; font-family: 'JetBrains Mono', monospace; font-size: 0.62rem; color: rgba(255,255,255,0.2); flex-shrink: 0; }
+
+/* ── STATS BAR ─────────────────────────────────────────── */
+.statsbar {
+  background: var(--navy-2);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  padding: 2rem 5vw;
+  display: flex; flex-wrap: wrap; gap: 2rem;
+  justify-content: center; align-items: center;
+}
+.stat { text-align: center; }
+.stat-num {
+  font-family: 'Fraunces', serif; font-size: 2.2rem; font-weight: 700;
+  color: var(--white); line-height: 1; letter-spacing: -0.03em;
+}
+.stat-num .unit { color: var(--blue); }
+.stat-label { font-size: 0.72rem; color: rgba(255,255,255,0.35); text-transform: uppercase; letter-spacing: 0.1em; margin-top: 0.2rem; }
+.stat-sep { width: 1px; height: 40px; background: rgba(255,255,255,0.08); }
+
+/* ── SECTION BASE ──────────────────────────────────────── */
+section { padding: 6rem 5vw; }
+.max-w { max-width: 1160px; margin: 0 auto; }
+.sec-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.68rem; font-weight: 500;
+  letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--blue); margin-bottom: 0.85rem;
+}
+.sec-title {
+  font-family: 'Fraunces', serif; font-weight: 700;
+  font-size: clamp(1.9rem, 3.5vw, 2.9rem);
+  line-height: 1.1; letter-spacing: -0.025em;
+  margin-bottom: 1rem; color: var(--ink);
+}
+.sec-sub { font-size: 1.05rem; color: var(--ink-3); line-height: 1.75; max-width: 520px; }
+
+/* ── PROBLEM ───────────────────────────────────────────── */
+.problem { background: var(--off); }
+.problem-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1.25rem; margin-top: 3rem;
+}
+.problem-card {
+  background: var(--white); border: 1px solid var(--rule);
+  border-radius: 10px; padding: 1.75rem;
+}
+.problem-icon { font-size: 1.4rem; margin-bottom: 0.75rem; }
+.problem-card h3 { font-size: 0.95rem; font-weight: 600; margin-bottom: 0.5rem; }
+.problem-card p { font-size: 0.875rem; color: var(--ink-3); line-height: 1.65; }
+
+/* ── THREE LAYERS ──────────────────────────────────────── */
+.layers-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0; margin-top: 3.5rem;
+  border: 1px solid var(--rule); border-radius: 14px; overflow: hidden;
+}
+.layer {
+  padding: 2.5rem 2rem;
+  border-right: 1px solid var(--rule);
+  position: relative;
+}
+.layer:last-child { border-right: none; }
+.layer-badge {
+  display: inline-block;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.62rem; font-weight: 500;
+  letter-spacing: 0.12em; text-transform: uppercase;
+  padding: 0.2rem 0.6rem; border-radius: 4px;
+  margin-bottom: 1rem;
+}
+.badge-publish { background: rgba(59,110,248,0.1); color: var(--blue); }
+.badge-monetize { background: rgba(240,165,0,0.12); color: var(--amber-2); }
+.badge-grow { background: rgba(16,185,129,0.1); color: #059669; }
+.layer h3 {
+  font-family: 'Fraunces', serif; font-size: 1.4rem; font-weight: 700;
+  letter-spacing: -0.02em; margin-bottom: 0.75rem;
+}
+.layer p { font-size: 0.875rem; color: var(--ink-3); line-height: 1.7; margin-bottom: 1.25rem; }
+.layer-features { list-style: none; }
+.layer-features li {
+  font-size: 0.82rem; padding: 0.35rem 0;
+  border-bottom: 1px solid var(--rule);
+  display: flex; align-items: flex-start; gap: 0.5rem;
+  color: var(--ink-2);
+}
+.layer-features li:last-child { border-bottom: none; }
+.layer-features li::before { content: '→'; color: var(--ink-3); flex-shrink: 0; font-size: 0.75rem; margin-top: 1px; }
+.layer-1 { border-top: 3px solid var(--blue); }
+.layer-2 { border-top: 3px solid var(--amber); }
+.layer-3 { border-top: 3px solid var(--green); }
+
+/* ── MOAT SECTION ──────────────────────────────────────── */
+.moat { background: var(--navy); color: var(--white); }
+.moat .sec-title { color: var(--white); }
+.moat .sec-sub { color: rgba(255,255,255,0.45); }
+.moat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.5rem; margin-top: 3.5rem;
+}
+.moat-card {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 12px; padding: 2rem;
+  transition: border-color 0.2s, background 0.2s;
+}
+.moat-card:hover { border-color: rgba(59,110,248,0.4); background: rgba(59,110,248,0.05); }
+.moat-card-icon { font-size: 1.5rem; margin-bottom: 1rem; }
+.moat-card h3 { font-size: 1rem; font-weight: 600; color: var(--white); margin-bottom: 0.5rem; }
+.moat-card p { font-size: 0.875rem; color: rgba(255,255,255,0.45); line-height: 1.7; }
+.moat-tag {
+  display: inline-block; margin-top: 1rem;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.62rem; letter-spacing: 0.1em; text-transform: uppercase;
+  padding: 0.2rem 0.6rem; border-radius: 4px;
+  background: rgba(59,110,248,0.15); color: #7EA8FF;
+}
+.moat-tag.amber { background: rgba(240,165,0,0.15); color: var(--amber); }
+.moat-tag.green { background: rgba(16,185,129,0.15); color: var(--green); }
+
+/* ── LANGUAGES ─────────────────────────────────────────── */
+.langs { background: var(--off); }
+.lang-grid {
+  display: flex; flex-wrap: wrap; gap: 0.75rem;
+  margin-top: 2.5rem;
+}
+.lang-pill {
+  display: flex; align-items: center; gap: 0.6rem;
+  background: var(--white); border: 1px solid var(--rule);
+  border-radius: 8px; padding: 0.65rem 1rem;
+  font-size: 0.85rem; color: var(--ink-2);
+}
+.lang-script { font-size: 1.2rem; }
+.lang-name { font-weight: 600; font-size: 0.82rem; }
+
+/* ── PRICING ───────────────────────────────────────────── */
+.pricing-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.5rem; margin-top: 3.5rem; align-items: start;
+}
+.pricing-card {
+  border: 1px solid var(--rule); border-radius: 12px;
+  padding: 2rem; background: var(--white);
+  position: relative;
+}
+.pricing-card.featured {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 1px var(--blue), 0 8px 40px rgba(59,110,248,0.12);
+}
+.pricing-badge {
+  position: absolute; top: -13px; left: 50%; transform: translateX(-50%);
+  background: var(--blue); color: var(--white);
+  font-size: 0.65rem; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase; padding: 0.25rem 0.85rem; border-radius: 100px;
+  white-space: nowrap; font-family: 'JetBrains Mono', monospace;
+}
+.pricing-tier { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 0.5rem; font-family: 'JetBrains Mono', monospace; }
+.pricing-price { font-family: 'Fraunces', serif; font-size: 2.6rem; font-weight: 700; color: var(--ink); line-height: 1; margin-bottom: 0.2rem; letter-spacing: -0.03em; }
+.pricing-price span { font-size: 0.95rem; font-weight: 400; color: var(--ink-3); font-family: 'Inter', sans-serif; }
+.pricing-desc { font-size: 0.85rem; color: var(--ink-3); margin: 0.75rem 0 1.5rem; line-height: 1.5; }
+.pricing-features { list-style: none; margin-bottom: 2rem; }
+.pricing-features li {
+  font-size: 0.875rem; padding: 0.4rem 0;
+  border-bottom: 1px solid var(--rule);
+  display: flex; align-items: flex-start; gap: 0.5rem; color: var(--ink-2);
+}
+.pricing-features li:last-child { border-bottom: none; }
+.pricing-features li::before { content: '✓'; color: var(--blue); font-weight: 700; flex-shrink: 0; margin-top: 1px; }
+.pricing-features li.amber::before { color: var(--amber-2); }
+.pricing-btn {
+  display: block; width: 100%; text-align: center;
+  padding: 0.85rem; border-radius: 8px;
+  font-weight: 600; font-size: 0.9rem; text-decoration: none;
+  transition: background 0.2s, transform 0.15s;
+}
+.pricing-btn.primary { background: var(--blue); color: var(--white); }
+.pricing-btn.primary:hover { background: var(--blue-2); }
+.pricing-btn.outline { border: 1px solid var(--rule); color: var(--ink); }
+.pricing-btn.outline:hover { border-color: var(--ink-3); }
+
+/* ── CONTACT ───────────────────────────────────────────── */
+.contact { background: var(--navy); }
+.contact .sec-title { color: var(--white); }
+.contact .sec-sub { color: rgba(255,255,255,0.45); }
+.contact-grid { display: grid; grid-template-columns: 1fr 1.4fr; gap: 4rem; margin-top: 3rem; }
+.contact-options { display: flex; flex-direction: column; gap: 1rem; }
+.contact-option {
+  display: flex; align-items: center; gap: 1rem;
+  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 10px; padding: 1.25rem 1.5rem;
+  text-decoration: none; transition: border-color 0.2s;
+  color: inherit;
+}
+.contact-option:hover { border-color: var(--blue); }
+.contact-icon { font-size: 1.4rem; flex-shrink: 0; }
+.contact-label { font-size: 0.7rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--blue); margin-bottom: 0.2rem; font-family: 'JetBrains Mono', monospace; }
+.contact-value { font-size: 0.9rem; color: rgba(255,255,255,0.8); font-weight: 500; }
+
+/* FORM */
+form { display: flex; flex-direction: column; gap: 1rem; }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.form-group { display: flex; flex-direction: column; gap: 0.4rem; }
+.form-group label { font-size: 0.7rem; font-weight: 600; color: rgba(255,255,255,0.35); text-transform: uppercase; letter-spacing: 0.1em; font-family: 'JetBrains Mono', monospace; }
+.form-group input, .form-group select, .form-group textarea {
+  background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px; padding: 0.75rem 1rem;
+  color: var(--white); font-size: 0.9rem; font-family: 'Inter', sans-serif;
+  outline: none; transition: border-color 0.2s; width: 100%;
+}
+.form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: var(--blue); }
+.form-group select option { background: var(--navy-2); }
+.form-group textarea { resize: vertical; min-height: 90px; }
+.form-submit {
+  background: var(--blue); color: var(--white); border: none;
+  padding: 0.9rem 2rem; border-radius: 8px;
+  font-weight: 600; font-size: 0.95rem;
+  cursor: pointer; font-family: 'Inter', sans-serif;
+  width: 100%; transition: background 0.2s;
+}
+.form-submit:hover { background: var(--blue-2); }
+
+/* ── HOW IT WORKS ──────────────────────────────────────── */
+.how-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 2rem; margin-top: 3.5rem; }
+.how-step { position: relative; padding-left: 1.5rem; border-left: 2px solid var(--rule); }
+.how-step::before {
+  content: attr(data-n);
+  position: absolute; top: 0; left: -1.1rem;
+  width: 2rem; height: 2rem; border-radius: 50%;
+  background: var(--white); border: 2px solid var(--blue);
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'JetBrains Mono', monospace; font-size: 0.65rem;
+  color: var(--blue); font-weight: 500;
+}
+.how-step h3 { font-size: 0.95rem; font-weight: 600; margin-bottom: 0.4rem; }
+.how-step p { font-size: 0.85rem; color: var(--ink-3); line-height: 1.65; }
+
+/* ── FOOTER ────────────────────────────────────────────── */
+footer {
+  background: #060810; padding: 2rem 5vw;
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 1rem;
+  border-top: 1px solid rgba(255,255,255,0.04);
+}
+footer p { font-size: 0.8rem; color: #333; }
+
+/* WhatsApp float */
+.wa {
+  position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 200;
+  background: #25D366; color: var(--white);
+  width: 54px; height: 54px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.5rem;
+  box-shadow: 0 4px 16px rgba(37,211,102,0.4);
+  text-decoration: none; transition: transform 0.2s;
+}
+.wa:hover { transform: scale(1.1); }
+
+/* ── RESPONSIVE ────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .nav-links { display: none; }
+  .layers-grid { grid-template-columns: 1fr; }
+  .layer { border-right: none; border-bottom: 1px solid var(--rule); }
+  .layer:last-child { border-bottom: none; }
+  .contact-grid { grid-template-columns: 1fr; gap: 2.5rem; }
+  .form-row { grid-template-columns: 1fr; }
+  .stat-sep { display: none; }
+  section { padding: 4rem 5vw; }
+  .hero { padding: 100px 5vw 60px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <a href="#" class="logo">Trending<em>Verse</em></a>
+  <div class="nav-links">
+    <a href="#platform">Platform</a>
+    <a href="#moat">Why Us</a>
+    <a href="#pricing">Pricing</a>
+    <a href="#demo" class="nav-cta">Book a Demo</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="eyebrow">Now live — 2 publisher sites · ₹0 setup cost</div>
+  <h1>The only Indian CMS<br>with a built-in<br><span class="amber">ad marketplace.</span></h1>
+  <p class="hero-sub">TrendingVerse gives Indian news publishers the tools to write, publish, monetize, and grow — in one platform, in 10+ languages, without stitching together five separate tools.</p>
+  <div class="hero-actions">
+    <a href="#demo" class="btn-primary">Request a Free Demo</a>
+    <a href="#platform" class="btn-outline">See the Platform →</a>
+  </div>
+
+  <!-- Platform Pulse — live activity feed showing the platform working -->
+  <div class="pulse-container">
+    <div class="pulse-header">
+      <div class="pulse-live"><div class="pulse-dot"></div> Platform live</div>
+      <span>TrendingVerse — Platform Activity</span>
+      <span id="pulse-clock">—</span>
+    </div>
+    <div class="pulse-feed" id="pulse-feed">
+      <div class="pulse-item" style="animation-delay:0.0s">
+        <span class="pulse-type type-publish">PUBLISH</span>
+        <span>Article auto-published: "GRSE Conferred Navratna Status"</span>
+        <span class="pulse-time">just now</span>
+      </div>
+      <div class="pulse-item" style="animation-delay:0.1s">
+        <span class="pulse-type type-ad">AD</span>
+        <span>AdCandid campaign served 2,982 impressions · trendingverse.online</span>
+        <span class="pulse-time">1m ago</span>
+      </div>
+      <div class="pulse-item" style="animation-delay:0.2s">
+        <span class="pulse-type type-rate">RATES</span>
+        <span>AED → INR updated · 1 AED = 22.84 INR · Finance / Currency Rates</span>
+        <span class="pulse-time">3m ago</span>
+      </div>
+      <div class="pulse-item" style="animation-delay:0.3s">
+        <span class="pulse-type type-audience">AUDIENCE</span>
+        <span>17,884 audience profiles tracked · 5 email leads captured today</span>
+        <span class="pulse-time">5m ago</span>
+      </div>
+      <div class="pulse-item" style="animation-delay:0.4s">
+        <span class="pulse-type type-publish">PUBLISH</span>
+        <span>SEO metadata rewritten · 21 articles re-categorized</span>
+        <span class="pulse-time">9m ago</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- STATS BAR -->
+<div class="statsbar">
+  <div class="stat"><div class="stat-num">200<span class="unit">+</span></div><div class="stat-label">Articles Published</div></div>
+  <div class="stat-sep"></div>
+  <div class="stat"><div class="stat-num">17<span class="unit">K+</span></div><div class="stat-label">Audience Profiles</div></div>
+  <div class="stat-sep"></div>
+  <div class="stat"><div class="stat-num">2</div><div class="stat-label">Live Publisher Sites</div></div>
+  <div class="stat-sep"></div>
+  <div class="stat"><div class="stat-num">10<span class="unit">+</span></div><div class="stat-label">Indian Languages</div></div>
+  <div class="stat-sep"></div>
+  <div class="stat"><div class="stat-num">₹0</div><div class="stat-label">Setup Cost</div></div>
+</div>
+
+<!-- PROBLEM -->
+<section class="problem">
+  <div class="max-w">
+    <div class="sec-label">The problem</div>
+    <h2 class="sec-title">Indian publishers are running<br>five tools where one should do.</h2>
+    <p class="sec-sub">WordPress for publishing, Google Ad Manager for ads, Analytics for audience, a separate SEO tool, and still no direct way to sell ads to local advertisers.</p>
+    <div class="problem-grid">
+      <div class="problem-card">
+        <div class="problem-icon">💸</div>
+        <h3>AdSense pays pennies for Indian traffic</h3>
+        <p>CPMs for Indian-language audiences on AdSense average ₹20–60. Direct ad deals with local brands pay 5–10× more — but there's no platform to run them.</p>
+      </div>
+      <div class="problem-card">
+        <div class="problem-icon">✍️</div>
+        <h3>AI tools don't write in your language</h3>
+        <p>ChatGPT writes passable Kannada or Tamil, but it doesn't understand Google Discover, SEO scoring, or your editorial workflow. It's a text box, not a publishing tool.</p>
+      </div>
+      <div class="problem-card">
+        <div class="problem-icon">📉</div>
+        <h3>No visibility into your audience</h3>
+        <p>WordPress tells you page views. It doesn't tell you which readers scroll to the bottom, which cities your audience comes from, or how many have shared their email.</p>
+      </div>
+      <div class="problem-card">
+        <div class="problem-icon">🔄</div>
+        <h3>Publishing is still manual</h3>
+        <p>Write in Google Docs, paste into WordPress, add SEO fields, find a photo, set the category, check the preview. Every single article. Every single day.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- THREE LAYERS -->
+<section id="platform">
+  <div class="max-w">
+    <div class="sec-label">The platform</div>
+    <h2 class="sec-title">One platform.<br>Three revenue layers.</h2>
+    <p class="sec-sub">TrendingVerse isn't just a CMS. It's a publishing stack with monetization and audience intelligence built in from the start.</p>
+    <div class="layers-grid">
+      <div class="layer layer-1">
+        <span class="layer-badge badge-publish">Publish</span>
+        <h3>Write & Publish</h3>
+        <p>AI writer, auto-publish cron, Paste & Enrich, URL rewrite in any language, SEO scoring, subheading injection, WordPress sync.</p>
+        <ul class="layer-features">
+          <li>AI Writer in 10+ Indian languages</li>
+          <li>Paste any URL → rewrite in your language</li>
+          <li>Daily auto-publish cron (trending news)</li>
+          <li>SEO engine with Discover scoring</li>
+          <li>One-click WordPress sync with auto-categories</li>
+          <li>AI-generated images per article</li>
+          <li>Article-to-video (YouTube + Instagram)</li>
+        </ul>
+      </div>
+      <div class="layer layer-2">
+        <span class="layer-badge badge-monetize">Monetize</span>
+        <h3>Direct Ad Marketplace</h3>
+        <p>Sell display ads directly to local and national advertisers — no intermediary, no AdSense split. Geo-targeted, frequency-capped, fully tracked.</p>
+        <ul class="layer-features">
+          <li>Direct advertiser onboarding portal</li>
+          <li>Geo targeting (Country → State → City)</li>
+          <li>Impression + click tracking per campaign</li>
+          <li>Campaign reports with CSV export</li>
+          <li>Frequency capping per user</li>
+          <li>Publisher Outreach CRM to find advertisers</li>
+          <li>Email campaign reports to advertisers</li>
+        </ul>
+      </div>
+      <div class="layer layer-3">
+        <span class="layer-badge badge-grow">Grow</span>
+        <h3>Audience & Data</h3>
+        <p>Know your readers: scroll depth, device, city, email capture — plus daily-updated financial data pages that rank on Google like GoodReturns.</p>
+        <ul class="layer-features">
+          <li>Audience profiles (17K+ tracked)</li>
+          <li>Scroll depth funnel per article</li>
+          <li>Google One Tap email capture</li>
+          <li>City-level geo breakdown</li>
+          <li>Currency rate pages (AED/SAR/USD/GBP/QAR → INR)</li>
+          <li>Daily auto-updated data verticals</li>
+          <li>Finance → Currency Rates SEO cluster</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- MOAT -->
+<section class="moat" id="moat">
+  <div class="max-w">
+    <div class="sec-label" style="color:var(--amber)">Why TrendingVerse</div>
+    <h2 class="sec-title">Features no other Indian<br>publisher CMS has.</h2>
+    <p class="sec-sub">These aren't on the roadmap. They're live, running, and powering publishers today.</p>
+    <div class="moat-grid">
+      <div class="moat-card">
+        <div class="moat-card-icon">🎯</div>
+        <h3>Direct Ad Marketplace</h3>
+        <p>Advertisers log in, create campaigns, target cities, set budgets. Publishers earn direct — no agency, no AdSense. Built with geo-targeting and frequency capping already in.</p>
+        <span class="moat-tag amber">Exclusive</span>
+      </div>
+      <div class="moat-card">
+        <div class="moat-card-icon">📊</div>
+        <h3>Real Audience Intelligence</h3>
+        <p>Not just pageviews. Scroll depth per article, city-level breakdown, device split, gender + age estimate, and actual email leads captured via Google One Tap.</p>
+        <span class="moat-tag">Audience Layer</span>
+      </div>
+      <div class="moat-card">
+        <div class="moat-card-icon">💱</div>
+        <h3>Daily Financial Data Pages</h3>
+        <p>Auto-updated currency rate pages (AED, SAR, USD, GBP, QAR → INR) published every morning with AI-written context — built to rank in Google Search the same way GoodReturns does.</p>
+        <span class="moat-tag green">SEO Moat</span>
+      </div>
+      <div class="moat-card">
+        <div class="moat-card-icon">🎬</div>
+        <h3>Article → Video Pipeline</h3>
+        <p>Turn any published article into a YouTube (16:9) or Instagram Reels (9:16) video — AI generates the script, images, voiceover, captions, and ready-to-paste upload metadata.</p>
+        <span class="moat-tag">Video Studio</span>
+      </div>
+      <div class="moat-card">
+        <div class="moat-card-icon">🔗</div>
+        <h3>URL Rewrite in Any Language</h3>
+        <p>Paste any article URL from any website in any language. TrendingVerse fetches it, detects the source language, and rewrites a completely original, plagiarism-free version in your target language.</p>
+        <span class="moat-tag">AI Writer</span>
+      </div>
+      <div class="moat-card">
+        <div class="moat-card-icon">📋</div>
+        <h3>Publisher Outreach CRM</h3>
+        <p>Find publishers to onboard to your ad network — brief-based matching, website contact scanning, AI email drafting, and CSV export. A full B2B sales pipeline built into your CMS.</p>
+        <span class="moat-tag amber">Ad Network</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section>
+  <div class="max-w">
+    <div class="sec-label">Getting started</div>
+    <h2 class="sec-title">Live in 48 hours.</h2>
+    <p class="sec-sub">We handle setup and migration. Your team starts writing within the hour.</p>
+    <div class="how-grid">
+      <div class="how-step" data-n="01">
+        <h3>We configure your platform</h3>
+        <p>Your instance is set up with your branding, categories, and author accounts. If you're migrating from WordPress, we handle that too.</p>
+      </div>
+      <div class="how-step" data-n="02">
+        <h3>Connect your WordPress site</h3>
+        <p>One API key links your WordPress site. Every article published in TrendingVerse appears on your live site automatically — categories, SEO fields, images and all.</p>
+      </div>
+      <div class="how-step" data-n="03">
+        <h3>Onboard your first advertiser</h3>
+        <p>We help you set up your first direct ad campaign — create the advertiser account, configure geo targeting, and launch. Your first ad revenue in week one.</p>
+      </div>
+      <div class="how-step" data-n="04">
+        <h3>Grow from here</h3>
+        <p>More publishers, more advertisers, more data verticals. The platform grows with you — add languages, add sites, add ad inventory without changing tools.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- LANGUAGES -->
+<section class="langs">
+  <div class="max-w">
+    <div class="sec-label">Language support</div>
+    <h2 class="sec-title">Write in every Indian language.</h2>
+    <p class="sec-sub">AI writing, SEO scoring, and content management in all major Indian languages — not translated from English, written in it.</p>
+    <div class="lang-grid">
+      <div class="lang-pill"><span class="lang-script">ಕ</span><span class="lang-name">Kannada</span></div>
+      <div class="lang-pill"><span class="lang-script">ह</span><span class="lang-name">Hindi</span></div>
+      <div class="lang-pill"><span class="lang-script">త</span><span class="lang-name">Telugu</span></div>
+      <div class="lang-pill"><span class="lang-script">த</span><span class="lang-name">Tamil</span></div>
+      <div class="lang-pill"><span class="lang-script">മ</span><span class="lang-name">Malayalam</span></div>
+      <div class="lang-pill"><span class="lang-script">ম</span><span class="lang-name">Bengali</span></div>
+      <div class="lang-pill"><span class="lang-script">ਪ</span><span class="lang-name">Punjabi</span></div>
+      <div class="lang-pill"><span class="lang-script">ગ</span><span class="lang-name">Gujarati</span></div>
+      <div class="lang-pill"><span class="lang-script">म</span><span class="lang-name">Marathi</span></div>
+      <div class="lang-pill"><span class="lang-script">+</span><span class="lang-name">More coming</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- PRICING -->
+<section id="pricing">
+  <div class="max-w">
+    <div class="sec-label">Pricing</div>
+    <h2 class="sec-title">Simple pricing.<br>No surprises.</h2>
+    <p class="sec-sub">All plans include setup, onboarding, and support. Cancel any time.</p>
+    <div class="pricing-grid">
+      <div class="pricing-card">
+        <div class="pricing-tier">Starter</div>
+        <div class="pricing-price">₹2,000<span>/month</span></div>
+        <div class="pricing-desc">For small news sites getting started with modern publishing.</div>
+        <ul class="pricing-features">
+          <li>Up to 3 author accounts</li>
+          <li>AI Writer (50 articles/month)</li>
+          <li>WordPress auto-sync</li>
+          <li>Google Discover scoring</li>
+          <li>Basic audience dashboard</li>
+          <li>Email support</li>
+          <li>Setup & migration included</li>
+        </ul>
+        <a href="#demo" class="pricing-btn outline">Get Started</a>
+      </div>
+      <div class="pricing-card featured">
+        <div class="pricing-badge">Most Popular</div>
+        <div class="pricing-tier">Growth</div>
+        <div class="pricing-price">₹5,000<span>/month</span></div>
+        <div class="pricing-desc">For active editorial teams who want the full platform.</div>
+        <ul class="pricing-features">
+          <li>Up to 10 author accounts</li>
+          <li>AI Writer (unlimited)</li>
+          <li>WordPress auto-sync</li>
+          <li class="amber">Direct Ads marketplace</li>
+          <li class="amber">Audience intelligence + scroll depth</li>
+          <li>URL rewrite in any language</li>
+          <li>Article-to-Video (YouTube + Reels)</li>
+          <li>Currency rate pages (5 corridors)</li>
+          <li>Priority support + monthly review</li>
+        </ul>
+        <a href="#demo" class="pricing-btn primary">Get Started</a>
+      </div>
+      <div class="pricing-card">
+        <div class="pricing-tier">Pro</div>
+        <div class="pricing-price">₹15,000<span>/month</span></div>
+        <div class="pricing-desc">For media companies with multiple sites and high ad volume.</div>
+        <ul class="pricing-features">
+          <li>Unlimited author accounts</li>
+          <li>Multiple WordPress sites</li>
+          <li>Full ad marketplace + outreach CRM</li>
+          <li>Custom data verticals</li>
+          <li>Dedicated account manager</li>
+          <li>API access</li>
+          <li>Custom feature development</li>
+          <li>SLA guarantee</li>
+        </ul>
+        <a href="#demo" class="pricing-btn outline">Contact Us</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CONTACT -->
+<section class="contact" id="demo">
+  <div class="max-w">
+    <div class="sec-label" style="color:var(--blue)">Get started</div>
+    <h2 class="sec-title">Ready to see it<br>with your own content?</h2>
+    <p class="sec-sub">We'll set up a live demo using articles from your actual site — so you see exactly what TrendingVerse does for your newsroom, not a generic demo.</p>
+    <div class="contact-grid">
+      <div class="contact-options">
+        <a href="https://wa.me/919000000000" class="contact-option" target="_blank">
+          <div class="contact-icon">💬</div>
+          <div>
+            <div class="contact-label">WhatsApp</div>
+            <div class="contact-value">Chat with us directly</div>
+          </div>
+        </a>
+        <a href="mailto:yusuf@trendingverse.online" class="contact-option">
+          <div class="contact-icon">✉️</div>
+          <div>
+            <div class="contact-label">Email</div>
+            <div class="contact-value">yusuf@trendingverse.online</div>
+          </div>
+        </a>
+        <div class="contact-option" style="cursor:default">
+          <div class="contact-icon">🕐</div>
+          <div>
+            <div class="contact-label">Response time</div>
+            <div class="contact-value">Within 2 hours (9am–9pm IST)</div>
+          </div>
+        </div>
+        <div class="contact-option" style="cursor:default">
+          <div class="contact-icon">⚡</div>
+          <div>
+            <div class="contact-label">Demo setup</div>
+            <div class="contact-value">Live on your site within 48 hours</div>
+          </div>
+        </div>
+      </div>
+      <form id="demo-form">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Your Name</label>
+            <input type="text" placeholder="Sunil Kumar" required>
+          </div>
+          <div class="form-group">
+            <label>Phone / WhatsApp</label>
+            <input type="tel" placeholder="+91 98765 43210" required>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>News Site URL</label>
+          <input type="url" placeholder="https://yournewssite.com">
+        </div>
+        <div class="form-group">
+          <label>Primary Language</label>
+          <select>
+            <option value="">Select language</option>
+            <option>Kannada</option>
+            <option>Hindi</option>
+            <option>Telugu</option>
+            <option>Tamil</option>
+            <option>Malayalam</option>
+            <option>Bengali</option>
+            <option>Marathi</option>
+            <option>Punjabi</option>
+            <option>Gujarati</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>I'm most interested in</label>
+          <select>
+            <option>Full platform (Publish + Monetize + Grow)</option>
+            <option>Direct Ad Marketplace</option>
+            <option>AI Writing + WordPress sync</option>
+            <option>Audience intelligence</option>
+            <option>Not sure yet</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Tell us about your site</label>
+          <textarea placeholder="How many articles per day? How many authors? Monthly traffic? Any specific requirements?"></textarea>
+        </div>
+        <button type="submit" class="form-submit">Request a Free Demo →</button>
+      </form>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <a href="#" class="logo">Trending<em>Verse</em></a>
+  <p>© 2026 TrendingVerse. Built for Indian journalism.</p>
+  <p>yusuf@trendingverse.online</p>
+</footer>
+
+<a href="https://wa.me/919000000000" class="wa" target="_blank" title="Chat on WhatsApp">💬</a>
+
+<script>
+// Live clock in pulse header
+function updateClock() {
+  const el = document.getElementById('pulse-clock');
+  if (el) el.textContent = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+updateClock();
+setInterval(updateClock, 1000);
+
+// Form submit
+document.getElementById('demo-form').addEventListener('submit', function(e) {
+  e.preventDefault();
+  const btn = this.querySelector('.form-submit');
+  btn.textContent = '✓ Request received — we\'ll reach out within 2 hours.';
+  btn.style.background = '#059669';
+  btn.disabled = true;
+});
+
+// Smooth scroll
+document.querySelectorAll('a[href^="#"]').forEach(a => {
+  a.addEventListener('click', e => {
+    const target = document.querySelector(a.getAttribute('href'));
+    if (target) { e.preventDefault(); target.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+  });
+});
+</script>
+</body>
+</html>
