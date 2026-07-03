@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
+import { buildArticlePrompt } from '@/lib/article-generation-prompt'
 
 const LANGUAGES: Record<string, string> = {
   'en': 'English', 'hi': 'Hindi', 'ta': 'Tamil',
@@ -8,14 +9,16 @@ const LANGUAGES: Record<string, string> = {
   'mr': 'Marathi', 'gu': 'Gujarati', 'bn': 'Bengali', 'pa': 'Punjabi',
 }
 
-function buildPrompt(subject: string, category: string, keywords: string[], tone: string, langName: string, wordCount: number) {
-  const actualWordCount = langName === 'English' ? wordCount : Math.min(wordCount, 500)
-  return `You are an expert journalist. Write a ${actualWordCount} word SEO news article about: ${subject}
-Category: ${category} | Keywords: ${keywords.slice(0, 5).join(', ')} | Tone: ${tone}
-Write ALL text content in ${langName} language.
-Use only h2 and h3 tags, never h1. No h1 tags allowed.
-Respond with ONLY a JSON object in this exact format (no other text, no markdown, no backticks):
-{"title":"[${langName} headline]","content":"[HTML article in ${langName} using p h2 h3 strong tags only]","excerpt":"[${langName} summary]","seo_title":"[${langName} SEO title under 60 chars]","meta_description":"[${langName} meta under 160 chars]","focus_keyword":"[main keyword]","keywords":["kw1","kw2","kw3"],"tags":["tag1","tag2"],"reading_time":4}`
+// Uses the shared prompt builder so AI Writer articles satisfy the SAME
+// algorithmic SEO factors (H2s, image placeholder w/ alt, keyword placement,
+// internal link) as the cron and enrich paths — pushing scores to 85+.
+function buildPrompt(subject: string, category: string, keywords: string[], langName: string) {
+  return buildArticlePrompt({
+    title: subject,
+    category,
+    keywords,
+    language: langName,
+  })
 }
 
 async function generateWithGemini(prompt: string, apiKey: string): Promise<Record<string, unknown>> {
@@ -27,7 +30,7 @@ async function generateWithGemini(prompt: string, apiKey: string): Promise<Recor
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {
-          temperature: 0.9,
+          temperature: 0.7,
           maxOutputTokens: 8192,
           responseMimeType: 'application/json'
         }
@@ -52,7 +55,7 @@ async function generateWithOpenAI(prompt: string, apiKey: string): Promise<Recor
       model: 'gpt-4o-mini',
       messages: [{ role: 'user', content: prompt }],
       max_tokens: 4096,
-      temperature: 0.9,
+      temperature: 0.7,
       response_format: { type: 'json_object' },
     })
   })
@@ -84,38 +87,32 @@ async function generateWithClaude(prompt: string, apiKey: string): Promise<Recor
   }
   const data = await res.json()
   const raw = (data.content?.[0]?.text || '').trim()
-
   // Step 1: Remove ALL markdown fences (handles ```json, ```, ``` json etc)
-const stripped = raw
-  .replace(/^[\s]*`{3,}[\s]*(?:json)?[\s]*/i, '')
-  .replace(/[\s]*`{3,}[\s]*$/i, '')
-  .trim()
-
+  const stripped = raw
+    .replace(/^[\s]*`{3,}[\s]*(?:json)?[\s]*/i, '')
+    .replace(/[\s]*`{3,}[\s]*$/i, '')
+    .trim()
   // Step 2: Direct parse
   try { return JSON.parse(stripped) } catch { /* continue */ }
-
   // Step 3: Find JSON boundaries
   const start = stripped.indexOf('{')
   const end = stripped.lastIndexOf('}')
   if (start === -1 || end <= start) {
-    // Last attempt — find JSON after any text
-const jsonMatch = raw.match(/\{[\s\S]*"title"[\s\S]*\}/)
-if (jsonMatch) {
-  try { return JSON.parse(jsonMatch[0]) } catch { /* continue */ }
-  try {
-    const unicoded = jsonMatch[0].replace(/[\u0080-\uFFFF]/g, c =>
-      '\\u' + ('0000' + c.charCodeAt(0).toString(16)).slice(-4)
-    )
-    return JSON.parse(unicoded)
-  } catch { /* continue */ }
-}
-throw new Error(`Claude returned non-JSON. Raw: ${raw.slice(0, 150)}`)
+    const jsonMatch = raw.match(/\{[\s\S]*"title"[\s\S]*\}/)
+    if (jsonMatch) {
+      try { return JSON.parse(jsonMatch[0]) } catch { /* continue */ }
+      try {
+        const unicoded = jsonMatch[0].replace(/[\u0080-\uFFFF]/g, c =>
+          '\\u' + ('0000' + c.charCodeAt(0).toString(16)).slice(-4)
+        )
+        return JSON.parse(unicoded)
+      } catch { /* continue */ }
+    }
+    throw new Error(`Claude returned non-JSON. Raw: ${raw.slice(0, 150)}`)
   }
   const extracted = stripped.slice(start, end + 1)
-
   // Step 4: Parse extracted
   try { return JSON.parse(extracted) } catch { /* continue */ }
-
   // Step 5: Unicode escape for Indian language characters
   try {
     const unicoded = extracted.replace(/[\u0080-\uFFFF]/g, c =>
@@ -123,7 +120,6 @@ throw new Error(`Claude returned non-JSON. Raw: ${raw.slice(0, 150)}`)
     )
     return JSON.parse(unicoded)
   } catch { /* continue */ }
-
   // Step 6: Manual field extraction — last resort
   const getStr = (key: string): string => {
     const m = extracted.match(new RegExp(`"${key}"\\s*:\\s*"((?:[^"\\\\]|\\\\[\\s\\S])*)"`, 's'))
@@ -137,10 +133,8 @@ throw new Error(`Claude returned non-JSON. Raw: ${raw.slice(0, 150)}`)
     const m = extracted.match(new RegExp(`"${key}"\\s*:\\s*\\[([^\\]]*)\\]`))
     return m ? (m[1].match(/"([^"]*)"/g) || []).map((s: string) => s.replace(/"/g, '')) : []
   }
-
   const title = getStr('title')
   if (!title) throw new Error(`Claude parse failed. Raw: ${raw.slice(0, 150)}`)
-
   return {
     title,
     content: getStr('content'),
@@ -158,7 +152,6 @@ export async function POST(req: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
   const body = await req.json()
   const {
     title, topic, keywords = [], category = 'General',
@@ -167,7 +160,6 @@ export async function POST(req: NextRequest) {
   const langName = LANGUAGES[language] || 'English'
   const subject = title || topic || 'Latest trending news'
   const kws = Array.isArray(keywords) ? keywords : []
-
   const admin = createServiceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -177,7 +169,6 @@ export async function POST(req: NextRequest) {
     .select('byoak_gemini_key, byoak_openai_key, byoak_claude_key, byoak_preferred_model, plan')
     .eq('id', user.id)
     .single()
-
   const isAdmin = user.email === process.env.ADMIN_EMAIL
   const plan = profile?.plan || 'free'
   const userGeminiKey = profile?.byoak_gemini_key
@@ -187,7 +178,6 @@ export async function POST(req: NextRequest) {
   const platformKey = process.env.GEMINI_API_KEY
   const platformKey2 = process.env.GEMINI_API_KEY_2
   const canUsePlatformKey = plan === 'popular' || plan === 'pro' || plan === 'byoak' || isAdmin
-
   if (plan === 'free' && !hasOwnKey && !isAdmin) {
     return NextResponse.json({
       error: 'FREE_PLAN_NO_KEY',
@@ -196,14 +186,11 @@ export async function POST(req: NextRequest) {
       link: '/admin/settings?tab=apikeys',
     }, { status: 403 })
   }
-
   const preferredModel = profile?.byoak_preferred_model || 'gemini'
-  const prompt = buildPrompt(subject, category, kws, tone, langName, wordCount)
-
+  const prompt = buildPrompt(subject, category, kws, langName)
   let article: Record<string, unknown> | null = null
   let modelUsed = ''
   let lastError = ''
-
   if (hasOwnKey) {
     try {
       if (preferredModel === 'claude' && userClaudeKey) {
@@ -226,7 +213,6 @@ export async function POST(req: NextRequest) {
       lastError = (e as Error).message
     }
   }
-
   if (!article && canUsePlatformKey) {
     const key = platformKey2 || platformKey
     if (key) {
@@ -238,7 +224,6 @@ export async function POST(req: NextRequest) {
       }
     }
   }
-
   if (!article) {
     return NextResponse.json({
       error: lastError.includes('429')
@@ -246,7 +231,6 @@ export async function POST(req: NextRequest) {
         : lastError || 'Generation failed. Please try again.'
     }, { status: 500 })
   }
-
   return NextResponse.json({
     title: article.title || subject,
     content: article.content || '',
