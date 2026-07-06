@@ -1,81 +1,100 @@
-// app/api/publishers/ads-txt/route.ts
-// Serves a publisher's authorized-seller lines as plain text at
-// publisher.com/ads.txt. Uses the SAME auth resolution as the
-// ad-codes endpoint: publisher_api_key → user_profiles.id → site.
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
-
-function plain(body: string, status = 200) {
-  return new NextResponse(body, {
-    status,
-    headers: {
-      'Content-Type': 'text/plain; charset=utf-8',
-      'Cache-Control': 'public, max-age=3600',
-      'X-Robots-Tag': 'noindex',
-    },
-  })
-}
-
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const key = searchParams.get('key')
   const siteUrl = searchParams.get('site')
-
-  if (!key) return plain('# TrendingVerse: API key required\n')
-
+  if (!key) return NextResponse.json({ error: 'API key required' }, { status: 401 })
   const admin = createServiceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   )
-
-  // 1) Resolve publisher by API key (same as ad-codes route)
+  // Look up publisher by API key
   const { data: profile } = await admin
     .from('user_profiles')
-    .select('id')
+    .select('id, plan')
     .eq('publisher_api_key', key)
     .single()
-
-  if (!profile) return plain('# TrendingVerse: invalid API key\n')
-
-  // 2) Resolve the site by user_id + url variants (same as ad-codes route)
+  if (!profile) {
+    return NextResponse.json({ error: 'Invalid API key' }, { status: 401 })
+  }
+  // Normalize URL — strip protocol and trailing slash
   const bare = (siteUrl || '').replace(/^https?:\/\//, '').replace(/\/$/, '')
-  const httpUrl = `http://${bare}`
+  const httpUrl  = `http://${bare}`
   const httpsUrl = `https://${bare}`
-
+  // Match site by both http and https variants
   const { data: site } = await admin
     .from('sites')
-    .select('id, site_url, ads_txt_variables')
+    .select('id, name, site_url')
     .eq('user_id', profile.id)
     .in('site_url', [httpUrl, httpsUrl, bare])
     .single()
-
-  if (!site) return plain(`# TrendingVerse: no site found for ${siteUrl}\n`)
-
-  // 3) Pull this site's active authorized-seller entries
-  const { data: entries } = await admin
-    .from('ads_txt_entries')
-    .select('ad_system, publisher_id, relationship, cert_authority_id')
+  if (!site) {
+    return NextResponse.json({
+      publisher: profile.id,
+      site: null,
+      ads: [],
+      message: `No site found for ${siteUrl} — please add your site in TrendingVerse CMS Settings`,
+    })
+  }
+  // Fetch active ad assignments for this publisher + site only
+  const { data: assignments } = await admin
+    .from('publisher_ads')
+    .select(`
+      id,
+      is_enabled,
+      inject_after_paragraph,
+      revenue_share_pct,
+      ad_units (
+        id,
+        ad_type,
+        position,
+        ad_code,
+        gam_network_code,
+        gam_unit_path,
+        size_width,
+        size_height
+      )
+    `)
+    .eq('publisher_id', profile.id)
     .eq('site_id', site.id)
-    .eq('is_active', true)
-    .order('created_at', { ascending: true })
-
-  const lines: string[] = [
-    '# ads.txt managed by TrendingVerse CMS',
-    `# Last updated: ${new Date().toISOString()}`,
-    '',
-  ]
-
-  if (site.ads_txt_variables) {
-    lines.push(site.ads_txt_variables.trim(), '')
-  }
-
-  for (const e of entries || []) {
-    let line = `${e.ad_system}, ${e.publisher_id}, ${e.relationship}`
-    if (e.cert_authority_id) line += `, ${e.cert_authority_id}`
-    lines.push(line)
-  }
-
-  if (!entries?.length) lines.push('# No authorized sellers configured yet')
-
-  return plain(lines.join('\n') + '\n')
+    .eq('is_enabled', true)
+  const ads = (assignments || []).map(a => {
+    const unit = Array.isArray(a.ad_units) ? a.ad_units[0] : a.ad_units
+    return {
+      id: unit?.id,
+      ad_type: unit?.ad_type,
+      position: unit?.position,
+      ad_code: unit?.ad_code,
+      gam_network_code: unit?.gam_network_code,
+      gam_unit_path: unit?.gam_unit_path,
+      size_width: unit?.size_width,
+      size_height: unit?.size_height,
+      is_enabled: a.is_enabled,
+      inject_after_paragraph: a.inject_after_paragraph,
+      revenue_share_pct: a.revenue_share_pct,
+    }
+  })
+  // Block restricted ad categories from being served
+const BLOCKED_KEYWORDS = [
+  'casino', 'gambling', 'bet', 'poker', 'slots', 'lottery',
+  'adult', 'xxx', 'porn', 'sex',
+  'one-vv5163.com', 'tobacco', 'cigarette'
+]
+const safeAds = ads.filter(ad => {
+  const code = (ad.ad_code || '').toLowerCase()
+  return !BLOCKED_KEYWORDS.some(keyword => code.includes(keyword))
+})
+return NextResponse.json({
+  publisher: profile.id,
+  site: { id: site.id, name: site.name, url: site.site_url },
+  ads: safeAds,
+  cached_until: new Date(Date.now() + 3600000).toISOString(),
+})
+  return NextResponse.json({
+    publisher: profile.id,
+    site: { id: site.id, name: site.name, url: site.site_url },
+    ads,
+    cached_until: new Date(Date.now() + 3600000).toISOString(),
+  })
 }
