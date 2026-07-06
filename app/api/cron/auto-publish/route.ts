@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { computeSeoScore } from '@/lib/seo-scorer'
 import { buildArticlePrompt, VALID_CATEGORIES } from '@/lib/article-generation-prompt'
-
+import { computePacing, resolveStatus, computeSpend } from '@/lib/pacing-engine'
 export const maxDuration = 300 // Vercel will clamp to your plan's actual max if lower
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'khan.khan.yusuf@gmail.com'
@@ -670,7 +670,86 @@ async function runArticlePublish(
     return { result: { success: false, error: (e as Error).message }, log }
   }
 }
+// ════════════════════════════════════════════════════════════════
+// ── DIRECT ADS PACING — runs inside the daily cron ───────────────
+// Records per-day delivery, updates spend, and auto-transitions
+// campaign status (scheduled→active→completed) + auto-pauses on
+// budget spent / goal reached / flight end.
+// ════════════════════════════════════════════════════════════════
+async function runDirectAdsPacing(supabase: any): Promise<{ processed: number; paused: number; log: string[] }> {
+  const log: string[] = []
+  let processed = 0, paused = 0
+  const today = new Date().toISOString().split('T')[0]
 
+  const { data: campaigns } = await supabase
+    .from('direct_ads')
+    .select('*')
+    .in('status', ['scheduled', 'active', 'paused'])
+
+  if (!campaigns?.length) {
+    log.push('[direct-ads] no active campaigns to pace')
+    return { processed: 0, paused: 0, log }
+  }
+
+  for (const c of campaigns) {
+    // Respect manual pauses — the cron never un-pauses an ops decision
+    if (c.status === 'paused') continue
+
+    const pacing = computePacing(c)
+    const newStatus = resolveStatus(c)
+    const spend = computeSpend(c, c.impressions || 0, c.clicks || 0)
+
+    // Per-day delivery ledger: today's numbers = running totals minus prior days
+    const { data: priorRows } = await supabase
+      .from('direct_ad_daily_delivery')
+      .select('impressions, clicks')
+      .eq('direct_ad_id', c.id)
+      .lt('delivery_date', today)
+
+    const priorImps = (priorRows || []).reduce((s: number, r: any) => s + (r.impressions || 0), 0)
+    const priorClicks = (priorRows || []).reduce((s: number, r: any) => s + (r.clicks || 0), 0)
+    const todayImps = Math.max(0, (c.impressions || 0) - priorImps)
+    const todayClicks = Math.max(0, (c.clicks || 0) - priorClicks)
+    const todaySpend = computeSpend(c, todayImps, todayClicks)
+
+    const { data: existingRow } = await supabase
+      .from('direct_ad_daily_delivery')
+      .select('id')
+      .eq('direct_ad_id', c.id)
+      .eq('delivery_date', today)
+      .single()
+
+    if (existingRow) {
+      await supabase.from('direct_ad_daily_delivery')
+        .update({ impressions: todayImps, clicks: todayClicks, spend_inr: todaySpend, updated_at: new Date().toISOString() })
+        .eq('id', existingRow.id)
+    } else {
+      await supabase.from('direct_ad_daily_delivery').insert({
+        direct_ad_id: c.id, delivery_date: today,
+        impressions: todayImps, clicks: todayClicks, spend_inr: todaySpend,
+      })
+    }
+
+    const updates: any = { spend_inr: spend, last_paced_at: new Date().toISOString() }
+
+    if (pacing.should_pause) {
+      updates.status = 'completed'
+      updates.is_active = false
+      paused++
+      log.push(`[direct-ads] ${c.name}: completed — ${pacing.pause_reason}`)
+    } else if (newStatus !== c.status) {
+      updates.status = newStatus
+      updates.is_active = newStatus === 'active'
+      log.push(`[direct-ads] ${c.name}: ${c.status} → ${newStatus}`)
+    }
+
+    await supabase.from('direct_ads').update(updates).eq('id', c.id)
+    processed++
+  }
+
+  log.push(`[direct-ads] processed ${processed}, completed ${paused}`)
+  return { processed, paused, log }
+}
 export async function GET(req: NextRequest) {
   if (!isAuthorized(req)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -704,16 +783,18 @@ export async function GET(req: NextRequest) {
   // ── Run article publishing AND currency rates update CONCURRENTLY ──
   // (previously sequential — total time was article_time + currency_time;
   // now it's max(article_time, currency_time), roughly halving wall-clock time)
-  const [articleOutcome, currencyOutcome] = await Promise.all([
+ const [articleOutcome, currencyOutcome, pacingOutcome] = await Promise.all([
     runArticlePublish(supabase, geminiKey, pexelsKey, newsApiKey, wpBase, auth, wpUrl, adminUserId, langParam, regionParam),
     runCurrencyRatesUpdate(supabase, geminiKey, wpBase, auth).catch((e) => ({ updated: 0, failed: 0, log: [`Currency rates error: ${(e as Error).message}`] })),
+    runDirectAdsPacing(supabase).catch((e) => ({ processed: 0, paused: 0, log: [`Direct-ads pacing error: ${(e as Error).message}`] })),
   ])
 
-  const log = [...articleOutcome.log, ...currencyOutcome.log]
+  const log = [...articleOutcome.log, ...currencyOutcome.log, ...pacingOutcome.log]
 
   return NextResponse.json({
     article: articleOutcome.result,
     currency: { updated: currencyOutcome.updated, failed: currencyOutcome.failed },
+    direct_ads: { processed: pacingOutcome.processed, completed: pacingOutcome.paused },
     log,
   })
 }
