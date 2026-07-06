@@ -1,3 +1,4 @@
+import { computePacing, paceStatusColor, paceStatusLabel } from '@/lib/pacing-engine'
 'use client'
 import { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
@@ -57,10 +58,12 @@ const EMPTY_AD = {
   headline: '', description: '', image_url: '', cta_text: 'Learn More',
   destination_url: '', ad_code_override: '',
   target_ad_unit_ids: [] as string[], segment_ids: [] as string[], target_all: false,
-  priority: 0, cpm_rate_inr: 0, impressions_cap: 0, start_date: '', end_date: '',
+priority: 0, cpm_rate_inr: 0, impressions_cap: 0, start_date: '', end_date: '',
   target_site_urls: [] as string[], target_countries: [] as string[],
   target_states: [] as string[], target_cities: [] as string[], target_gender: 'all',
   campaign_objective: 'impressions', target_impressions: 0, freq_cap_per_user: 0,
+  pricing_model: 'cpm', cpc_rate_inr: 0, flat_fee_inr: 0,
+  total_budget_inr: 0, daily_budget_inr: 0, pacing: 'even',
 }
 
 const EMPTY_SEG = {
@@ -885,12 +888,78 @@ export function DirectAdsPanel() {
                   </div>
                 </div>
 
+                {/* Pricing model selector */}
+                <div className="mb-4">
+                  <label className="label">Pricing Model</label>
+                  <div className="flex gap-2">
+                    {[
+                      { k: 'cpm', l: '📊 CPM', sub: 'Pay per 1,000 impressions' },
+                      { k: 'cpc', l: '🖱 CPC', sub: 'Pay per click' },
+                      { k: 'flat', l: '💰 Flat / Sponsorship', sub: 'Fixed total fee' },
+                    ].map(opt => (
+                      <button key={opt.k} onClick={() => setAdForm((f: any) => ({ ...f, pricing_model: opt.k }))}
+                        className={`flex-1 p-2.5 rounded-xl border text-xs text-left transition-colors ${adForm.pricing_model === opt.k ? 'border-accent bg-accent/5' : 'border-ink-200 hover:border-ink-300'}`}>
+                        <p className="font-semibold text-ink-900">{opt.l}</p>
+                        <p className="text-ink-400 mt-0.5">{opt.sub}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Rate + budget row — fields adapt to pricing model */}
                 <div className="grid grid-cols-4 gap-3">
                   <div><label className="label">Start Date</label><input type="date" className="input" value={adForm.start_date} onChange={e => setAdForm((f: any) => ({ ...f, start_date: e.target.value }))} /></div>
                   <div><label className="label">End Date</label><input type="date" className="input" value={adForm.end_date} onChange={e => setAdForm((f: any) => ({ ...f, end_date: e.target.value }))} /></div>
-                  <div><label className="label">CPM Rate (₹)</label><input type="number" className="input" min={0} step="0.01" value={adForm.cpm_rate_inr} onChange={e => setAdForm((f: any) => ({ ...f, cpm_rate_inr: parseFloat(e.target.value) || 0 }))} /></div>
+                  {adForm.pricing_model === 'cpm' && (
+                    <div><label className="label">CPM Rate (₹)</label><input type="number" className="input" min={0} step="0.01" value={adForm.cpm_rate_inr} onChange={e => setAdForm((f: any) => ({ ...f, cpm_rate_inr: parseFloat(e.target.value) || 0 }))} /></div>
+                  )}
+                  {adForm.pricing_model === 'cpc' && (
+                    <div><label className="label">CPC Rate (₹)</label><input type="number" className="input" min={0} step="0.01" value={adForm.cpc_rate_inr} onChange={e => setAdForm((f: any) => ({ ...f, cpc_rate_inr: parseFloat(e.target.value) || 0 }))} /></div>
+                  )}
+                  {adForm.pricing_model === 'flat' && (
+                    <div><label className="label">Flat Fee (₹)</label><input type="number" className="input" min={0} value={adForm.flat_fee_inr} onChange={e => setAdForm((f: any) => ({ ...f, flat_fee_inr: parseInt(e.target.value) || 0 }))} /></div>
+                  )}
                   <div><label className="label">Priority (0–100)</label><input type="number" className="input" min={0} max={100} value={adForm.priority} onChange={e => setAdForm((f: any) => ({ ...f, priority: parseInt(e.target.value) || 0 }))} /></div>
                 </div>
+
+                {/* Budget + pacing row — only meaningful for CPM/CPC */}
+                {adForm.pricing_model !== 'flat' && (
+                  <div className="grid grid-cols-3 gap-3 mt-3">
+                    <div>
+                      <label className="label">Total Budget (₹)</label>
+                      <input type="number" className="input" min={0} value={adForm.total_budget_inr}
+                        onChange={e => setAdForm((f: any) => ({ ...f, total_budget_inr: parseInt(e.target.value) || 0 }))}
+                        placeholder="0 = no budget cap" />
+                      <p className="text-[10px] text-ink-400 mt-1">Auto-completes when spent</p>
+                    </div>
+                    <div>
+                      <label className="label">Daily Budget Cap (₹)</label>
+                      <input type="number" className="input" min={0} value={adForm.daily_budget_inr}
+                        onChange={e => setAdForm((f: any) => ({ ...f, daily_budget_inr: parseInt(e.target.value) || 0 }))}
+                        placeholder="0 = no daily cap" />
+                      <p className="text-[10px] text-ink-400 mt-1">Optional ceiling per day</p>
+                    </div>
+                    <div>
+                      <label className="label">Pacing</label>
+                      <div className="flex gap-1 p-1 bg-ink-100 rounded-xl">
+                        {[{ k: 'even', l: 'Even' }, { k: 'asap', l: 'ASAP' }].map(p => (
+                          <button key={p.k} onClick={() => setAdForm((f: any) => ({ ...f, pacing: p.k }))}
+                            className={`flex-1 px-2 py-2 text-xs font-medium rounded-lg transition-colors ${adForm.pacing === p.k ? 'bg-white shadow text-ink-900' : 'text-ink-500'}`}>
+                            {p.l}
+                          </button>
+                        ))}
+                      </div>
+                      <p className="text-[10px] text-ink-400 mt-1">{adForm.pacing === 'even' ? 'Spread across flight' : 'Deliver as fast as possible'}</p>
+                    </div>
+                  </div>
+                )}
+                {/* Estimated impressions from budget ÷ CPM (spend-primary preview) */}
+                {adForm.pricing_model === 'cpm' && adForm.total_budget_inr > 0 && adForm.cpm_rate_inr > 0 && (
+                  <p className="text-xs text-blue-600 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 mt-3">
+                    📊 Estimated delivery: <strong>{Math.floor((adForm.total_budget_inr / adForm.cpm_rate_inr) * 1000).toLocaleString()}</strong> impressions
+                    (₹{adForm.total_budget_inr.toLocaleString()} ÷ ₹{adForm.cpm_rate_inr} CPM)
+                  </p>
+                )}
 
                 <div className="grid grid-cols-3 gap-3 mt-3">
                   <div>
@@ -960,6 +1029,7 @@ export function DirectAdsPanel() {
                   <th className="text-right px-3 py-2.5 text-xs font-medium text-ink-500">Impr.</th>
                   <th className="text-right px-3 py-2.5 text-xs font-medium text-ink-500">CTR</th>
                   <th className="text-right px-3 py-2.5 text-xs font-medium text-ink-500">Earned</th>
+                  <th className="text-center px-3 py-2.5 text-xs font-medium text-ink-500">Pacing</th>
                   <th className="text-center px-3 py-2.5 text-xs font-medium text-ink-500">Actions</th>
                 </tr></thead>
                 <tbody>
@@ -989,7 +1059,21 @@ export function DirectAdsPanel() {
                         <td className="px-3 py-3 text-center text-xs text-ink-500">{ad.start_date || '—'}{ad.end_date ? ` → ${ad.end_date}` : ''}</td>
                         <td className="px-3 py-3 text-right text-xs">{(ad.impressions || 0).toLocaleString()}</td>
                         <td className="px-3 py-3 text-right text-xs font-medium text-green-600">{ctr}%</td>
-                        <td className="px-3 py-3 text-right text-xs font-medium text-amber-600">{ad.cpm_rate_inr > 0 ? `₹${earned.toLocaleString()}` : '—'}</td>
+                       <td className="px-3 py-3 text-right text-xs font-medium text-amber-600">{ad.cpm_rate_inr > 0 ? `₹${earned.toLocaleString()}` : '—'}</td>
+                        <td className="px-3 py-3 text-center">
+                          {(() => {
+                            const p = computePacing(ad as any)
+                            if (p.goal_basis === 'none') return <span className="text-[10px] text-ink-400">—</span>
+                            return (
+                              <div className="flex flex-col items-center gap-0.5">
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${paceStatusColor(p.pace_status)}`}>
+                                  {paceStatusLabel(p.pace_status)}
+                                </span>
+                                <span className="text-[10px] text-ink-400">{p.delivered_pct}% of goal</span>
+                              </div>
+                            )
+                          })()}
+                        </td>
                         <td className="px-3 py-3 text-center">
                           <div className="flex items-center justify-center gap-1">
                             <button onClick={() => openReport(ad)} className="text-xs px-2 py-1 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100" title="View Report">📊</button>
