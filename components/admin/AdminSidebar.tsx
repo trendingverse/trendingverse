@@ -42,6 +42,7 @@ const adminExtraItems: Record<string, { href: string; label: string; icon: strin
   'AI & SEO': [{ href: '/admin/author-fix', label: 'Author & Category', icon: '👤' }],
   'Revenue':  [
     { href: '/admin/direct-ads', label: 'Direct Ads', icon: '🎯' },
+    { href: '/admin/ads-txt', label: 'ads.txt', icon: '🔐' },
     { href: '/admin/outreach', label: 'Outreach', icon: '📋' },
   ],
   'System': [
