@@ -36,6 +36,7 @@ export async function POST(req: NextRequest) {
     .from('direct_ads')
     .select('*')
     .eq('is_active', true)
+    .eq('approval_status', 'approved')
     .eq('position', position || 'in_content')
     .or(`start_date.is.null,start_date.lte.${today}`)
     .or(`end_date.is.null,end_date.gte.${today}`)
