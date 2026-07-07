@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
 import { computePacing, paceStatusColor, paceStatusLabel } from '@/lib/pacing-engine'
-
+import { TIER_LABELS, tierColor } from '@/lib/ad-decisioning'
 
 interface AdUnit {
   id: string; name: string; position: string
@@ -65,6 +65,7 @@ priority: 0, cpm_rate_inr: 0, impressions_cap: 0, start_date: '', end_date: '',
   campaign_objective: 'impressions', target_impressions: 0, freq_cap_per_user: 0,
   pricing_model: 'cpm', cpc_rate_inr: 0, flat_fee_inr: 0,
   total_budget_inr: 0, daily_budget_inr: 0, pacing: 'even',
+  priority_tier: 2, delivery_weight: 1, floor_cpm_inr: 0,
 }
 
 const EMPTY_SEG = {
@@ -959,9 +960,43 @@ export function DirectAdsPanel() {
                   <p className="text-xs text-blue-600 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 mt-3">
                     📊 Estimated delivery: <strong>{Math.floor((adForm.total_budget_inr / adForm.cpm_rate_inr) * 1000).toLocaleString()}</strong> impressions
                     (₹{adForm.total_budget_inr.toLocaleString()} ÷ ₹{adForm.cpm_rate_inr} CPM)
+
+                    
                   </p>
                 )}
-
+{/* Delivery priority */}
+                <div className="mt-4 p-4 border border-ink-200 rounded-xl space-y-3">
+                  <p className="text-xs font-semibold text-ink-700">🏆 Delivery Priority</p>
+                  <p className="text-[11px] text-ink-400 -mt-1">Higher tier always wins a shared slot, regardless of price.</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { k: 1, l: 'Sponsorship', sub: 'Guaranteed — top priority', color: 'border-violet-400 bg-violet-50' },
+                      { k: 2, l: 'Standard', sub: 'Direct-sold guaranteed', color: 'border-blue-400 bg-blue-50' },
+                      { k: 3, l: 'Network', sub: 'Non-guaranteed direct', color: 'border-amber-400 bg-amber-50' },
+                      { k: 4, l: 'House', sub: 'Filler / self-promo', color: 'border-ink-300 bg-ink-50' },
+                    ].map(t => (
+                      <button key={t.k} type="button" onClick={() => setAdForm((f: any) => ({ ...f, priority_tier: t.k }))}
+                        className={`p-2.5 rounded-xl border text-xs text-left transition-colors ${adForm.priority_tier === t.k ? t.color : 'border-ink-200 hover:border-ink-300'}`}>
+                        <p className="font-semibold text-ink-900">{t.l}</p>
+                        <p className="text-ink-400 mt-0.5">{t.sub}</p>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="label">Delivery Weight</label>
+                      <input type="number" className="input" min={1} value={adForm.delivery_weight}
+                        onChange={e => setAdForm((f: any) => ({ ...f, delivery_weight: parseInt(e.target.value) || 1 }))} />
+                      <p className="text-[10px] text-ink-400 mt-1">Split share vs same-tier campaigns</p>
+                    </div>
+                    <div>
+                      <label className="label">Floor CPM (₹)</label>
+                      <input type="number" className="input" min={0} step="0.01" value={adForm.floor_cpm_inr}
+                        onChange={e => setAdForm((f: any) => ({ ...f, floor_cpm_inr: parseFloat(e.target.value) || 0 }))} />
+                      <p className="text-[10px] text-ink-400 mt-1">Min CPM to serve</p>
+                    </div>
+                  </div>
+                </div>
                 <div className="grid grid-cols-3 gap-3 mt-3">
                   <div>
                     <label className="label">Target Impressions</label>
