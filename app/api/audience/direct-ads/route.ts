@@ -20,7 +20,9 @@ export async function POST(req: NextRequest) {
   if (!user || user.email !== ADMIN_EMAIL) return NextResponse.json({ error: 'Admin only' }, { status: 403 })
 
   const admin = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
-  const body = await req.json()
+ const body = await req.json()
+  // New campaigns require review before they can serve
+  if (!body.approval_status) body.approval_status = 'pending'
   const { data, error } = await admin.from('direct_ads').insert(body).select().single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json(data, { status: 201 })
