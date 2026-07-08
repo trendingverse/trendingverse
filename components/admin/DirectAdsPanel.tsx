@@ -24,6 +24,7 @@ interface DirectAd {
   impressions: number; clicks: number; is_active: boolean
   target_site_urls?: string[]; target_countries?: string[]; target_states?: string[]
   target_cities?: string[]; target_gender?: string
+  priority_tier?: number; approval_status?: string; advertiser_user_id?: string
 }
 interface UnitPerf {
   ad_unit_id: string; network_name: string; date: string
@@ -100,6 +101,7 @@ export function DirectAdsPanel() {
   const [siteInput, setSiteInput] = useState('')
   const [showPreview, setShowPreview] = useState(false)
   const [publisherSites, setPublisherSites] = useState<{ domain: string; name: string; articles_count: number }[]>([])
+  const [advertisers, setAdvertisers] = useState<{ id: string; company_name: string; email: string }[]>([])
   const [collapsePublishers, setCollapsePublishers] = useState(true)
   const [collapseCountries, setCollapseCountries] = useState(true)
   const [collapseStates, setCollapseStates] = useState(true)
@@ -120,7 +122,7 @@ export function DirectAdsPanel() {
     by_city: true,
   })
 
-  useEffect(() => { fetchAll(); fetchGeoData(); fetchPublisherSites() }, [])
+  useEffect(() => { fetchAll(); fetchGeoData(); fetchPublisherSites(); fetchAdvertisers() }, [])
   useEffect(() => { if (activeTab === 'performance') fetchPerformance() }, [activeTab, perfDays])
 
   async function fetchAll() {
@@ -196,8 +198,23 @@ export function DirectAdsPanel() {
       }
     } catch { /* silent */ }
   }
-
+async function fetchAdvertisers() {
+    try {
+      const res = await fetch('/api/admin/advertisers')
+      if (res.ok) setAdvertisers(await res.json())
+    } catch { /* silent */ }
+  }
+  async function setApproval(id: string, status: 'approved' | 'rejected') {
+    const note = status === 'rejected' ? (prompt('Rejection reason (optional):') || '') : ''
+    await fetch('/api/audience/direct-ads', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, approval_status: status, approval_note: note, reviewed_at: new Date().toISOString() }),
+    })
+    setAds(prev => prev.map(a => a.id === id ? ({ ...a, approval_status: status } as any) : a))
+    toast.success(status === 'approved' ? 'Approved — now eligible to serve' : 'Campaign rejected')
+  }
   async function fetchPerformance() {
+    
     const res = await fetch(`/api/audience/ad-performance?days=${perfDays}`)
     if (res.ok) setPerformance(await res.json())
   }
