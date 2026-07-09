@@ -7,6 +7,7 @@ interface AdUnit {
   id: string; name: string; ad_type: 'gam' | 'direct'; position: string
   ad_code: string; gam_network_code?: string; gam_unit_path?: string
   size_width: number; size_height: number; is_active: boolean
+  network_name?: string; site_url?: string
 }
 interface AdsTxtEntry {
   id: string; domain: string; publisher_id: string; relationship: string
@@ -37,6 +38,8 @@ export function MonetizationPanel({ isAdmin = false }: { isAdmin?: boolean }) {
   // Ad units state
   const [adUnits, setAdUnits] = useState<AdUnit[]>([])
   const [showAdForm, setShowAdForm] = useState(false)
+  const [editUnit, setEditUnit] = useState<AdUnit | null>(null)
+  const [editForm, setEditForm] = useState<any>({})
   const [adForm, setAdForm] = useState({ name: '', ad_type: 'direct', position: 'in_content', ad_code: '', gam_network_code: '', gam_unit_path: '', size_width: 728, size_height: 90 })
 
   // Ads.txt state
@@ -74,7 +77,26 @@ export function MonetizationPanel({ isAdmin = false }: { isAdmin?: boolean }) {
     if (res.ok) { toast.success('Ad unit created'); setShowAdForm(false); fetchAdUnits(); setAdForm({ name: '', ad_type: 'direct', position: 'in_content', ad_code: '', gam_network_code: '', gam_unit_path: '', size_width: 728, size_height: 90 }) }
     else toast.error('Failed to create ad unit')
   }
-
+function openEditUnit(unit: AdUnit) {
+    setEditUnit(unit)
+    setEditForm({
+      name: unit.name || '', ad_type: unit.ad_type || 'direct',
+      position: unit.position || 'in_content', ad_code: unit.ad_code || '',
+      gam_network_code: unit.gam_network_code || '', gam_unit_path: unit.gam_unit_path || '',
+      size_width: unit.size_width || 300, size_height: unit.size_height || 250,
+      network_name: unit.network_name || '', site_url: unit.site_url || '',
+      is_active: unit.is_active !== false,
+    })
+  }
+  async function updateAdUnit() {
+    if (!editUnit) return
+    const res = await fetch('/api/monetization/ad-units', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: editUnit.id, ...editForm }),
+    })
+    if (res.ok) { toast.success('Ad unit updated'); setEditUnit(null); fetchAdUnits() }
+    else toast.error('Failed to update — the API may need a PATCH handler (see note)')
+  }
   async function deleteAdUnit(id: string) {
     if (!confirm('Delete this ad unit?')) return
     await fetch('/api/monetization/ad-units', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
@@ -211,11 +233,68 @@ export function MonetizationPanel({ isAdmin = false }: { isAdmin?: boolean }) {
                 </div>
                 <div className="flex items-center gap-2">
                   <span className={`w-2 h-2 rounded-full ${unit.is_active ? 'bg-green-500' : 'bg-ink-300'}`}/>
-                  {isAdmin && (
-                    <button onClick={() => deleteAdUnit(unit.id)} className="text-xs text-red-500 hover:text-red-600 px-2 py-1">
-                      Delete
-                    </button>
+                 {isAdmin && (
+                    <>
+                      <button onClick={() => openEditUnit(unit)} className="text-xs text-blue-500 hover:text-blue-600 px-2 py-1">
+                        Edit
+                      </button>
+                      <button onClick={() => deleteAdUnit(unit.id)} className="text-xs text-red-500 hover:text-red-600 px-2 py-1">
+                        Delete
+                      </button>
+                    </>
                   )}
+                  )}
+      {editUnit && (
+        <>
+          <div className="fixed inset-0 bg-black/40 z-40" onClick={() => setEditUnit(null)} />
+          <div className="fixed inset-0 flex items-center justify-center z-50 p-4 overflow-y-auto">
+            <div className="card p-6 w-full max-w-2xl space-y-4 my-8">
+              <div className="flex items-center justify-between">
+                <p className="font-semibold text-ink-900">✏ Edit Ad Unit</p>
+                <button onClick={() => setEditUnit(null)} className="text-xs text-ink-400 hover:text-ink-600">✕</button>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div><label className="label">Name</label><input className="input" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})}/></div>
+                <div>
+                  <label className="label">Type</label>
+                  <select className="input" value={editForm.ad_type} onChange={e => setEditForm({...editForm, ad_type: e.target.value})}>
+                    <option value="direct">Direct (paste ad code)</option>
+                    <option value="gam">Google Ad Manager (GAM)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="label">Position</label>
+                  <select className="input" value={editForm.position} onChange={e => setEditForm({...editForm, position: e.target.value})}>
+                    {POSITIONS.map(p => <option key={p} value={p}>{p.replace('_', ' ')}</option>)}
+                  </select>
+                </div>
+                <div><label className="label">Network Name</label><input className="input" value={editForm.network_name} onChange={e => setEditForm({...editForm, network_name: e.target.value})} placeholder="adsterra / adsense"/></div>
+                <div><label className="label">Width</label><input type="number" className="input" value={editForm.size_width} onChange={e => setEditForm({...editForm, size_width: parseInt(e.target.value) || 0})}/></div>
+                <div><label className="label">Height</label><input type="number" className="input" value={editForm.size_height} onChange={e => setEditForm({...editForm, size_height: parseInt(e.target.value) || 0})}/></div>
+                <div className="col-span-2"><label className="label">Site URL</label><input className="input" value={editForm.site_url} onChange={e => setEditForm({...editForm, site_url: e.target.value})} placeholder="https://kannadadunia.com"/></div>
+                {editForm.ad_type === 'gam' && (
+                  <>
+                    <div><label className="label">GAM Network Code</label><input className="input font-mono text-xs" value={editForm.gam_network_code} onChange={e => setEditForm({...editForm, gam_network_code: e.target.value})}/></div>
+                    <div><label className="label">GAM Unit Path</label><input className="input font-mono text-xs" value={editForm.gam_unit_path} onChange={e => setEditForm({...editForm, gam_unit_path: e.target.value})}/></div>
+                  </>
+                )}
+                <div className="col-span-2"><label className="label">Ad Code</label><textarea className="input font-mono text-xs resize-none" rows={5} value={editForm.ad_code} onChange={e => setEditForm({...editForm, ad_code: e.target.value})}/></div>
+                <div className="col-span-2 flex items-center gap-2">
+                  <input type="checkbox" checked={editForm.is_active} onChange={e => setEditForm({...editForm, is_active: e.target.checked})} className="w-4 h-4 accent-accent"/>
+                  <label className="text-sm text-ink-700">Active</label>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <button onClick={updateAdUnit} className="btn-primary">✓ Save Changes</button>
+                <button onClick={() => setEditUnit(null)} className="btn-secondary">Cancel</button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
                 </div>
               </div>
             ))}
