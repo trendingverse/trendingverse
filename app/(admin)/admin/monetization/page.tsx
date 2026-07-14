@@ -29,6 +29,7 @@ export default async function MonetizationPage() {
 
       {hasAds ? (
         <>
+           {isAdmin && <DeliveryHealthBanner />}
           <div className="border-b border-ink-100 pb-8">
             <div className="mb-5">
               <h2 className="font-display text-xl font-bold text-ink-950">📡 Ad Network Revenue</h2>
