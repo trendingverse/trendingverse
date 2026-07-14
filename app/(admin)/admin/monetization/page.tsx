@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { MonetizationPanel } from '@/components/admin/MonetizationPanel'
+import { DeliveryHealthBanner } from '@/components/admin/DeliveryHealthBanner'
 import { AdsterraDashboard } from '@/components/admin/AdsterraDashboard'
 import Link from 'next/link'
 
