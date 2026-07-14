@@ -158,7 +158,7 @@ export async function POST(req: NextRequest) {
     .from('articles').select('*, categories(name)').eq('id', article_id).single()
   if (error || !article) return NextResponse.json({ error: 'Article not found' }, { status: 404 })
 
-  const base = wp_url.replace(/\/$/, '')
+  const base = wp_url.replace(/\/$/, '').replace(/^http:\/\//, 'https://')
   const auth = Buffer.from(`${wp_username}:${wp_password}`).toString('base64')
   const geminiKey = process.env.GEMINI_API_KEY!
 
