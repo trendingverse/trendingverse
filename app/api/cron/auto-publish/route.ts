@@ -136,30 +136,76 @@ async function getTrendingTopic(geminiKey: string, newsApiKey?: string, region =
   return defaults[region] || defaults['India']
 }
 
+// ── REPLACEMENT for generateArticle() in your cron route ─────────
+// Uses Gemini JSON mode + higher token limit + resilient parsing to
+// fix the "No JSON in response" / "Expected ',' or '}'" failures.
 async function generateArticle(title: string, keywords: string[], category: string, geminiKey: string, language = 'en') {
   const langName = LANGUAGES[language] || 'English'
   const prompt = buildArticlePrompt({ title, category, keywords, language: langName })
 
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.7, maxOutputTokens: 4096 },
-      }),
-      cache: 'no-store',
+  async function callGemini(): Promise<any> {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: 0.7,
+            maxOutputTokens: 8192,               // was 4096 — long articles were truncating
+            responseMimeType: 'application/json', // force valid JSON, handles escaping internally
+          },
+        }),
+        cache: 'no-store',
+      }
+    )
+    const data = await res.json()
+    if (data.error) throw new Error('Gemini error: ' + data.error.message)
+
+    const finishReason = data.candidates?.[0]?.finishReason
+    const parts = data.candidates?.[0]?.content?.parts || []
+    const text = parts
+      .filter((p: { text?: string }) => p.text)
+      .map((p: { text: string }) => p.text)
+      .join('')
+      .replace(/```json\n?|```/g, '')
+      .trim()
+
+    if (!text) {
+      throw new Error(`Gemini returned empty response${finishReason ? ` (finishReason: ${finishReason})` : ''}`)
     }
-  )
-  const data = await res.json()
-  if (data.error) throw new Error('Gemini error: ' + data.error.message)
-  const parts = data.candidates?.[0]?.content?.parts || []
-  const text = parts.filter((p: { text?: string }) => p.text).map((p: { text: string }) => p.text).join('').replace(/```json\n?|```/g, '').trim()
-  if (!text) throw new Error('Gemini returned empty response')
-  const match = text.match(/\{[\s\S]*\}/)
-  if (!match) throw new Error('No JSON in response. Raw: ' + text.slice(0, 300))
-  const article = JSON.parse(match[0])
+    // If the model stopped because it hit the token cap, the JSON is
+    // almost certainly truncated — flag it clearly rather than a cryptic parse error.
+    if (finishReason === 'MAX_TOKENS') {
+      throw new Error('Gemini hit MAX_TOKENS — article too long, JSON truncated. Consider raising maxOutputTokens or shortening the prompt.')
+    }
+
+    // Resilient parse: JSON mode returns clean JSON, so a direct parse
+    // usually works. Fall back to brace extraction if the model wrapped it.
+    try {
+      return JSON.parse(text)
+    } catch {
+      const match = text.match(/\{[\s\S]*\}/)
+      if (!match) throw new Error('No JSON in response. Raw: ' + text.slice(0, 300))
+      return JSON.parse(match[0])   // may still throw — caught by retry wrapper below
+    }
+  }
+
+  // One retry — transient truncation / malformed output often succeeds second time.
+  let article: any
+  try {
+    article = await callGemini()
+  } catch (e) {
+    const msg = (e as Error).message
+    // Only retry on parse/truncation-type failures, not hard API errors like quota.
+    if (/JSON|MAX_TOKENS|Unexpected|Expected/i.test(msg)) {
+      await new Promise(r => setTimeout(r, 1500))
+      article = await callGemini()   // second attempt; if it throws, it propagates up
+    } else {
+      throw e
+    }
+  }
 
   // Compute algorithmic SEO score and attach to article
   const scoreResult = computeSeoScore({
@@ -172,7 +218,6 @@ async function generateArticle(title: string, keywords: string[], category: stri
   article.seo_score = scoreResult.total
   article.seo_grade = scoreResult.grade
   article.seo_tips = scoreResult.tips
-
   return article
 }
 
