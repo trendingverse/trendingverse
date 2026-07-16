@@ -120,9 +120,9 @@ export async function POST(req: NextRequest) {
   const ordered = [...direct, ...network]
 
   admin.from('mediation_events').insert({
-    fingerprint, site_url: normSite, position: pos,
-    partner_slug: 'request', event_type: 'request',
-  }).then(() => {}, () => {})
+  fingerprint, site_url: normSite, position: pos,
+  partner_slug: null, event_type: 'request',
+}).then(() => {}, () => {})
 
   return NextResponse.json({
     slot_id: slotId,
