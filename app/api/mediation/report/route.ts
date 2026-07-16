@@ -1,33 +1,25 @@
-// app/api/mediation/report/route.ts  — v2
+// app/api/mediation/report/route.ts  — v3
 // ══════════════════════════════════════════════════════════════════
-// Fixes the "phantom partner" problem. Events are now interpreted by
-// what they ARE, not by mis-using partner_slug as an event label:
+// Now reports on TWO data sources (they measure different things):
 //
-//   request        -> a slot request (NOT a partner). Counts toward Requests.
-//   fill  (partner) -> that partner filled. Counts toward that partner's Fills.
-//   nofill(partner) -> that partner tried & failed. That partner's No-fills.
-//   unfilled       -> whole waterfall empty (partner_slug null). Terminal miss.
+//   source='plugin'  -> direct_ad_events  (your live WordPress sites)
+//     events: impression / viewable / click
+//     metrics: impressions, viewable, viewability_rate, clicks, ctr
+//     dims: date, site, city, device, ad_unit
 //
-// Requests are counted per SLOT CONTEXT (date/site/position/geo/device),
-// never per partner. Fills/nofills/clicks are counted per partner.
+//   source='mediation' -> mediation_events (universal tag)
+//     events: request / fill / nofill / click
+//     metrics: requests, fills, fill_rate, overall_fill_rate, clicks, ctr, nofills
+//     dims: date, site, partner, position, country, device
 //
-// Metrics:
-//   requests          = # request events in the group's slot context
-//   fills / nofills   = per-partner outcome counts
-//   fill_rate         = partner fills / requests-in-context  (per-partner)
-//   overall_fill_rate = any fill / requests-in-context        (slot-level)
-//   clicks, ctr, viewable, viewability_rate as before
-//   revenue/ecpm/rpm  = 0 until Phase 2
+// The client picks the source; metrics/dims valid for that source are used.
+// Revenue/eCPM/rpm are 0 for both until Phase 2 revenue ingestion.
 // ══════════════════════════════════════════════════════════════════
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'khan.khan.yusuf@gmail.com'
 type Row = Record<string, any>
-
-// Partner-scoped dimensions vs slot-context dimensions.
-// Requests live at the slot-context level (everything EXCEPT partner).
-const PARTNER_DIM = 'partner'
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient()
@@ -37,20 +29,87 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json().catch(() => ({}))
-  const dimensions: string[] = Array.isArray(body.dimensions) && body.dimensions.length
-    ? body.dimensions : ['date']
-  const metrics: string[] = Array.isArray(body.metrics) && body.metrics.length
-    ? body.metrics : ['requests', 'fills', 'fill_rate']
+  const source: string = body.source === 'mediation' ? 'mediation' : 'plugin'
+  const dimensions: string[] = Array.isArray(body.dimensions) && body.dimensions.length ? body.dimensions : ['date']
+  const metrics: string[] = Array.isArray(body.metrics) && body.metrics.length ? body.metrics : ['impressions']
   const filters = body.filters || {}
   const start = body.start || new Date(Date.now() - 7 * 864e5).toISOString().split('T')[0]
   const end = body.end || new Date().toISOString().split('T')[0]
+  const endInclusive = new Date(new Date(end).getTime() + 864e5).toISOString().split('T')[0]
 
   const admin = createServiceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   )
 
-  const endInclusive = new Date(new Date(end).getTime() + 864e5).toISOString().split('T')[0]
+  // ══════════════════════════════════════════════════════════════
+  // SOURCE: PLUGIN  (direct_ad_events — your live WordPress sites)
+  // ══════════════════════════════════════════════════════════════
+  if (source === 'plugin') {
+    let q = admin
+      .from('direct_ad_events')
+      .select('site_url, city, device_type, ad_unit_id, event_type, created_at')
+      .gte('created_at', start)
+      .lt('created_at', endInclusive)
+      .limit(200000)
+    if (filters.site_url) q = q.ilike('site_url', `%${filters.site_url}%`)
+    const { data: events, error } = await q
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+    const dimValue = (e: Row, dim: string): string => {
+      switch (dim) {
+        case 'date': return (e.created_at || '').split('T')[0]
+        case 'site': return e.site_url || '(none)'
+        case 'city': return e.city || '(unknown)'
+        case 'device': return e.device_type || '(unknown)'
+        case 'ad_unit': return e.ad_unit_id || '(none)'
+        default: return '(all)'
+      }
+    }
+
+    const groups: Record<string, Row> = {}
+    for (const e of events || []) {
+      const key = dimensions.map(d => dimValue(e, d)).join(' ‖ ')
+      if (!groups[key]) {
+        groups[key] = {}
+        dimensions.forEach((d, i) => { groups[key][d] = key.split(' ‖ ')[i] })
+        groups[key]._impr = 0; groups[key]._view = 0; groups[key]._clicks = 0
+      }
+      const g = groups[key]
+      if (e.event_type === 'impression') g._impr++
+      else if (e.event_type === 'viewable') g._view++
+      else if (e.event_type === 'click') g._clicks++
+    }
+
+    const mv = (g: Row, m: string): number => {
+      switch (m) {
+        case 'impressions': return g._impr
+        case 'viewable': return g._view
+        case 'clicks': return g._clicks
+        case 'viewability_rate': return g._impr ? +(g._view / g._impr * 100).toFixed(2) : 0
+        case 'ctr': return g._impr ? +(g._clicks / g._impr * 100).toFixed(2) : 0
+        case 'revenue': case 'ecpm': case 'rpm': return 0
+        default: return 0
+      }
+    }
+
+    const rows = Object.values(groups).map(g => {
+      const r: Row = {}
+      dimensions.forEach(d => { r[d] = g[d] })
+      metrics.forEach(m => { r[m] = mv(g, m) })
+      return r
+    })
+    const sum = (k: string) => Object.values(groups).reduce((s, g) => s + (g[k] || 0), 0)
+    const T: Row = { _impr: sum('_impr'), _view: sum('_view'), _clicks: sum('_clicks') }
+    const totals: Row = {}
+    metrics.forEach(m => { totals[m] = mv(T, m) })
+    rows.sort((a, b) => (b[metrics[0]] ?? 0) - (a[metrics[0]] ?? 0))
+    return NextResponse.json({ source, dimensions, metrics, rows, totals, row_count: rows.length, date_range: { start, end } })
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // SOURCE: MEDIATION  (mediation_events — universal tag)
+  // ══════════════════════════════════════════════════════════════
   let q = admin
     .from('mediation_events')
     .select('site_url, position, partner_slug, event_type, fingerprint, created_at')
@@ -62,15 +121,13 @@ export async function POST(req: NextRequest) {
   const { data: events, error } = await q
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  // Resolve geo/device if requested
   const needProfile = dimensions.includes('country') || dimensions.includes('device')
   const profileMap: Record<string, { country?: string; device?: string }> = {}
   if (needProfile && events?.length) {
     const fps = Array.from(new Set(events.map(e => e.fingerprint).filter(Boolean)))
     for (let i = 0; i < fps.length; i += 500) {
-      const chunk = fps.slice(i, i + 500)
       const { data: profs } = await admin
-        .from('audience_profiles').select('fingerprint, country, device_type').in('fingerprint', chunk)
+        .from('audience_profiles').select('fingerprint, country, device_type').in('fingerprint', fps.slice(i, i + 500))
       for (const p of profs || []) profileMap[p.fingerprint] = { country: p.country, device: p.device_type }
     }
   }
@@ -86,57 +143,39 @@ export async function POST(req: NextRequest) {
       default: return '(all)'
     }
   }
-
-  // Slot-context key = all chosen dimensions EXCEPT partner (requests live here)
-  const contextDims = dimensions.filter(d => d !== PARTNER_DIM)
+  const contextDims = dimensions.filter(d => d !== 'partner')
   const contextKey = (e: Row) => contextDims.map(d => dimValue(e, d)).join(' ‖ ')
 
-  // 1) Count REQUESTS per slot context (only event_type='request')
   const requestsByContext: Record<string, number> = {}
-  // 2) Count ANY-fill per slot context (for overall fill rate)
   const anyFillByContext: Record<string, number> = {}
   for (const e of events || []) {
-    if (e.event_type === 'request') {
-      const k = contextKey(e)
-      requestsByContext[k] = (requestsByContext[k] || 0) + 1
-    }
-    if (e.event_type === 'fill') {
-      const k = contextKey(e)
-      anyFillByContext[k] = (anyFillByContext[k] || 0) + 1
-    }
+    if (e.event_type === 'request') { const k = contextKey(e); requestsByContext[k] = (requestsByContext[k] || 0) + 1 }
+    if (e.event_type === 'fill') { const k = contextKey(e); anyFillByContext[k] = (anyFillByContext[k] || 0) + 1 }
   }
 
-  // 3) Build the actual report groups (by full dimension set)
   const groups: Record<string, Row> = {}
   const ensure = (e: Row) => {
     const key = dimensions.map(d => dimValue(e, d)).join(' ‖ ')
     if (!groups[key]) {
-      groups[key] = { _key: key, _ctx: contextKey(e) }
+      groups[key] = { _ctx: contextKey(e) }
       dimensions.forEach((d, i) => { groups[key][d] = key.split(' ‖ ')[i] })
       groups[key]._fills = 0; groups[key]._nofills = 0; groups[key]._clicks = 0; groups[key]._viewable = 0
     }
     return groups[key]
   }
-
   for (const e of events || []) {
-    // Skip request/unfilled from partner-level rows — they're not partner outcomes.
-    // But we still need a row to exist for contexts even if only requests happened.
     if (e.event_type === 'request' || e.event_type === 'unfilled' || e.partner_slug === 'request' || e.partner_slug === 'nofill') {
-      // Only materialise a row if partner isn't a chosen dimension (so requests show up
-      // in slot-context groupings). If partner IS a dimension, requests don't belong to a partner row.
-      if (!dimensions.includes(PARTNER_DIM)) ensure(e)
+      if (!dimensions.includes('partner')) ensure(e)
       continue
     }
     const g = ensure(e)
-    switch (e.event_type) {
-      case 'fill': g._fills++; break
-      case 'nofill': g._nofills++; break
-      case 'click': g._clicks++; break
-      case 'viewable': g._viewable++; break
-    }
+    if (e.event_type === 'fill') g._fills++
+    else if (e.event_type === 'nofill') g._nofills++
+    else if (e.event_type === 'click') g._clicks++
+    else if (e.event_type === 'viewable') g._viewable++
   }
 
-  const metricValue = (g: Row, m: string): number => {
+  const mv = (g: Row, m: string): number => {
     const reqs = requestsByContext[g._ctx] || 0
     const anyFill = anyFillByContext[g._ctx] || 0
     switch (m) {
@@ -149,21 +188,17 @@ export async function POST(req: NextRequest) {
       case 'overall_fill_rate': return reqs ? +(anyFill / reqs * 100).toFixed(2) : 0
       case 'ctr': return g._fills ? +(g._clicks / g._fills * 100).toFixed(2) : 0
       case 'viewability_rate': return g._fills ? +(g._viewable / g._fills * 100).toFixed(2) : 0
-      case 'revenue': return 0
-      case 'ecpm': return 0
-      case 'rpm': return 0
+      case 'revenue': case 'ecpm': case 'rpm': return 0
       default: return 0
     }
   }
 
   const rows = Object.values(groups).map(g => {
-    const row: Row = {}
-    dimensions.forEach(d => { row[d] = g[d] })
-    metrics.forEach(m => { row[m] = metricValue(g, m) })
-    return row
+    const r: Row = {}
+    dimensions.forEach(d => { r[d] = g[d] })
+    metrics.forEach(m => { r[m] = mv(g, m) })
+    return r
   })
-
-  // Totals: requests = sum of distinct context requests; fills etc = sum
   const totalRequests = Object.values(requestsByContext).reduce((s, v) => s + v, 0)
   const totalAnyFill = Object.values(anyFillByContext).reduce((s, v) => s + v, 0)
   const sum = (k: string) => Object.values(groups).reduce((s, g) => s + (g[k] || 0), 0)
@@ -182,9 +217,6 @@ export async function POST(req: NextRequest) {
       default: totals[m] = 0
     }
   })
-
-  const sortMetric = metrics[0]
-  rows.sort((a, b) => (b[sortMetric] ?? 0) - (a[sortMetric] ?? 0))
-
-  return NextResponse.json({ dimensions, metrics, rows, totals, row_count: rows.length, date_range: { start, end } })
+  rows.sort((a, b) => (b[metrics[0]] ?? 0) - (a[metrics[0]] ?? 0))
+  return NextResponse.json({ source, dimensions, metrics, rows, totals, row_count: rows.length, date_range: { start, end } })
 }
