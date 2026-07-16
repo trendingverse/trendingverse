@@ -165,8 +165,6 @@ function Modal({ children, onClose, title }: any) {
     </div>
   )
 }
-
-
 function PartnerForm({ onClose, onSave }: any) {
   const [name, setName] = useState('')
   const [order, setOrder] = useState('100')
@@ -221,7 +219,6 @@ function PartnerForm({ onClose, onSave }: any) {
           <label className="block text-sm font-medium text-ink-700 mb-1">Serving order (lower = fires first)</label>
           <input type="number" value={order} onChange={e => setOrder(e.target.value)} className="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm" />
         </div>
-
         <div className="border-t border-ink-100 pt-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-ink-400 mb-2">Reporting API (optional)</p>
           <label className="block text-sm font-medium text-ink-700 mb-1">Adapter</label>
@@ -230,20 +227,18 @@ function PartnerForm({ onClose, onSave }: any) {
             <option value="generic">Generic REST API (auto-detect)</option>
             <option value="adsterra">Adsterra (built-in)</option>
           </select>
-
           {adapter === 'adsterra' && (
             <div className="mt-3">
               <label className="block text-sm font-medium text-ink-700 mb-1">API key / token</label>
               <input value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder="paste token" className="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm font-mono" />
             </div>
           )}
-
           {adapter === 'generic' && (
             <div className="mt-3 space-y-3 bg-surface-2 rounded-lg p-3">
               <div>
                 <label className="block text-xs font-medium text-ink-700 mb-1">API URL (use {'{start}'} and {'{end}'} for the dates)</label>
                 <input value={endpoint} onChange={e => setEndpoint(e.target.value)}
-                  placeholder="https://apps.valueimpression.com/report/api-report-publisher/?from={start}&to={end}"
+                  placeholder="https://api.net/report?from={start}&to={end}"
                   className="w-full border border-ink-200 rounded-lg px-3 py-2 text-xs font-mono" />
               </div>
               <div className="grid grid-cols-2 gap-2">
@@ -277,7 +272,7 @@ function PartnerForm({ onClose, onSave }: any) {
                 <label className="block text-xs font-medium text-ink-700 mb-1">Site (only if the API doesn't return one)</label>
                 <input value={siteFallback} onChange={e => setSiteFallback(e.target.value)} placeholder="optional" className="w-full border border-ink-200 rounded-lg px-2 py-2 text-xs font-mono" />
               </div>
-              <button onClick={testConnection} disabled={testing || !endpoint || !authName}
+              <button onClick={testConnection} disabled={testing || !endpoint}
                 className="text-xs px-3 py-1.5 rounded-lg border border-ink-300 bg-white hover:bg-ink-50 disabled:opacity-50">
                 {testing ? 'Testing…' : 'Test connection'}
               </button>
@@ -286,7 +281,6 @@ function PartnerForm({ onClose, onSave }: any) {
             </div>
           )}
         </div>
-
         <button onClick={() => name && onSave(payload())} disabled={!name} className="btn-primary w-full py-2.5 disabled:opacity-50">Save network</button>
       </div>
     </Modal>
