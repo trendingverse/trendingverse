@@ -46,12 +46,21 @@ export async function POST(req: NextRequest) {
   // ── PARTNER (ad network) create/update ──
   if (action === 'partner') {
     const row: any = {
-      name: body.name,
-      slug: body.slug ? slugify(body.slug) : slugify(body.name),
-      ad_code_template: body.ad_code_template || null,
-      waterfall_order: parseInt(body.waterfall_order, 10) || 100,
-      is_active: body.is_active !== false,
+  name: body.name,
+  slug: body.slug ? slugify(body.slug) : slugify(body.name),
+  ad_code_template: body.ad_code_template || null,
+  waterfall_order: parseInt(body.waterfall_order, 10) || 100,
+  is_active: body.is_active !== false,
+}
+// Save reporting API config if provided
+if (body.report_adapter || body.report_api_key) {
+  row.config = {
+    report: {
+      adapter: body.report_adapter || null,
+      api_key: body.report_api_key || null,
     }
+  }
+}
     if (body.id) {
       const { data, error } = await admin.from('demand_partners').update(row).eq('id', body.id).select().single()
       if (error) return NextResponse.json({ error: error.message }, { status: 500 })
