@@ -338,6 +338,7 @@ async function checkDuplicate(slug: string, title: string, wpBase: string, auth:
   const [slugRes, titleRes] = await Promise.all([
     fetch(`${wpBase}/wp-json/wp/v2/posts?slug=${encodeURIComponent(slug)}&status=any`, { headers: { Authorization: `Basic ${auth}` } }),
     fetch(`${wpBase}/wp-json/wp/v2/posts?search=${encodeURIComponent(title.slice(0, 30))}&status=any&per_page=5`, { headers: { Authorization: `Basic ${auth}` } }),
+    fetch(`${new URL(req.url).origin}/api/mediation/revenue/sync?secret=${process.env.CRON_SECRET}`).catch(() => ({})),
   ])
   const slugData = slugRes.ok ? await slugRes.json() : []
   if (Array.isArray(slugData) && slugData.length > 0) return true
