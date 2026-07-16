@@ -165,26 +165,23 @@ function Modal({ children, onClose, title }: any) {
     </div>
   )
 }
+# Replace the PartnerForm function in PartnerManager.tsx with this SIMPLE version.
+# Only 4 inputs for a generic network: URL, date format, auth name, API key.
+# The adapter auto-detects the response fields. A "Test" button verifies it.
+
 function PartnerForm({ onClose, onSave }: any) {
   const [name, setName] = useState('')
   const [order, setOrder] = useState('100')
   const [adapter, setAdapter] = useState('')
   const [apiKey, setApiKey] = useState('')
-  // generic-only config
   const [endpoint, setEndpoint] = useState('')
   const [dateFormat, setDateFormat] = useState('YYYY-MM-DD')
   const [authType, setAuthType] = useState('header')
   const [authName, setAuthName] = useState('')
-  const [rowsPath, setRowsPath] = useState('')
   const [siteFallback, setSiteFallback] = useState('')
-  const [mapDate, setMapDate] = useState('date')
-  const [mapSite, setMapSite] = useState('domain')
-  const [mapImpr, setMapImpr] = useState('impressions')
-  const [mapClicks, setMapClicks] = useState('clicks')
-  const [mapRev, setMapRev] = useState('revenue')
   const [testMsg, setTestMsg] = useState('')
   const [testing, setTesting] = useState(false)
- 
+
   function payload() {
     const base: any = { name, waterfall_order: order }
     if (adapter) {
@@ -194,15 +191,13 @@ function PartnerForm({ onClose, onSave }: any) {
         Object.assign(base, {
           report_endpoint: endpoint, report_date_format: dateFormat,
           report_auth_type: authType, report_auth_name: authName,
-          report_rows_path: rowsPath, report_site_fallback: siteFallback,
-          map_date: mapDate, map_site: mapSite, map_impressions: mapImpr,
-          map_clicks: mapClicks, map_revenue: mapRev,
+          report_site_fallback: siteFallback,
         })
       }
     }
     return base
   }
- 
+
   async function testConnection() {
     setTesting(true); setTestMsg('')
     try {
@@ -211,12 +206,12 @@ function PartnerForm({ onClose, onSave }: any) {
         body: JSON.stringify(payload()),
       })
       const d = await r.json()
-      if (d.ok) setTestMsg(`✓ Pulled ${d.rows} row(s). Sample: ${JSON.stringify(d.sample || {}).slice(0, 160)}`)
+      if (d.ok) setTestMsg(`✓ Pulled ${d.rows} row(s). Sample: ${JSON.stringify(d.sample || {}).slice(0, 180)}`)
       else setTestMsg(`✗ ${d.error || 'Test failed'}`)
     } catch { setTestMsg('✗ Test request failed') }
     finally { setTesting(false) }
   }
- 
+
   return (
     <Modal title="Add ad network" onClose={onClose}>
       <div className="space-y-4">
@@ -225,83 +220,75 @@ function PartnerForm({ onClose, onSave }: any) {
           <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. ValueImpression" className="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm" />
         </div>
         <div>
-          <label className="block text-sm font-medium text-ink-700 mb-1">Default serving order (lower = fires first)</label>
+          <label className="block text-sm font-medium text-ink-700 mb-1">Serving order (lower = fires first)</label>
           <input type="number" value={order} onChange={e => setOrder(e.target.value)} className="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm" />
         </div>
- 
+
         <div className="border-t border-ink-100 pt-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-ink-400 mb-2">Reporting API (optional)</p>
-          <div>
-            <label className="block text-sm font-medium text-ink-700 mb-1">Adapter</label>
-            <select value={adapter} onChange={e => setAdapter(e.target.value)} className="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm">
-              <option value="">None (no revenue sync)</option>
-              <option value="generic">Generic REST API (configure below)</option>
-              <option value="adsterra">Adsterra (built-in)</option>
-            </select>
-          </div>
- 
-          {adapter && (
+          <label className="block text-sm font-medium text-ink-700 mb-1">Adapter</label>
+          <select value={adapter} onChange={e => setAdapter(e.target.value)} className="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm">
+            <option value="">None</option>
+            <option value="generic">Generic REST API (auto-detect)</option>
+            <option value="adsterra">Adsterra (built-in)</option>
+          </select>
+
+          {adapter === 'adsterra' && (
             <div className="mt-3">
               <label className="block text-sm font-medium text-ink-700 mb-1">API key / token</label>
-              <input value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder="paste the network's token" className="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm font-mono" />
+              <input value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder="paste token" className="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm font-mono" />
             </div>
           )}
- 
+
           {adapter === 'generic' && (
-            <div className="mt-4 space-y-3 bg-surface-2 rounded-lg p-3">
-              <p className="text-[11px] text-ink-500">Use {'{start}'} and {'{end}'} in the URL for the date range. They'll be filled per the date format below.</p>
+            <div className="mt-3 space-y-3 bg-surface-2 rounded-lg p-3">
               <div>
-                <label className="block text-xs font-medium text-ink-700 mb-1">API endpoint URL</label>
-                <input value={endpoint} onChange={e => setEndpoint(e.target.value)} placeholder="https://api.net/report?from={start}&to={end}" className="w-full border border-ink-200 rounded-lg px-3 py-2 text-xs font-mono" />
+                <label className="block text-xs font-medium text-ink-700 mb-1">API URL (use {'{start}'} and {'{end}'} for the dates)</label>
+                <input value={endpoint} onChange={e => setEndpoint(e.target.value)}
+                  placeholder="https://apps.valueimpression.com/report/api-report-publisher/?from={start}&to={end}"
+                  className="w-full border border-ink-200 rounded-lg px-3 py-2 text-xs font-mono" />
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block text-xs font-medium text-ink-700 mb-1">Date format</label>
                   <select value={dateFormat} onChange={e => setDateFormat(e.target.value)} className="w-full border border-ink-200 rounded-lg px-2 py-2 text-xs">
-                    <option value="YYYY-MM-DD">YYYY-MM-DD</option>
-                    <option value="YYYYMMDD">YYYYMMDD</option>
-                    <option value="YYYY/MM/DD">YYYY/MM/DD</option>
+                    <option value="YYYY-MM-DD">2023-11-01</option>
+                    <option value="YYYYMMDD">20231101</option>
+                    <option value="YYYY/MM/DD">2023/11/01</option>
                   </select>
                 </div>
-                <div>
-                  <label className="block text-xs font-medium text-ink-700 mb-1">Rows path (JSON)</label>
-                  <input value={rowsPath} onChange={e => setRowsPath(e.target.value)} placeholder="data (blank = root)" className="w-full border border-ink-200 rounded-lg px-2 py-2 text-xs font-mono" />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block text-xs font-medium text-ink-700 mb-1">Auth location</label>
                   <select value={authType} onChange={e => setAuthType(e.target.value)} className="w-full border border-ink-200 rounded-lg px-2 py-2 text-xs">
                     <option value="header">Header</option>
-                    <option value="query">Query param</option>
+                    <option value="query">URL param</option>
                   </select>
                 </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block text-xs font-medium text-ink-700 mb-1">Auth name</label>
                   <input value={authName} onChange={e => setAuthName(e.target.value)} placeholder="Token-Key" className="w-full border border-ink-200 rounded-lg px-2 py-2 text-xs font-mono" />
                 </div>
+                <div>
+                  <label className="block text-xs font-medium text-ink-700 mb-1">API key</label>
+                  <input value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder="a23f588c…" className="w-full border border-ink-200 rounded-lg px-2 py-2 text-xs font-mono" />
+                </div>
               </div>
               <div>
-                <label className="block text-xs font-medium text-ink-700 mb-1">Site fallback (if API doesn't return a site field)</label>
-                <input value={siteFallback} onChange={e => setSiteFallback(e.target.value)} placeholder="example.com" className="w-full border border-ink-200 rounded-lg px-2 py-2 text-xs font-mono" />
+                <label className="block text-xs font-medium text-ink-700 mb-1">Site (only if the API doesn't return one)</label>
+                <input value={siteFallback} onChange={e => setSiteFallback(e.target.value)} placeholder="optional" className="w-full border border-ink-200 rounded-lg px-2 py-2 text-xs font-mono" />
               </div>
-              <p className="text-[11px] font-semibold text-ink-500 pt-1">Field mapping (their JSON field → our metric)</p>
-              <div className="grid grid-cols-2 gap-2">
-                <input value={mapDate} onChange={e => setMapDate(e.target.value)} placeholder="date field" className="border border-ink-200 rounded-lg px-2 py-1.5 text-xs font-mono" />
-                <input value={mapSite} onChange={e => setMapSite(e.target.value)} placeholder="site field" className="border border-ink-200 rounded-lg px-2 py-1.5 text-xs font-mono" />
-                <input value={mapImpr} onChange={e => setMapImpr(e.target.value)} placeholder="impressions field" className="border border-ink-200 rounded-lg px-2 py-1.5 text-xs font-mono" />
-                <input value={mapClicks} onChange={e => setMapClicks(e.target.value)} placeholder="clicks field" className="border border-ink-200 rounded-lg px-2 py-1.5 text-xs font-mono" />
-                <input value={mapRev} onChange={e => setMapRev(e.target.value)} placeholder="revenue field" className="border border-ink-200 rounded-lg px-2 py-1.5 text-xs font-mono col-span-2" />
-              </div>
-              <button onClick={testConnection} disabled={testing || !endpoint}
-                className="text-xs px-3 py-1.5 rounded-lg border border-ink-300 hover:bg-white disabled:opacity-50">
+              <button onClick={testConnection} disabled={testing || !endpoint || !authName}
+                className="text-xs px-3 py-1.5 rounded-lg border border-ink-300 bg-white hover:bg-ink-50 disabled:opacity-50">
                 {testing ? 'Testing…' : 'Test connection'}
               </button>
-              {testMsg && <p className={`text-[11px] mt-1 ${testMsg.startsWith('✓') ? 'text-green-600' : 'text-red-600'}`}>{testMsg}</p>}
+              {testMsg && <p className={`text-[11px] mt-1 break-all ${testMsg.startsWith('✓') ? 'text-green-600' : 'text-red-600'}`}>{testMsg}</p>}
+              <p className="text-[11px] text-ink-400">The system auto-detects revenue, impressions, clicks, date and site fields from the response.</p>
             </div>
           )}
         </div>
- 
+
         <button onClick={() => name && onSave(payload())} disabled={!name} className="btn-primary w-full py-2.5 disabled:opacity-50">Save network</button>
       </div>
     </Modal>
