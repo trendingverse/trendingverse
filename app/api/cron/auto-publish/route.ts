@@ -338,7 +338,7 @@ async function checkDuplicate(slug: string, title: string, wpBase: string, auth:
   const [slugRes, titleRes] = await Promise.all([
     fetch(`${wpBase}/wp-json/wp/v2/posts?slug=${encodeURIComponent(slug)}&status=any`, { headers: { Authorization: `Basic ${auth}` } }),
     fetch(`${wpBase}/wp-json/wp/v2/posts?search=${encodeURIComponent(title.slice(0, 30))}&status=any&per_page=5`, { headers: { Authorization: `Basic ${auth}` } }),
-    fetch(`${new URL(req.url).origin}/api/mediation/revenue/sync?secret=${process.env.CRON_SECRET}`).catch(() => ({})),
+    
   ])
   const slugData = slugRes.ok ? await slugRes.json() : []
   if (Array.isArray(slugData) && slugData.length > 0) return true
@@ -829,10 +829,11 @@ export async function GET(req: NextRequest) {
   // ── Run article publishing AND currency rates update CONCURRENTLY ──
   // (previously sequential — total time was article_time + currency_time;
   // now it's max(article_time, currency_time), roughly halving wall-clock time)
- const [articleOutcome, currencyOutcome, pacingOutcome] = await Promise.all([
+const [articleOutcome, currencyOutcome, pacingOutcome] = await Promise.all([
     runArticlePublish(supabase, geminiKey, pexelsKey, newsApiKey, wpBase, auth, wpUrl, adminUserId, langParam, regionParam),
     runCurrencyRatesUpdate(supabase, geminiKey, wpBase, auth).catch((e) => ({ updated: 0, failed: 0, log: [`Currency rates error: ${(e as Error).message}`] })),
     runDirectAdsPacing(supabase).catch((e) => ({ processed: 0, paused: 0, log: [`Direct-ads pacing error: ${(e as Error).message}`] })),
+    fetch(`${new URL(req.url).origin}/api/mediation/revenue/sync?secret=${process.env.CRON_SECRET}`).catch(() => ({})),
   ])
 
   const log = [...articleOutcome.log, ...currencyOutcome.log, ...pacingOutcome.log]
