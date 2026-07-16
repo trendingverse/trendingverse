@@ -40,8 +40,9 @@ const baseNav = [
 const adminExtraItems: Record<string, { href: string; label: string; icon: string }[]> = {
   'Content': [{ href: '/admin/video', label: 'Video', icon: '🎬' }],
   'AI & SEO': [{ href: '/admin/author-fix', label: 'Author & Category', icon: '👤' }],
-  'Revenue':  [
+'Revenue':  [
     { href: '/admin/direct-ads', label: 'Direct Ads', icon: '🎯' },
+    { href: '/admin/reports', label: 'Ad Reports', icon: '📊' },
     { href: '/admin/ads-txt', label: 'ads.txt', icon: '🔐' },
     { href: '/admin/outreach', label: 'Outreach', icon: '📋' },
   ],
