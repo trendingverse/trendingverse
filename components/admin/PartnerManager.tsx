@@ -8,7 +8,7 @@ interface Placement {
   size_width?: number; size_height?: number; ad_code?: string
   waterfall_order?: number; is_active: boolean
 }
-const POSITIONS = ['in_content', 'header', 'footer', 'sidebar']
+const POSITIONS = ['in_content', 'header', 'footer', 'sidebar', 'popunder']
 const COMMON_SIZES = ['300x250', '336x280', '728x90', '320x50', '300x600', '160x600']
 export function PartnerManager() {
   const [partners, setPartners] = useState<Partner[]>([])
