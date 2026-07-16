@@ -1,25 +1,35 @@
-// app/api/mediation/report/route.ts
+// app/api/mediation/report/route.ts  — v2
 // ══════════════════════════════════════════════════════════════════
-// AD-SERVER REPORTING ENGINE — GAM-style pivot builder backend.
+// Fixes the "phantom partner" problem. Events are now interpreted by
+// what they ARE, not by mis-using partner_slug as an event label:
 //
-// Accepts { metrics[], dimensions[], filters{}, start, end } and returns
-// aggregated rows grouped by the chosen dimensions, with the chosen metrics.
+//   request        -> a slot request (NOT a partner). Counts toward Requests.
+//   fill  (partner) -> that partner filled. Counts toward that partner's Fills.
+//   nofill(partner) -> that partner tried & failed. That partner's No-fills.
+//   unfilled       -> whole waterfall empty (partner_slug null). Terminal miss.
 //
-// Data source: mediation_events (request/fill/nofill/click/viewable).
-// Geo/device dimensions are resolved by joining audience_profiles on
-// fingerprint. Revenue/eCPM columns are wired but stay 0 until Phase 2
-// revenue ingestion populates a revenue source.
+// Requests are counted per SLOT CONTEXT (date/site/position/geo/device),
+// never per partner. Fills/nofills/clicks are counted per partner.
+//
+// Metrics:
+//   requests          = # request events in the group's slot context
+//   fills / nofills   = per-partner outcome counts
+//   fill_rate         = partner fills / requests-in-context  (per-partner)
+//   overall_fill_rate = any fill / requests-in-context        (slot-level)
+//   clicks, ctr, viewable, viewability_rate as before
+//   revenue/ecpm/rpm  = 0 until Phase 2
 // ══════════════════════════════════════════════════════════════════
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'khan.khan.yusuf@gmail.com'
-
-// Which raw event_types we count, and the metric keys they feed.
 type Row = Record<string, any>
 
+// Partner-scoped dimensions vs slot-context dimensions.
+// Requests live at the slot-context level (everything EXCEPT partner).
+const PARTNER_DIM = 'partner'
+
 export async function POST(req: NextRequest) {
-  // Admin gate
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user || user.email !== ADMIN_EMAIL) {
@@ -40,8 +50,6 @@ export async function POST(req: NextRequest) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   )
 
-  // ── Pull raw events in the date window ──
-  // end + 1 day so the whole end date is inclusive
   const endInclusive = new Date(new Date(end).getTime() + 864e5).toISOString().split('T')[0]
   let q = admin
     .from('mediation_events')
@@ -50,30 +58,23 @@ export async function POST(req: NextRequest) {
     .lt('created_at', endInclusive)
     .limit(100000)
   if (filters.site_url) q = q.ilike('site_url', `%${filters.site_url}%`)
-  if (filters.partner_slug) q = q.eq('partner_slug', filters.partner_slug)
   if (filters.position) q = q.eq('position', filters.position)
   const { data: events, error } = await q
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  // ── If geo/device dimensions requested, resolve fingerprints → profiles ──
+  // Resolve geo/device if requested
   const needProfile = dimensions.includes('country') || dimensions.includes('device')
   const profileMap: Record<string, { country?: string; device?: string }> = {}
   if (needProfile && events?.length) {
     const fps = Array.from(new Set(events.map(e => e.fingerprint).filter(Boolean)))
-    // chunk to avoid oversized IN clauses
     for (let i = 0; i < fps.length; i += 500) {
       const chunk = fps.slice(i, i + 500)
       const { data: profs } = await admin
-        .from('audience_profiles')
-        .select('fingerprint, country, device_type')
-        .in('fingerprint', chunk)
-      for (const p of profs || []) {
-        profileMap[p.fingerprint] = { country: p.country, device: p.device_type }
-      }
+        .from('audience_profiles').select('fingerprint, country, device_type').in('fingerprint', chunk)
+      for (const p of profs || []) profileMap[p.fingerprint] = { country: p.country, device: p.device_type }
     }
   }
 
-  // ── Group + aggregate in code ──
   const dimValue = (e: Row, dim: string): string => {
     switch (dim) {
       case 'date': return (e.created_at || '').split('T')[0]
@@ -86,19 +87,48 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const groups: Record<string, Row> = {}
+  // Slot-context key = all chosen dimensions EXCEPT partner (requests live here)
+  const contextDims = dimensions.filter(d => d !== PARTNER_DIM)
+  const contextKey = (e: Row) => contextDims.map(d => dimValue(e, d)).join(' ‖ ')
+
+  // 1) Count REQUESTS per slot context (only event_type='request')
+  const requestsByContext: Record<string, number> = {}
+  // 2) Count ANY-fill per slot context (for overall fill rate)
+  const anyFillByContext: Record<string, number> = {}
   for (const e of events || []) {
-    // Skip the server-side 'request' bookkeeping rows when they're tagged as partner 'request'
+    if (e.event_type === 'request') {
+      const k = contextKey(e)
+      requestsByContext[k] = (requestsByContext[k] || 0) + 1
+    }
+    if (e.event_type === 'fill') {
+      const k = contextKey(e)
+      anyFillByContext[k] = (anyFillByContext[k] || 0) + 1
+    }
+  }
+
+  // 3) Build the actual report groups (by full dimension set)
+  const groups: Record<string, Row> = {}
+  const ensure = (e: Row) => {
     const key = dimensions.map(d => dimValue(e, d)).join(' ‖ ')
     if (!groups[key]) {
-      groups[key] = { _key: key }
+      groups[key] = { _key: key, _ctx: contextKey(e) }
       dimensions.forEach((d, i) => { groups[key][d] = key.split(' ‖ ')[i] })
-      groups[key]._requests = 0; groups[key]._fills = 0; groups[key]._nofills = 0
-      groups[key]._clicks = 0; groups[key]._viewable = 0
+      groups[key]._fills = 0; groups[key]._nofills = 0; groups[key]._clicks = 0; groups[key]._viewable = 0
     }
-    const g = groups[key]
+    return groups[key]
+  }
+
+  for (const e of events || []) {
+    // Skip request/unfilled from partner-level rows — they're not partner outcomes.
+    // But we still need a row to exist for contexts even if only requests happened.
+    if (e.event_type === 'request' || e.event_type === 'unfilled' || e.partner_slug === 'request' || e.partner_slug === 'nofill') {
+      // Only materialise a row if partner isn't a chosen dimension (so requests show up
+      // in slot-context groupings). If partner IS a dimension, requests don't belong to a partner row.
+      if (!dimensions.includes(PARTNER_DIM)) ensure(e)
+      continue
+    }
+    const g = ensure(e)
     switch (e.event_type) {
-      case 'request': g._requests++; break
       case 'fill': g._fills++; break
       case 'nofill': g._nofills++; break
       case 'click': g._clicks++; break
@@ -106,18 +136,19 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // ── Compute derived metrics + shape output rows ──
   const metricValue = (g: Row, m: string): number => {
+    const reqs = requestsByContext[g._ctx] || 0
+    const anyFill = anyFillByContext[g._ctx] || 0
     switch (m) {
-      case 'requests': return g._requests
+      case 'requests': return reqs
       case 'fills': return g._fills
       case 'nofills': return g._nofills
       case 'clicks': return g._clicks
       case 'viewable': return g._viewable
-      case 'fill_rate': return g._requests ? +(g._fills / g._requests * 100).toFixed(2) : 0
+      case 'fill_rate': return reqs ? +(g._fills / reqs * 100).toFixed(2) : 0
+      case 'overall_fill_rate': return reqs ? +(anyFill / reqs * 100).toFixed(2) : 0
       case 'ctr': return g._fills ? +(g._clicks / g._fills * 100).toFixed(2) : 0
       case 'viewability_rate': return g._fills ? +(g._viewable / g._fills * 100).toFixed(2) : 0
-      // Revenue metrics — wired but 0 until Phase 2 revenue ingestion
       case 'revenue': return 0
       case 'ecpm': return 0
       case 'rpm': return 0
@@ -132,21 +163,28 @@ export async function POST(req: NextRequest) {
     return row
   })
 
-  // Totals across all groups
-  const totals: Row = { _isTotal: true }
+  // Totals: requests = sum of distinct context requests; fills etc = sum
+  const totalRequests = Object.values(requestsByContext).reduce((s, v) => s + v, 0)
+  const totalAnyFill = Object.values(anyFillByContext).reduce((s, v) => s + v, 0)
   const sum = (k: string) => Object.values(groups).reduce((s, g) => s + (g[k] || 0), 0)
-  const T = { _requests: sum('_requests'), _fills: sum('_fills'), _nofills: sum('_nofills'), _clicks: sum('_clicks'), _viewable: sum('_viewable') }
-  metrics.forEach(m => { totals[m] = metricValue(T as Row, m) })
+  const totals: Row = {}
+  metrics.forEach(m => {
+    switch (m) {
+      case 'requests': totals[m] = totalRequests; break
+      case 'fills': totals[m] = sum('_fills'); break
+      case 'nofills': totals[m] = sum('_nofills'); break
+      case 'clicks': totals[m] = sum('_clicks'); break
+      case 'viewable': totals[m] = sum('_viewable'); break
+      case 'fill_rate': totals[m] = totalRequests ? +(sum('_fills') / totalRequests * 100).toFixed(2) : 0; break
+      case 'overall_fill_rate': totals[m] = totalRequests ? +(totalAnyFill / totalRequests * 100).toFixed(2) : 0; break
+      case 'ctr': totals[m] = sum('_fills') ? +(sum('_clicks') / sum('_fills') * 100).toFixed(2) : 0; break
+      case 'viewability_rate': totals[m] = sum('_fills') ? +(sum('_viewable') / sum('_fills') * 100).toFixed(2) : 0; break
+      default: totals[m] = 0
+    }
+  })
 
-  // Default sort: first metric desc
   const sortMetric = metrics[0]
   rows.sort((a, b) => (b[sortMetric] ?? 0) - (a[sortMetric] ?? 0))
 
-  return NextResponse.json({
-    dimensions, metrics,
-    rows,
-    totals,
-    row_count: rows.length,
-    date_range: { start, end },
-  })
+  return NextResponse.json({ dimensions, metrics, rows, totals, row_count: rows.length, date_range: { start, end } })
 }
