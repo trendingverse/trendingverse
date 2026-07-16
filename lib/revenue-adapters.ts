@@ -1,21 +1,20 @@
-// lib/revenue-adapters.ts  — v3
+// lib/revenue-adapters.ts  — v4
 // ══════════════════════════════════════════════════════════════════
-// GENERIC configurable REST adapter (handles most simple key-based APIs
-// entirely from UI config — no code) + CUSTOM adapters (adsterra) for
-// APIs that need special handling.
+// GENERIC adapter now AUTO-DETECTS field names + the rows array, so you
+// only need to provide: endpoint, auth (header/query + name), api_key.
+// No field mapping required. Custom adapters (adsterra) unchanged.
 //
-// Generic config (demand_partners.config.report):
+// Minimal generic config (demand_partners.config.report):
 // {
 //   "adapter": "generic",
 //   "endpoint": "https://api.net/report?from={start}&to={end}",
-//   "date_format": "YYYY-MM-DD" | "YYYYMMDD",   // how {start}/{end} render
+//   "date_format": "YYYY-MM-DD" | "YYYYMMDD" | "YYYY/MM/DD",
 //   "auth_type": "header" | "query",
-//   "auth_name": "Token-Key",                    // header name or query param
+//   "auth_name": "Token-Key",
 //   "api_key": "THE_KEY",
-//   "rows_path": "data",        // dot-path to the rows array; "" = root is the array
-//   "map": { "date":"date","site":"domain","impressions":"impressions",
-//            "clicks":"clicks","revenue":"revenue" },
-//   "site_fallback": "example.com"  // used when the API doesn't return a site field
+//   "site_fallback": "example.com"   // optional
+//   // optional manual overrides still respected if present:
+//   // "rows_path", "map"
 // }
 // ══════════════════════════════════════════════════════════════════
 
@@ -26,25 +25,73 @@ export interface NormalizedRow {
 export interface AdapterResult { ok: boolean; rows: NormalizedRow[]; error?: string }
 export type Adapter = (config: any, start: string, end: string) => Promise<AdapterResult>
 
+function num(v: any): number { const n = Number(v); return isNaN(n) ? 0 : n }
 function dig(obj: any, path: string): any {
   if (!path) return obj
   return path.split('.').reduce((o, k) => (o == null ? o : o[k]), obj)
 }
-function num(v: any): number { const n = Number(v); return isNaN(n) ? 0 : n }
 function fmtDate(iso: string, format?: string): string {
-  // iso is YYYY-MM-DD
   if (format === 'YYYYMMDD') return iso.replace(/-/g, '')
   if (format === 'YYYY/MM/DD') return iso.replace(/-/g, '/')
-  return iso // default YYYY-MM-DD
+  return iso
 }
-function normSite(s: string): string {
+function normSite(s: any): string {
   return String(s || '(all)').replace(/^https?:\/\//, '').replace(/\/$/, '').toLowerCase()
 }
 
-// ── GENERIC configurable REST adapter ─────────────────────────────
+// Find the first key in an object matching any of the candidate names
+// (case-insensitive, ignoring _ and spaces).
+function findKey(obj: any, candidates: string[]): string | null {
+  if (!obj || typeof obj !== 'object') return null
+  const keys = Object.keys(obj)
+  const norm = (s: string) => s.toLowerCase().replace(/[_\s-]/g, '')
+  for (const cand of candidates) {
+    const c = norm(cand)
+    const hit = keys.find(k => norm(k) === c)
+    if (hit) return hit
+  }
+  // partial contains match as a fallback
+  for (const cand of candidates) {
+    const c = norm(cand)
+    const hit = keys.find(k => norm(k).includes(c))
+    if (hit) return hit
+  }
+  return null
+}
+
+// Auto-find the array of row objects in an arbitrary JSON response.
+function findRowsArray(json: any): any[] | null {
+  if (Array.isArray(json)) return json
+  if (!json || typeof json !== 'object') return null
+  // common wrapper keys first
+  for (const k of ['data', 'items', 'results', 'report', 'stats', 'rows', 'response']) {
+    const v = json[k]
+    if (Array.isArray(v)) return v
+    if (v && typeof v === 'object') {
+      // one level deeper (e.g. { response: { data: [...] } })
+      for (const k2 of ['data', 'items', 'results', 'report', 'stats', 'rows']) {
+        if (Array.isArray(v[k2])) return v[k2]
+      }
+    }
+  }
+  // otherwise: first array-of-objects value anywhere at top level
+  for (const k of Object.keys(json)) {
+    const v = json[k]
+    if (Array.isArray(v) && v.length && typeof v[0] === 'object') return v
+  }
+  return null
+}
+
+const REVENUE_NAMES = ['revenue', 'earning', 'earnings', 'income', 'money', 'profit', 'publisherRevenue', 'publisherNetRevenue', 'amount', 'total']
+const DATE_NAMES = ['date', 'day', 'stat_date', 'statDate', 'reportDate']
+const SITE_NAMES = ['domain', 'site', 'website', 'url', 'domain_name', 'siteName', 'host']
+const IMPR_NAMES = ['impressions', 'impression', 'impr', 'views', 'view', 'imps']
+const CLICK_NAMES = ['clicks', 'click', 'clk']
+
+// ── GENERIC auto-detecting REST adapter ───────────────────────────
 const generic: Adapter = async (config, startIso, endIso) => {
   try {
-    if (!config?.endpoint) return { ok: false, rows: [], error: 'Generic adapter: missing endpoint' }
+    if (!config?.endpoint) return { ok: false, rows: [], error: 'Missing endpoint URL' }
     const start = fmtDate(startIso, config.date_format)
     const end = fmtDate(endIso, config.date_format)
     let url = String(config.endpoint)
@@ -52,10 +99,10 @@ const generic: Adapter = async (config, startIso, endIso) => {
       .replace(/\{end\}/g, end).replace(/\{to\}/g, end).replace(/\{finish\}/g, end)
 
     const headers: Record<string, string> = { 'Accept': 'application/json' }
-    if (config.auth_type === 'header' && config.auth_name) {
-      headers[config.auth_name] = config.api_key || ''
-    } else if (config.auth_type === 'query' && config.auth_name) {
+    if (config.auth_type === 'query' && config.auth_name) {
       url += (url.includes('?') ? '&' : '?') + `${config.auth_name}=${encodeURIComponent(config.api_key || '')}`
+    } else if (config.auth_name) { // default to header
+      headers[config.auth_name] = config.api_key || ''
     }
 
     const res = await fetch(url, { headers })
@@ -64,25 +111,37 @@ const generic: Adapter = async (config, startIso, endIso) => {
       return { ok: false, rows: [], error: `API ${res.status}: ${t.slice(0, 200)}` }
     }
     const json = await res.json()
-    let arr = dig(json, config.rows_path || '')
-    // If rows_path missing but the root IS an array, use it.
-    if (!Array.isArray(arr) && Array.isArray(json)) arr = json
-    if (!Array.isArray(arr)) {
-      return { ok: false, rows: [], error: `rows_path '${config.rows_path || '(root)'}' isn't an array. Top-level keys: ${Object.keys(json || {}).join(', ').slice(0, 150)}` }
+
+    // rows array: manual override, else auto-detect
+    let arr = config.rows_path ? dig(json, config.rows_path) : findRowsArray(json)
+    if (!Array.isArray(arr)) arr = findRowsArray(json)
+    if (!Array.isArray(arr) || !arr.length) {
+      const keys = json && typeof json === 'object' ? Object.keys(json).join(', ') : typeof json
+      return { ok: false, rows: [], error: `Couldn't find rows in response. Top-level: ${String(keys).slice(0, 150)}` }
     }
+
+    // detect field names from the first row (or use manual map overrides)
+    const sample = arr[0]
     const m = config.map || {}
-    const rows: NormalizedRow[] = arr.map((r: any) => {
-      const rawSite = m.site ? dig(r, m.site) : null
-      return {
-        date: String(dig(r, m.date || 'date') || '').slice(0, 10),
-        site: rawSite ? normSite(rawSite) : normSite(config.site_fallback || '(all)'),
-        impressions: num(dig(r, m.impressions || 'impressions')),
-        clicks: num(dig(r, m.clicks || 'clicks')),
-        revenue: num(dig(r, m.revenue || 'revenue')),
-        currency: config.currency || 'USD',
-        raw: r,
-      }
-    }).filter((r: NormalizedRow) => r.date)
+    const kDate = m.date || findKey(sample, DATE_NAMES)
+    const kSite = m.site || findKey(sample, SITE_NAMES)
+    const kImpr = m.impressions || findKey(sample, IMPR_NAMES)
+    const kClick = m.clicks || findKey(sample, CLICK_NAMES)
+    const kRev = m.revenue || findKey(sample, REVENUE_NAMES)
+
+    const rows: NormalizedRow[] = arr.map((r: any) => ({
+      date: kDate ? String(dig(r, kDate) || '').slice(0, 10) : '',
+      site: kSite ? normSite(dig(r, kSite)) : normSite(config.site_fallback || '(all)'),
+      impressions: kImpr ? num(dig(r, kImpr)) : 0,
+      clicks: kClick ? num(dig(r, kClick)) : 0,
+      revenue: kRev ? num(dig(r, kRev)) : 0,
+      currency: config.currency || 'USD',
+      raw: r,
+    })).filter((r: NormalizedRow) => r.date)
+
+    if (!rows.length) {
+      return { ok: false, rows: [], error: `Found ${arr.length} rows but couldn't read a date field. Row keys: ${Object.keys(sample).join(', ').slice(0, 150)}` }
+    }
     return { ok: true, rows }
   } catch (e) {
     return { ok: false, rows: [], error: `Generic adapter failed: ${(e as Error).message}` }
@@ -127,11 +186,5 @@ const adsterra: Adapter = async (config, start, end) => {
   }
 }
 
-// ── REGISTRY ──────────────────────────────────────────────────────
-export const ADAPTERS: Record<string, Adapter> = {
-  generic,
-  adsterra,
-}
-export function getAdapter(name: string): Adapter | null {
-  return ADAPTERS[name] || null
-}
+export const ADAPTERS: Record<string, Adapter> = { generic, adsterra }
+export function getAdapter(name: string): Adapter | null { return ADAPTERS[name] || null }
