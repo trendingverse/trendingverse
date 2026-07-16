@@ -165,9 +165,7 @@ function Modal({ children, onClose, title }: any) {
     </div>
   )
 }
-# Replace the PartnerForm function in PartnerManager.tsx with this SIMPLE version.
-# Only 4 inputs for a generic network: URL, date format, auth name, API key.
-# The adapter auto-detects the response fields. A "Test" button verifies it.
+
 
 function PartnerForm({ onClose, onSave }: any) {
   const [name, setName] = useState('')
