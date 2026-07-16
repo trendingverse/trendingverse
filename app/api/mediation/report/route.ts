@@ -1,0 +1,23 @@
+import { createClient } from '@/lib/supabase/server'
+import { redirect } from 'next/navigation'
+import { ReportBuilder } from '@/components/admin/ReportBuilder'
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'khan.khan.yusuf@gmail.com'
+
+export default async function ReportsPage() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+  if (user.email !== ADMIN_EMAIL) redirect('/admin')
+
+  return (
+    <div className="space-y-8">
+      <div>
+        <h1 className="font-display text-2xl font-bold text-ink-950">📊 Reports</h1>
+        <p className="text-sm text-ink-400 mt-1">
+          Build custom ad-server reports — pick metrics and dimensions, filter, and export.
+        </p>
+      </div>
+      <ReportBuilder />
+    </div>
+  )
+}
