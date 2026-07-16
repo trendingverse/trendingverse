@@ -1,4 +1,5 @@
-// app/api/mediation/partners/route.ts  — v2 (saves report API config on partner)
+// app/api/mediation/partners/route.ts  — v3
+// Saves full report config incl. the generic REST adapter fields.
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
@@ -23,11 +24,20 @@ export async function GET() {
     admin.from('demand_partners').select('*').order('waterfall_order', { ascending: true }),
     admin.from('demand_partner_placements').select('*').order('waterfall_order', { ascending: true }),
   ])
-  // Mask api keys before sending to client (show only whether one is set)
   const safePartners = (partners || []).map((p: any) => {
-    const hasKey = !!(p.config?.report?.api_key)
-    const adapter = p.config?.report?.adapter || null
-    return { ...p, _has_report_key: hasKey, _report_adapter: adapter, config: undefined }
+    const rep = p.config?.report || null
+    return {
+      ...p,
+      _has_report_key: !!(rep?.api_key),
+      _report_adapter: rep?.adapter || null,
+      // send back non-secret generic config so the edit form can prefill
+      _report_cfg: rep ? {
+        adapter: rep.adapter, endpoint: rep.endpoint, date_format: rep.date_format,
+        auth_type: rep.auth_type, auth_name: rep.auth_name, rows_path: rep.rows_path,
+        map: rep.map, site_fallback: rep.site_fallback,
+      } : null,
+      config: undefined,
+    }
   })
   return NextResponse.json({ partners: safePartners, placements: placements || [] })
 }
@@ -46,20 +56,37 @@ export async function POST(req: NextRequest) {
       waterfall_order: parseInt(body.waterfall_order, 10) || 100,
       is_active: body.is_active !== false,
     }
-    // Report API config. Only overwrite the key if a new one was actually
-    // provided (so editing other fields doesn't wipe the saved key).
-    if (body.report_adapter !== undefined || body.report_api_key !== undefined) {
-      // fetch existing to preserve key if not re-entered
+    // Build report config if an adapter was chosen
+    if (body.report_adapter !== undefined) {
       let existingKey: string | null = null
       if (body.id) {
         const { data: cur } = await admin.from('demand_partners').select('config').eq('id', body.id).single()
         existingKey = cur?.config?.report?.api_key || null
       }
-      row.config = {
-        report: {
-          adapter: body.report_adapter || null,
+      if (body.report_adapter) {
+        const report: any = {
+          adapter: body.report_adapter,
           api_key: (body.report_api_key && body.report_api_key.trim()) ? body.report_api_key.trim() : existingKey,
         }
+        if (body.report_adapter === 'generic') {
+          report.endpoint = body.report_endpoint || null
+          report.date_format = body.report_date_format || 'YYYY-MM-DD'
+          report.auth_type = body.report_auth_type || 'header'
+          report.auth_name = body.report_auth_name || null
+          report.rows_path = body.report_rows_path || ''
+          report.site_fallback = body.report_site_fallback || null
+          // map fields come as individual inputs
+          report.map = {
+            date: body.map_date || 'date',
+            site: body.map_site || 'domain',
+            impressions: body.map_impressions || 'impressions',
+            clicks: body.map_clicks || 'clicks',
+            revenue: body.map_revenue || 'revenue',
+          }
+        }
+        row.config = { report }
+      } else {
+        row.config = {} // adapter cleared
       }
     }
     if (body.id) {
@@ -81,8 +108,7 @@ export async function POST(req: NextRequest) {
       size_width: body.size_width ? parseInt(body.size_width, 10) : null,
       size_height: body.size_height ? parseInt(body.size_height, 10) : null,
       ad_code: body.ad_code || null,
-      waterfall_order: body.waterfall_order !== undefined && body.waterfall_order !== ''
-        ? parseInt(body.waterfall_order, 10) : null,
+      waterfall_order: body.waterfall_order !== undefined && body.waterfall_order !== '' ? parseInt(body.waterfall_order, 10) : null,
       is_active: body.is_active !== false,
     }
     if (body.id) {
@@ -106,6 +132,5 @@ export async function POST(req: NextRequest) {
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json({ ok: true })
   }
-
   return NextResponse.json({ error: 'Unknown action' }, { status: 400 })
 }
