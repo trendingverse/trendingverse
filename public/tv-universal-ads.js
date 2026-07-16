@@ -94,7 +94,7 @@
 
   // Try the demand list in order; stop at the first that fills.
   function runWaterfall(slot, demand, i) {
-    if (i >= demand.length) { beacon(slot, 'nofill', 'nofill'); return; }
+    if (i >= demand.length) { beacon(slot, null, 'unfilled'); return; }
     var item = demand[i];
 
     if (item.type === 'direct') {
