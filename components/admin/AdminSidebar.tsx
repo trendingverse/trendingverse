@@ -43,9 +43,11 @@ const adminExtraItems: Record<string, { href: string; label: string; icon: strin
 'Revenue':  [
     { href: '/admin/direct-ads', label: 'Direct Ads', icon: '🎯' },
     { href: '/admin/partners', label: 'Ad Networks', icon: '🔌' },
+  { href: '/admin/revenue', label: 'Network Revenue', icon: '💵' },
     { href: '/admin/reports', label: 'Ad Reports', icon: '📊' },
     { href: '/admin/ads-txt', label: 'ads.txt', icon: '🔐' },
     { href: '/admin/outreach', label: 'Outreach', icon: '📋' },
+  
   ],
   'System': [
     { href: '/admin/audience', label: 'Audience', icon: '👥' },
