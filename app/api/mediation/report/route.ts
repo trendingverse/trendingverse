@@ -124,7 +124,8 @@ export async function POST(req: NextRequest) {
     return row
   })
   // Drop rows that are pure request bookkeeping (partner '(none)') when partner is a dim
-  const cleanRows = hasPartner ? rows.filter(r => r.partner && r.partner !== '(none)') : rows
+  const BAD_PARTNERS = ['(none)', 'request', 'nofill', 'unfilled']
+  const cleanRows = hasPartner ? rows.filter(r => r.partner && !BAD_PARTNERS.includes(r.partner)) : rows
 
   const totalReq = Object.values(requestsByCtx).reduce((s, v) => s + v, 0)
   const totalAnyFill = Object.values(anyFillByCtx).reduce((s, v) => s + v, 0)
