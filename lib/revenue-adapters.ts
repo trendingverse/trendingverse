@@ -115,7 +115,11 @@ const generic: Adapter = async (config, startIso, endIso) => {
     // rows array: manual override, else auto-detect
     let arr = config.rows_path ? dig(json, config.rows_path) : findRowsArray(json)
     if (!Array.isArray(arr)) arr = findRowsArray(json)
-    if (!Array.isArray(arr) || !arr.length) {
+    // An empty array is a VALID response (no data for this date range) — not an error.
+    if (Array.isArray(arr) && arr.length === 0) {
+      return { ok: true, rows: [] }
+    }
+    if (!Array.isArray(arr)) {
       const keys = json && typeof json === 'object' ? Object.keys(json).join(', ') : typeof json
       return { ok: false, rows: [], error: `Couldn't find rows in response. Top-level: ${String(keys).slice(0, 150)}` }
     }
