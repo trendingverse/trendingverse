@@ -1,529 +1,454 @@
+// app/(admin)/admin/page.tsx
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
-import {
-  RevenueChart,
-  ImpressionsChart,
-  NetworkChart,
-  ViewsChart,
-} from './_components/DashboardCharts'
+import { RevenueAreaChart, ImpressionsBarChart, NetworkBarChart } from './_components/DashboardCharts'
 
-/* ─────────────────────────────────────────────────────────────────────
-   TrendingVerse Pro — Admin Dashboard
-   File: app/(admin)/admin/page.tsx
-   ───────────────────────────────────────────────────────────────────── */
-
-export const dynamic   = 'force-dynamic'
+export const dynamic    = 'force-dynamic'
 export const revalidate = 0
 
-/* ─── Helpers ─────────────────────────────────────────────────────── */
-function fmtUSD(n: number) {
-  if (n >= 1) return `$${n.toFixed(2)}`
-  return `$${n.toFixed(4)}`
-}
-function fmtNum(n: number) {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
-  if (n >= 1_000)     return `${(n / 1_000).toFixed(1)}k`
-  return String(n)
-}
-function shortDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })
+/* ─── Formatters ─────────────────────────────────────────────────── */
+const fmtMoney = (n: number) => n >= 1 ? `$${n.toFixed(2)}` : `$${n.toFixed(4)}`
+const fmtK     = (n: number) => n >= 1_000_000 ? `${(n/1e6).toFixed(1)}M` : n >= 1_000 ? `${(n/1e3).toFixed(1)}k` : String(n)
+const fmtDate  = (iso: string) => new Date(iso).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })
+
+/* ─── Design tokens ──────────────────────────────────────────────── */
+const C = {
+  bg:       '#07101f',
+  surface:  '#0e1726',
+  elevated: '#131f33',
+  border:   '#1a2840',
+  borderDim:'#111e30',
+  text:     '#dde4f0',
+  muted:    '#6b82a8',
+  dim:      '#2d3f58',
 }
 
-/* ─── Tiny server-side components ────────────────────────────────── */
-function KpiCard({
-  label, value, sub, color = 'text-white', icon,
-}: {
-  label: string; value: string; sub?: string; color?: string; icon: string
-}) {
+/* ─── Small server components ────────────────────────────────────── */
+function Card({ children, className = '' }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 flex items-start gap-4">
-      <div className="w-10 h-10 rounded-lg bg-slate-800 flex items-center justify-center text-xl flex-shrink-0">
-        {icon}
-      </div>
-      <div className="min-w-0">
-        <p className="text-xs text-slate-500 font-medium uppercase tracking-wide">{label}</p>
-        <p className={`text-2xl font-bold mt-0.5 ${color} font-mono`}>{value}</p>
-        {sub && <p className="text-xs text-slate-600 mt-0.5">{sub}</p>}
-      </div>
+    <div className={`rounded-xl ${className}`} style={{ background: C.surface, border: `1px solid ${C.border}` }}>
+      {children}
     </div>
   )
 }
 
-function SectionHead({ title, href, label = 'See all' }: { title: string; href?: string; label?: string }) {
+function Stat({ label, value, sub, accent }: { label: string; value: string; sub?: string; accent: string }) {
+  return (
+    <Card>
+      <div className="p-5">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.08em] mb-2" style={{ color: C.dim }}>
+          {label}
+        </p>
+        <p className={`text-[28px] font-mono font-bold leading-none ${accent}`}>{value}</p>
+        {sub && <p className="text-[12px] mt-1.5" style={{ color: C.muted }}>{sub}</p>}
+      </div>
+    </Card>
+  )
+}
+
+function SectionHead({ title, action }: { title: string; action?: { label: string; href: string } }) {
   return (
     <div className="flex items-center justify-between mb-4">
-      <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">{title}</h2>
-      {href && (
-        <Link href={href} className="text-xs text-red-500 hover:text-red-400 font-medium transition-colors">
-          {label} →
+      <h2 className="text-[11px] font-semibold uppercase tracking-[0.1em]" style={{ color: C.dim }}>{title}</h2>
+      {action && (
+        <Link href={action.href} className="text-[12px] font-medium transition-colors" style={{ color: '#e63030' }}
+          onMouseEnter={e => (e.currentTarget.style.color = '#f87171')}
+          onMouseLeave={e => (e.currentTarget.style.color = '#e63030')}>
+          {action.label} →
         </Link>
       )}
     </div>
   )
 }
 
-/* ─── Status badge ───────────────────────────────────────────────── */
-function StatusBadge({ status }: { status: string }) {
-  const map: Record<string, string> = {
-    published: 'bg-emerald-500/15 text-emerald-400',
-    draft:     'bg-slate-700 text-slate-400',
-    scheduled: 'bg-amber-500/15 text-amber-400',
-    archived:  'bg-slate-800 text-slate-600',
+function StatusDot({ on }: { on: boolean }) {
+  return <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${on ? 'bg-emerald-500' : 'bg-slate-700'}`} />
+}
+
+type ArticleRow = { id: string; title: string; status: string; category_name?: string; published_at?: string; seo_score?: number }
+
+function ArticleItem({ a }: { a: ArticleRow }) {
+  const scoreColor = (a.seo_score ?? 0) >= 70 ? 'text-emerald-400' : (a.seo_score ?? 0) >= 40 ? 'text-amber-400' : 'text-red-400'
+  const statusColor: Record<string,string> = {
+    published: 'bg-emerald-500/10 text-emerald-400',
+    draft:     'bg-slate-800 text-slate-500',
+    scheduled: 'bg-amber-500/10 text-amber-400',
+    archived:  'bg-slate-900 text-slate-700',
   }
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${map[status] ?? map.draft}`}>
-      {status}
-    </span>
-  )
-}
-
-/* ─── Quick action button ─────────────────────────────────────────── */
-function QuickAction({ href, icon, label, sub, color = 'bg-slate-800 hover:bg-slate-700' }: {
-  href: string; icon: string; label: string; sub: string; color?: string
-}) {
-  return (
-    <Link href={href} className={`${color} border border-slate-700/50 rounded-xl p-4 flex items-center gap-3 transition-colors group`}>
-      <span className="text-2xl">{icon}</span>
-      <div>
-        <p className="text-sm font-semibold text-slate-200 group-hover:text-white">{label}</p>
-        <p className="text-xs text-slate-500">{sub}</p>
+    <div
+      className="flex items-center gap-3 px-5 py-3 transition-colors group"
+      style={{ borderBottom: `1px solid ${C.borderDim}` }}
+      onMouseEnter={e => (e.currentTarget.style.background = C.elevated)}
+      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+    >
+      <div className="flex-1 min-w-0">
+        <Link
+          href={`/admin/articles/${a.id}/edit`}
+          className="text-[13px] font-medium truncate block transition-colors"
+          style={{ color: C.text }}
+        >
+          {a.title}
+        </Link>
+        <div className="flex items-center gap-2 mt-0.5">
+          <span className="text-[11px]" style={{ color: C.dim }}>{a.category_name || 'Uncategorized'}</span>
+          {a.published_at && (
+            <>
+              <span style={{ color: C.borderDim }}>·</span>
+              <span className="text-[11px]" style={{ color: C.dim }}>{fmtDate(a.published_at)}</span>
+            </>
+          )}
+        </div>
       </div>
-    </Link>
+      <div className="flex items-center gap-2.5 flex-shrink-0">
+        {a.seo_score != null && (
+          <span className={`text-[11px] font-mono font-semibold ${scoreColor}`}>{a.seo_score}</span>
+        )}
+        <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${statusColor[a.status] ?? statusColor.draft}`}>
+          {a.status}
+        </span>
+        <Link
+          href={`/admin/articles/${a.id}/edit`}
+          className="text-[11px] opacity-0 group-hover:opacity-100 transition-opacity"
+          style={{ color: C.muted }}
+        >
+          Edit
+        </Link>
+      </div>
+    </div>
   )
 }
 
-/* ─── Page ────────────────────────────────────────────────────────── */
+/* ─── Page ───────────────────────────────────────────────────────── */
 export default async function AdminDashboard() {
-  const supabase = await createClient()
+  const supabase   = await createClient()
+  const now        = new Date()
+  const todayISO   = now.toISOString().slice(0, 10)
 
-  const now      = new Date()
-  const todayISO = now.toISOString().slice(0, 10)
-  const todayStart = todayISO + 'T00:00:00Z'
-  const todayEnd   = todayISO + 'T23:59:59Z'
-
-  // 7-day window
-  const d7 = new Date(now); d7.setDate(now.getDate() - 7)
-  const w7ISO = d7.toISOString().slice(0, 10) + 'T00:00:00Z'
-
-  // 30-day window
+  const d14 = new Date(now); d14.setDate(now.getDate() - 14)
   const d30 = new Date(now); d30.setDate(now.getDate() - 30)
-  const d30ISO = d30.toISOString().slice(0, 10) + 'T00:00:00Z'
+  const d7  = new Date(now); d7.setDate(now.getDate() - 7)
 
-  /* ── Parallel data fetching ────────────────────────────────────── */
+  /* ── Parallel queries ─────────────────────────────────────────── */
   const [
     { count: totalArticles },
-    { count: publishedToday },
     { count: draftCount },
-    { data: revenueRows },
-    { data: recentArticles },
+    { count: pubToday },
+    { data: revRows },
+    { data: articles },
     { data: topArticles },
     { data: adNetworks },
     { data: sites },
-    { data: recentActivity },
+    { data: recentRev },
   ] = await Promise.all([
-    // Article counts
     supabase.from('articles').select('*', { count: 'exact', head: true }),
+    supabase.from('articles').select('*', { count: 'exact', head: true }).eq('status','draft'),
     supabase.from('articles').select('*', { count: 'exact', head: true })
-      .eq('status', 'published')
-      .gte('published_at', todayStart)
-      .lte('published_at', todayEnd),
-    supabase.from('articles').select('*', { count: 'exact', head: true })
-      .eq('status', 'draft'),
-
-    // Revenue — last 30 days from partner_revenue
+      .eq('status','published').gte('published_at', todayISO + 'T00:00:00Z'),
     supabase.from('partner_revenue')
-      .select('date, revenue_usd, impressions, network_name')
-      .gte('date', d30.toISOString().slice(0, 10))
+      .select('date,revenue_usd,impressions,network_name')
+      .gte('date', d30.toISOString().slice(0,10))
       .order('date', { ascending: true }),
-
-    // Recent articles
     supabase.from('articles')
-      .select('id, title, status, published_at, category_name, view_count, seo_score')
+      .select('id,title,status,published_at,category_name,seo_score')
       .order('created_at', { ascending: false })
-      .limit(8),
-
-    // Top articles by views
+      .limit(10),
     supabase.from('articles')
-      .select('id, title, view_count, category_name, status')
-      .eq('status', 'published')
+      .select('id,title,view_count,category_name')
+      .eq('status','published')
       .order('view_count', { ascending: false })
       .limit(5),
-
-    // Ad networks
     supabase.from('ad_networks')
-      .select('id, name, is_active, priority')
-      .order('priority', { ascending: true })
-      .limit(10),
-
-    // Publisher sites
+      .select('id,name,is_active,priority')
+      .order('priority', { ascending: true }),
     supabase.from('sites')
-      .select('id, name, site_url, is_active')
+      .select('id,name,site_url,is_active')
       .limit(6),
-
-    // Recent partner_revenue for activity feed
     supabase.from('partner_revenue')
-      .select('date, network_name, revenue_usd, impressions, site_url')
+      .select('date,network_name,revenue_usd,impressions,site_url')
       .order('date', { ascending: false })
-      .limit(6),
+      .limit(8),
   ])
 
-  /* ── Aggregate revenue numbers ─────────────────────────────────── */
-  const rows = revenueRows ?? []
+  /* ── Aggregate ────────────────────────────────────────────────── */
+  const rows      = revRows ?? []
+  const todayRev  = rows.filter(r => r.date === todayISO).reduce((s,r) => s + (r.revenue_usd ?? 0), 0)
+  const weekRev   = rows.filter(r => r.date >= d7.toISOString().slice(0,10)).reduce((s,r) => s + (r.revenue_usd ?? 0), 0)
+  const monthRev  = rows.reduce((s,r) => s + (r.revenue_usd ?? 0), 0)
+  const monthImpr = rows.reduce((s,r) => s + (r.impressions ?? 0), 0)
+  const todayImpr = rows.filter(r => r.date === todayISO).reduce((s,r) => s + (r.impressions ?? 0), 0)
+  const cpm       = monthImpr > 0 ? (monthRev / monthImpr) * 1000 : 0
 
-  const todayRev  = rows.filter(r => r.date === todayISO)
-    .reduce((s, r) => s + (r.revenue_usd ?? 0), 0)
-
-  const week7Rev  = rows.filter(r => r.date >= d7.toISOString().slice(0, 10))
-    .reduce((s, r) => s + (r.revenue_usd ?? 0), 0)
-
-  const month30Rev = rows.reduce((s, r) => s + (r.revenue_usd ?? 0), 0)
-
-  const todayImpr  = rows.filter(r => r.date === todayISO)
-    .reduce((s, r) => s + (r.impressions ?? 0), 0)
-
-  const month30Impr = rows.reduce((s, r) => s + (r.impressions ?? 0), 0)
-
-  // CPM
-  const cpm = month30Impr > 0 ? (month30Rev / month30Impr) * 1000 : 0
-
-  /* ── Chart data: 14-day daily revenue ─────────────────────────── */
+  /* ── 14-day chart data ────────────────────────────────────────── */
   const chartDays = Array.from({ length: 14 }, (_, i) => {
     const d = new Date(now); d.setDate(now.getDate() - 13 + i)
     return d.toISOString().slice(0, 10)
   })
+  const chartData = chartDays.map(date => ({
+    date: date.slice(5),
+    revenue:     rows.filter(r => r.date === date).reduce((s,r) => s + (r.revenue_usd ?? 0), 0),
+    impressions: rows.filter(r => r.date === date).reduce((s,r) => s + (r.impressions ?? 0), 0),
+  }))
 
-  const revenueChartData = chartDays.map(date => {
-    const dayRows = rows.filter(r => r.date === date)
-    return {
-      date: date.slice(5),
-      revenue:     dayRows.reduce((s, r) => s + (r.revenue_usd ?? 0), 0),
-      impressions: dayRows.reduce((s, r) => s + (r.impressions ?? 0), 0),
-    }
-  })
-
-  /* ── Per-network breakdown ─────────────────────────────────────── */
-  const networkMap: Record<string, { revenue: number; impressions: number }> = {}
+  /* ── Network breakdown ────────────────────────────────────────── */
+  const netMap: Record<string, number> = {}
   rows.forEach(r => {
     const n = r.network_name ?? 'Unknown'
-    if (!networkMap[n]) networkMap[n] = { revenue: 0, impressions: 0 }
-    networkMap[n].revenue     += r.revenue_usd ?? 0
-    networkMap[n].impressions += r.impressions ?? 0
+    netMap[n] = (netMap[n] ?? 0) + (r.revenue_usd ?? 0)
   })
-  const networkChartData = Object.entries(networkMap)
-    .map(([network, d]) => ({
-      network,
-      revenue:     d.revenue,
-      impressions: d.impressions,
-      cpm: d.impressions > 0 ? (d.revenue / d.impressions) * 1000 : 0,
-    }))
+  const netData = Object.entries(netMap)
+    .map(([network, revenue]) => ({ network, revenue }))
     .sort((a, b) => b.revenue - a.revenue)
 
-  /* ── Article views placeholder (from view_count field) ─────────── */
-  const totalViews = (topArticles ?? []).reduce((s, a) => s + (a.view_count ?? 0), 0)
-
-  /* ─────────────────────────────────────────────────────────────── */
+  /* ── Render ───────────────────────────────────────────────────── */
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-200">
-      <div className="max-w-[1400px] mx-auto px-6 py-8 space-y-8">
+    <div className="space-y-6 pb-8" style={{ color: C.text }}>
 
-        {/* ── PAGE HEADER ──────────────────────────────────────────── */}
-        <div className="flex items-start justify-between">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="text-xs text-emerald-400 font-mono">LIVE</span>
-            </div>
-            <h1 className="text-2xl font-bold text-white">Dashboard</h1>
-            <p className="text-sm text-slate-500 mt-0.5">
-              {now.toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-            </p>
+      {/* ── Page header ─────────────────────────────────────────── */}
+      <div className="flex items-start justify-between pt-1">
+        <div>
+          <div className="flex items-center gap-2 mb-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="text-[11px] font-mono font-semibold text-emerald-500 uppercase tracking-wider">Live</span>
           </div>
-          <div className="flex items-center gap-3">
-            <Link
-              href="/admin/articles/new"
-              className="inline-flex items-center gap-2 bg-red-600 hover:bg-red-500 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
-            >
-              + New Article
-            </Link>
-            <Link
-              href="/admin/trends"
-              className="inline-flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-semibold px-4 py-2 rounded-lg border border-slate-700 transition-colors"
-            >
-              🔥 Trends
-            </Link>
-          </div>
+          <p className="text-[13px]" style={{ color: C.muted }}>
+            {now.toLocaleDateString('en-IN', { weekday:'long', year:'numeric', month:'long', day:'numeric' })}
+          </p>
         </div>
-
-        {/* ── KPI STRIP ────────────────────────────────────────────── */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <KpiCard
-            icon="💰"
-            label="Revenue today"
-            value={fmtUSD(todayRev)}
-            sub={`$${week7Rev.toFixed(3)} this week`}
-            color="text-emerald-400"
-          />
-          <KpiCard
-            icon="📈"
-            label="Revenue (30d)"
-            value={fmtUSD(month30Rev)}
-            sub={`CPM: $${cpm.toFixed(2)}`}
-            color="text-sky-400"
-          />
-          <KpiCard
-            icon="👁"
-            label="Impressions today"
-            value={fmtNum(todayImpr)}
-            sub={`${fmtNum(month30Impr)} this month`}
-            color="text-violet-400"
-          />
-          <KpiCard
-            icon="📝"
-            label="Total articles"
-            value={String(totalArticles ?? 0)}
-            sub={`${publishedToday ?? 0} published today · ${draftCount ?? 0} drafts`}
-            color="text-amber-400"
-          />
+        <div className="flex items-center gap-2">
+          <Link
+            href="/admin/ai-writer"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-medium transition-colors"
+            style={{ background: C.elevated, border: `1px solid ${C.border}`, color: C.muted }}
+          >
+            ✦ AI Writer
+          </Link>
+          <Link
+            href="/admin/articles/new"
+            className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-[13px] font-semibold text-white"
+            style={{ background: '#dc2626' }}
+          >
+            + New Article
+          </Link>
         </div>
+      </div>
 
-        {/* ── REVENUE CHARTS ───────────────────────────────────────── */}
-        <div className="grid lg:grid-cols-3 gap-4">
+      {/* ── KPI row ─────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <Stat label="Revenue today"   value={fmtMoney(todayRev)}  sub={`${fmtMoney(weekRev)} this week`}                accent="text-emerald-400" />
+        <Stat label="Revenue (30d)"   value={fmtMoney(monthRev)}  sub={`CPM $${cpm.toFixed(2)}`}                        accent="text-sky-400"     />
+        <Stat label="Impressions (30d)" value={fmtK(monthImpr)}   sub={`${fmtK(todayImpr)} today`}                      accent="text-violet-400"  />
+        <Stat label="Articles"        value={String(totalArticles ?? 0)} sub={`${draftCount ?? 0} drafts · ${pubToday ?? 0} today`} accent="text-amber-400"  />
+      </div>
 
-          {/* Revenue trend — 14 day */}
-          <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-xl p-5">
-            <SectionHead title="Revenue — Last 14 Days" href="/admin/revenue" label="Full report" />
-            <RevenueChart data={revenueChartData} />
-          </div>
-
-          {/* Network breakdown */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
-            <SectionHead title="Revenue by Network" />
-            {networkChartData.length > 0 ? (
-              <>
-                <NetworkChart data={networkChartData} />
-                <div className="mt-4 space-y-2 border-t border-slate-800 pt-4">
-                  {networkChartData.map(n => (
-                    <div key={n.network} className="flex items-center justify-between text-xs">
-                      <span className="text-slate-400 font-medium">{n.network}</span>
-                      <div className="flex items-center gap-3 text-right">
-                        <span className="text-slate-600">{fmtNum(n.impressions)} impr</span>
-                        <span className="text-emerald-400 font-mono font-semibold">{fmtUSD(n.revenue)}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </>
-            ) : (
-              <div className="h-48 flex flex-col items-center justify-center gap-2 text-slate-600">
-                <span className="text-3xl">📡</span>
-                <p className="text-sm">No network data yet</p>
-                <Link href="/admin/monetization/ad-networks" className="text-xs text-red-500 hover:text-red-400">
-                  Connect Ad Networks →
-                </Link>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* ── IMPRESSIONS + ARTICLE VIEWS ──────────────────────────── */}
-        <div className="grid lg:grid-cols-2 gap-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
-            <SectionHead title="Impressions — Last 14 Days" />
-            <ImpressionsChart data={revenueChartData} />
-          </div>
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
-            <SectionHead title="Top Articles by Views" href="/admin/articles" />
-            <div className="space-y-3 mt-1">
-              {(topArticles ?? []).length === 0 && (
-                <p className="text-sm text-slate-600 py-6 text-center">No articles yet</p>
-              )}
-              {(topArticles ?? []).map((a, i) => (
-                <div key={a.id} className="flex items-center gap-3">
-                  <span className="text-xs font-mono text-slate-700 w-5 text-right flex-shrink-0">
-                    {String(i + 1).padStart(2, '0')}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <Link
-                      href={`/admin/articles/${a.id}/edit`}
-                      className="text-sm text-slate-300 hover:text-white font-medium truncate block transition-colors"
-                    >
-                      {a.title}
-                    </Link>
-                    <span className="text-xs text-slate-600">{a.category_name || 'Uncategorized'}</span>
+      {/* ── Charts row ──────────────────────────────────────────── */}
+      <div className="grid lg:grid-cols-3 gap-4">
+        <Card className="lg:col-span-2 p-5">
+          <SectionHead title="Revenue — 14 days" action={{ label: 'Full report', href: '/admin/revenue' }} />
+          <RevenueAreaChart data={chartData} />
+        </Card>
+        <Card className="p-5">
+          <SectionHead title="By Network" />
+          {netData.length > 0 ? (
+            <>
+              <NetworkBarChart data={netData} />
+              <div className="mt-4 pt-4 space-y-2" style={{ borderTop: `1px solid ${C.borderDim}` }}>
+                {netData.map(n => (
+                  <div key={n.network} className="flex items-center justify-between">
+                    <span className="text-[12px]" style={{ color: C.muted }}>{n.network}</span>
+                    <span className="text-[12px] font-mono font-semibold text-emerald-400">{fmtMoney(n.revenue)}</span>
                   </div>
-                  <span className="text-xs font-mono text-violet-400 flex-shrink-0">
-                    {fmtNum(a.view_count ?? 0)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* ── RECENT ARTICLES + AD NETWORKS ────────────────────────── */}
-        <div className="grid lg:grid-cols-3 gap-4">
-
-          {/* Recent articles */}
-          <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800">
-              <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">Recent Articles</h2>
-              <Link href="/admin/articles" className="text-xs text-red-500 hover:text-red-400 font-medium transition-colors">
-                All articles →
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="h-40 flex flex-col items-center justify-center gap-2" style={{ color: C.dim }}>
+              <span className="text-2xl">📡</span>
+              <p className="text-[12px]">No network data</p>
+              <Link href="/admin/monetization/ad-networks" className="text-[11px] text-red-500 hover:text-red-400">
+                Connect networks →
               </Link>
             </div>
-            <div className="divide-y divide-slate-800/60">
-              {(recentArticles ?? []).length === 0 && (
-                <p className="text-sm text-slate-600 p-6 text-center">
-                  No articles yet.{' '}
-                  <Link href="/admin/articles/new" className="text-red-500 hover:text-red-400">Create one →</Link>
-                </p>
-              )}
-              {(recentArticles ?? []).map(a => (
-                <div key={a.id} className="flex items-center gap-4 px-5 py-3 hover:bg-slate-800/40 transition-colors group">
-                  <div className="flex-1 min-w-0">
-                    <Link
-                      href={`/admin/articles/${a.id}/edit`}
-                      className="text-sm text-slate-200 group-hover:text-white font-medium truncate block transition-colors"
-                    >
-                      {a.title}
-                    </Link>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-xs text-slate-600">{a.category_name || 'Uncategorized'}</span>
-                      {a.published_at && (
-                        <>
-                          <span className="text-slate-700">·</span>
-                          <span className="text-xs text-slate-600">{shortDate(a.published_at)}</span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 flex-shrink-0">
-                    {a.seo_score != null && (
-                      <span className={`text-xs font-mono font-semibold ${
-                        (a.seo_score) >= 70 ? 'text-emerald-400' :
-                        (a.seo_score) >= 40 ? 'text-amber-400' : 'text-red-400'
-                      }`}>
-                        {a.seo_score}
-                      </span>
-                    )}
-                    <StatusBadge status={a.status} />
-                    <Link
-                      href={`/admin/articles/${a.id}/edit`}
-                      className="text-xs text-slate-600 hover:text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      Edit
-                    </Link>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+          )}
+        </Card>
+      </div>
 
-          {/* Ad networks + sites */}
-          <div className="space-y-4">
-            {/* Ad networks status */}
-            <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
-              <SectionHead title="Ad Networks" href="/admin/monetization/ad-networks" label="Manage" />
-              <div className="space-y-2.5">
-                {(adNetworks ?? []).length === 0 && (
-                  <div className="text-center py-4">
-                    <p className="text-sm text-slate-600 mb-2">No networks connected</p>
-                    <Link href="/admin/monetization/ad-networks" className="text-xs text-red-500 hover:text-red-400">
-                      + Connect network →
-                    </Link>
-                  </div>
-                )}
-                {(adNetworks ?? []).map(n => (
+      {/* ── Impressions + top articles ──────────────────────────── */}
+      <div className="grid lg:grid-cols-2 gap-4">
+        <Card className="p-5">
+          <SectionHead title="Impressions — 14 days" />
+          <ImpressionsBarChart data={chartData} />
+        </Card>
+        <Card className="p-5">
+          <SectionHead title="Top articles by views" action={{ label: 'All articles', href: '/admin/articles' }} />
+          <div className="space-y-3 mt-1">
+            {(topArticles ?? []).length === 0 && (
+              <p className="text-[13px] text-center py-6" style={{ color: C.dim }}>No published articles yet</p>
+            )}
+            {(topArticles ?? []).map((a, i) => (
+              <div key={a.id} className="flex items-center gap-3">
+                <span className="text-[11px] font-mono w-4 text-right flex-shrink-0" style={{ color: C.dim }}>
+                  {String(i + 1).padStart(2,'0')}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <Link href={`/admin/articles/${a.id}/edit`}
+                    className="text-[13px] font-medium truncate block hover:text-white transition-colors"
+                    style={{ color: C.text }}
+                  >
+                    {a.title}
+                  </Link>
+                  <span className="text-[11px]" style={{ color: C.dim }}>{a.category_name || 'Uncategorized'}</span>
+                </div>
+                <span className="text-[12px] font-mono text-violet-400 flex-shrink-0">{fmtK(a.view_count ?? 0)}</span>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+
+      {/* ── Articles + infrastructure ───────────────────────────── */}
+      <div className="grid lg:grid-cols-3 gap-4">
+
+        {/* Recent articles */}
+        <Card className="lg:col-span-2 overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-3.5" style={{ borderBottom: `1px solid ${C.borderDim}` }}>
+            <SectionHead title="Recent Articles" />
+            <Link href="/admin/articles" className="text-[12px] font-medium text-red-500 hover:text-red-400 mb-4">
+              All articles →
+            </Link>
+          </div>
+          {(articles ?? []).length === 0 ? (
+            <p className="text-[13px] text-center py-8" style={{ color: C.dim }}>
+              No articles yet.{' '}
+              <Link href="/admin/articles/new" className="text-red-500">Create one →</Link>
+            </p>
+          ) : (
+            <div>
+              {(articles as ArticleRow[]).map(a => <ArticleItem key={a.id} a={a} />)}
+            </div>
+          )}
+        </Card>
+
+        {/* Infrastructure */}
+        <div className="space-y-4">
+          {/* Ad networks */}
+          <Card className="p-4">
+            <SectionHead title="Ad Networks" action={{ label: 'Manage', href: '/admin/monetization/ad-networks' }} />
+            <div className="space-y-2">
+              {(adNetworks ?? []).length === 0 ? (
+                <Link href="/admin/monetization/ad-networks" className="text-[12px] text-red-500 block text-center py-3">
+                  + Connect your first network
+                </Link>
+              ) : (
+                (adNetworks ?? []).map(n => (
                   <div key={n.id} className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${n.is_active ? 'bg-emerald-400' : 'bg-slate-700'}`} />
-                      <span className="text-sm text-slate-300">{n.name}</span>
+                      <StatusDot on={n.is_active} />
+                      <span className="text-[13px]" style={{ color: n.is_active ? C.text : C.dim }}>{n.name}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-slate-600">P{n.priority}</span>
-                      <span className={`text-xs font-medium ${n.is_active ? 'text-emerald-500' : 'text-slate-600'}`}>
-                        {n.is_active ? 'Active' : 'Paused'}
+                      <span className="text-[10px] font-mono" style={{ color: C.dim }}>P{n.priority}</span>
+                      <span className={`text-[11px] font-semibold ${n.is_active ? 'text-emerald-500' : 'text-slate-700'}`}>
+                        {n.is_active ? 'Live' : 'Off'}
                       </span>
                     </div>
                   </div>
-                ))}
-              </div>
+                ))
+              )}
             </div>
+          </Card>
 
-            {/* Publisher sites */}
-            <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
-              <SectionHead title="Publisher Sites" href="/admin/monetization" label="Manage" />
-              <div className="space-y-2.5">
-                {(sites ?? []).length === 0 && (
-                  <p className="text-sm text-slate-600 text-center py-3">No sites yet</p>
-                )}
-                {(sites ?? []).map(s => (
-                  <div key={s.id} className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${s.is_active ? 'bg-sky-400' : 'bg-slate-700'}`} />
-                      <span className="text-sm text-slate-300 truncate">{s.name || s.site_url}</span>
-                    </div>
-                    <span className={`text-xs flex-shrink-0 ${s.is_active ? 'text-sky-500' : 'text-slate-600'}`}>
-                      {s.is_active ? 'Live' : 'Inactive'}
+          {/* Sites */}
+          <Card className="p-4">
+            <SectionHead title="Publisher Sites" action={{ label: 'Manage', href: '/admin/monetization' }} />
+            <div className="space-y-2">
+              {(sites ?? []).map(s => (
+                <div key={s.id} className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <StatusDot on={s.is_active} />
+                    <span className="text-[13px] truncate" style={{ color: s.is_active ? C.text : C.dim }}>
+                      {s.name || s.site_url}
                     </span>
                   </div>
-                ))}
-              </div>
+                  <span className={`text-[11px] flex-shrink-0 ${s.is_active ? 'text-sky-500' : 'text-slate-700'}`}>
+                    {s.is_active ? 'Live' : '—'}
+                  </span>
+                </div>
+              ))}
+              {(sites ?? []).length === 0 && (
+                <p className="text-[12px] text-center py-3" style={{ color: C.dim }}>No sites yet</p>
+              )}
             </div>
-          </div>
+          </Card>
         </div>
-
-        {/* ── RECENT REVENUE ACTIVITY ───────────────────────────────── */}
-        {(recentActivity ?? []).length > 0 && (
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
-            <SectionHead title="Recent Revenue Activity" href="/admin/revenue" label="View earnings" />
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-xs text-slate-600 uppercase tracking-wide border-b border-slate-800">
-                    <th className="text-left py-2 pr-4 font-medium">Date</th>
-                    <th className="text-left py-2 pr-4 font-medium">Network</th>
-                    <th className="text-left py-2 pr-4 font-medium">Site</th>
-                    <th className="text-right py-2 pr-4 font-medium">Impressions</th>
-                    <th className="text-right py-2 font-medium">Revenue</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800/60">
-                  {(recentActivity ?? []).map((r, i) => (
-                    <tr key={i} className="hover:bg-slate-800/40 transition-colors">
-                      <td className="py-2.5 pr-4 text-slate-500 font-mono text-xs">{r.date}</td>
-                      <td className="py-2.5 pr-4 text-slate-300">{r.network_name}</td>
-                      <td className="py-2.5 pr-4 text-slate-500 text-xs truncate max-w-[160px]">{r.site_url}</td>
-                      <td className="py-2.5 pr-4 text-right text-slate-400 font-mono text-xs">{fmtNum(r.impressions ?? 0)}</td>
-                      <td className="py-2.5 text-right text-emerald-400 font-mono font-semibold text-xs">{fmtUSD(r.revenue_usd ?? 0)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {/* ── QUICK ACTIONS ─────────────────────────────────────────── */}
-        <div>
-          <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4">Quick Actions</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-            <QuickAction href="/admin/articles/new"           icon="✏️" label="New Article"      sub="Write & publish"      />
-            <QuickAction href="/admin/ai-writer"              icon="🤖" label="AI Writer"        sub="Generate content"     />
-            <QuickAction href="/admin/trends"                 icon="🔥" label="Trending"         sub="Today's hot topics"   />
-            <QuickAction href="/admin/seo"                    icon="🎯" label="SEO Engine"       sub="Optimize articles"    />
-            <QuickAction href="/admin/monetization/ad-networks" icon="📡" label="Ad Networks"   sub="Manage waterfall"     />
-            <QuickAction href="/admin/reports"                icon="📊" label="Reports"          sub="Delivery & fill"      />
-          </div>
-        </div>
-
-        {/* ── FOOTER ───────────────────────────────────────────────── */}
-        <div className="border-t border-slate-800/60 pt-6 flex items-center justify-between text-xs text-slate-700">
-          <span>TrendingVerse Pro · Dashboard</span>
-          <span>Data refreshes on page load</span>
-        </div>
-
       </div>
+
+      {/* ── Recent revenue activity ──────────────────────────────── */}
+      {(recentRev ?? []).length > 0 && (
+        <Card className="overflow-hidden">
+          <div className="px-5 py-3.5" style={{ borderBottom: `1px solid ${C.borderDim}` }}>
+            <SectionHead title="Recent Revenue Activity" action={{ label: 'View all', href: '/admin/revenue' }} />
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-[13px]">
+              <thead>
+                <tr style={{ borderBottom: `1px solid ${C.borderDim}` }}>
+                  {['Date','Network','Site','Impressions','Revenue'].map((h, i) => (
+                    <th key={h} className={`py-2.5 px-5 text-[10px] font-semibold uppercase tracking-widest font-mono ${i >= 3 ? 'text-right' : 'text-left'}`}
+                      style={{ color: C.dim }}>
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {(recentRev ?? []).map((r, i) => (
+                  <tr
+                    key={i}
+                    style={{ borderBottom: `1px solid ${C.borderDim}` }}
+                    onMouseEnter={e => (e.currentTarget.style.background = C.elevated)}
+                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                  >
+                    <td className="py-2.5 px-5 font-mono text-[12px]" style={{ color: C.dim }}>{r.date}</td>
+                    <td className="py-2.5 px-5" style={{ color: C.text }}>{r.network_name}</td>
+                    <td className="py-2.5 px-5 text-[12px] max-w-[180px] truncate" style={{ color: C.muted }}>{r.site_url}</td>
+                    <td className="py-2.5 px-5 text-right font-mono text-[12px]" style={{ color: C.muted }}>{fmtK(r.impressions ?? 0)}</td>
+                    <td className="py-2.5 px-5 text-right font-mono font-semibold text-[12px] text-emerald-400">{fmtMoney(r.revenue_usd ?? 0)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {/* ── Quick actions ────────────────────────────────────────── */}
+      <div>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.1em] mb-3" style={{ color: C.dim }}>Quick Actions</p>
+        <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-2">
+          {[
+            { href:'/admin/articles/new',                     icon:'✏️', label:'New Article'   },
+            { href:'/admin/ai-writer',                        icon:'🤖', label:'AI Writer'     },
+            { href:'/admin/trends',                           icon:'🔥', label:'Trends'        },
+            { href:'/admin/seo',                              icon:'🎯', label:'SEO Engine'    },
+            { href:'/admin/monetization/ad-networks',         icon:'📡', label:'Ad Networks'   },
+            { href:'/admin/reports',                          icon:'📊', label:'Reports'       },
+          ].map(a => (
+            <Link
+              key={a.href}
+              href={a.href}
+              className="flex flex-col items-center gap-1.5 p-3 rounded-xl text-center transition-colors"
+              style={{ background: C.elevated, border: `1px solid ${C.border}` }}
+              onMouseEnter={e => (e.currentTarget.style.background = '#1a2840')}
+              onMouseLeave={e => (e.currentTarget.style.background = C.elevated)}
+            >
+              <span className="text-xl">{a.icon}</span>
+              <span className="text-[11px] font-medium" style={{ color: C.muted }}>{a.label}</span>
+            </Link>
+          ))}
+        </div>
+      </div>
+
     </div>
   )
 }
