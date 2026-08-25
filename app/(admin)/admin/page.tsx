@@ -61,7 +61,7 @@ function normNet(r:any) {
   return {
     id:      r.id           ?? '',
     name:    r.name         ?? r.partner_slug ?? r.slug ?? r.label ?? 'Network',
-    active: !!(r.is_active  ?? r.active ?? r.enabled ?? r.status === 'active' ?? true),
+    active: !!(r.is_active  ?? r.active ?? r.enabled ?? true),
     priority:+(r.priority   ?? r.waterfall_order ?? r.order ?? 0),
   }
 }
