@@ -4,22 +4,21 @@ import { redirect } from 'next/navigation'
 import { AdminSidebar } from '@/components/admin/AdminSidebar'
 import { AdminHeader } from '@/components/admin/AdminHeader'
 
-/* ── Admin gate ───────────────────────────────────────────────────── */
-// Only this email can access the admin panel
+/* ── Admin-only gate ──────────────────────────────────────────────── */
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? 'khan.khan.yusuf@gmail.com'
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
 
-  // 1. Must be authenticated
-  const { data: { user }, error } = await supabase.auth.getUser()
-  if (error || !user) {
-    redirect('/login')
-  }
+  // Not logged in → go to login
+  if (!user) redirect('/login')
 
-  // 2. Must be the admin — anyone else gets bounced to home
+  // Logged in but not admin → sign them out and send to login
+  // (prevents publishers/advertisers seeing a confusing blank page)
   if (user.email !== ADMIN_EMAIL) {
-    redirect('/')
+    await supabase.auth.signOut()
+    redirect('/login?error=unauthorized')
   }
 
   return (
