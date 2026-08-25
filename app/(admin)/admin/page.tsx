@@ -116,11 +116,11 @@ export default async function AdminDashboard() {
   /* ── Normalise ─────────────────────────────────────────────────── */
   const rows      = rawRev.map(normRev)
   const recentRev = rawRecent.map(normRev)
-  // Use ad_networks if it has data, else fall back to partners table
-  const rawNetsData = rawNets.length > 0 ? rawNets : rawPartners
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const nets = rawNetsData.map((r: any) => normNet(r))
-  const sites     = rawSites.map(normSite)
+  // ad_networks = actual ad networks (Adsterra, HilltopAds etc.)
+  const nets  = rawNets.map(normNet)
+  // partners table confirmed to hold publisher sites
+  // partners table = publisher sites (Karunadasuddi, TrendingVerse, Kannada Dunia, Nitya Soubhagya)
+  const sites = (rawPartners.length > 0 ? rawPartners : rawSites).map(normSite)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const articles  = rawArticles as any[]
 
