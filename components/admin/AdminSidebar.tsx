@@ -162,7 +162,7 @@ export function AdminSidebar() {
         <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-white text-xs font-bold"
           style={{ background:'linear-gradient(135deg,#dc2626,#7c3aed)' }}>Y</div>
         <div className="flex-1 min-w-0">
-          <p className="text-[12px] font-medium text-slate-300 truncate">Aizal Wasira</p>
+          <p className="text-[12px] font-medium text-slate-300 truncate">Yusuf Khan H S</p>
           <p className="text-[10px] text-slate-600 truncate">Admin</p>
         </div>
         <Link href="/api/auth/signout" className="flex-shrink-0 text-slate-700 hover:text-slate-400 transition-colors" title="Sign out">
