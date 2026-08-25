@@ -56,7 +56,6 @@ function normRev(r:any) {
   }
 }
 
-}
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function normSite(r:any) {
   return {
