@@ -59,10 +59,10 @@ function normRev(r:any) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function normNet(r:any) {
   return {
-    id:      r.id       ?? '',
-    name:    r.name     ?? r.partner_slug ?? r.label ?? 'Network',
-    active: !!(r.is_active ?? r.active ?? r.enabled ?? true),
-    priority:+(r.priority  ?? r.order  ?? 0),
+    id:      r.id           ?? '',
+    name:    r.name         ?? r.partner_slug ?? r.slug ?? r.label ?? 'Network',
+    active: !!(r.is_active  ?? r.active ?? r.enabled ?? r.status === 'active' ?? true),
+    priority:+(r.priority   ?? r.waterfall_order ?? r.order ?? 0),
   }
 }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -95,7 +95,7 @@ export default async function AdminDashboard() {
   const [
     totalArt, drafts, todayPub,
     rawRev, rawRecent,
-    rawArticles, rawNets, rawSites,
+    rawArticles, rawNets, rawSites, rawPartners,
   ] = await Promise.all([
     sqN(()=>supabase.from('articles').select('*',{count:'exact',head:true})),
     sqN(()=>supabase.from('articles').select('*',{count:'exact',head:true}).eq('status','draft')),
@@ -109,13 +109,17 @@ export default async function AdminDashboard() {
 
     sq(()=>supabase.from('articles').select('id,title,status,published_at').order('created_at',{ascending:false}).limit(10)),
     sq(()=>svc.from('ad_networks').select('*').order('priority',{ascending:true})),
+    sq(()=>svc.from('partners').select('*').order('created_at',{ascending:true}).limit(20)),
     sq(()=>svc.from('sites').select('*').limit(6)),
   ])
 
   /* ── Normalise ─────────────────────────────────────────────────── */
   const rows      = rawRev.map(normRev)
   const recentRev = rawRecent.map(normRev)
-  const nets      = rawNets.map(normNet)
+  // Use ad_networks if it has data, else fall back to partners table
+  const rawNetsData = rawNets.length > 0 ? rawNets : rawPartners
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const nets = rawNetsData.map((r: any) => normNet(r))
   const sites     = rawSites.map(normSite)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const articles  = rawArticles as any[]
@@ -191,7 +195,7 @@ export default async function AdminDashboard() {
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Kpi label="Revenue today"      val={$(todayRev)}    sub={`${$(weekRev)} this week`}           col="text-emerald-400"/>
-        <Kpi label="Revenue (30d)"      val={$(monthRev)}    sub={`All-time: ${$(allRev)} · CPM $${cpm.toFixed(2)}`} col="text-sky-400"/>
+        <Kpi label="Revenue (30d)"      val={$(monthRev)}    sub={`All-time $${allRev.toFixed(2)} · CPM $${cpm.toFixed(2)}`} col="text-sky-400"/>
         <Kpi label="Impressions (30d)"  val={fmtK(monthImpr)} sub={`${fmtK(todayImpr)} today · ${fmtK(allImpr)} all-time`} col="text-violet-400"/>
         <Kpi label="Total articles"     val={String(totalArt)} sub={`${drafts} drafts · ${todayPub} today`} col="text-amber-400"/>
       </div>
