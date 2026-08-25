@@ -56,14 +56,6 @@ function normRev(r:any) {
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function normNet(r:any) {
-  return {
-    id:      r.id           ?? '',
-    name:    r.name         ?? r.partner_slug ?? r.slug ?? r.label ?? 'Network',
-    active: !!(r.is_active  ?? r.active ?? r.enabled ?? true),
-    priority:+(r.priority   ?? r.waterfall_order ?? r.order ?? 0),
-  }
 }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function normSite(r:any) {
@@ -95,7 +87,7 @@ export default async function AdminDashboard() {
   const [
     totalArt, drafts, todayPub,
     rawRev, rawRecent,
-    rawArticles, rawNets, rawSites, rawPartners,
+    rawArticles, rawSites, rawPartners,
   ] = await Promise.all([
     sqN(()=>supabase.from('articles').select('*',{count:'exact',head:true})),
     sqN(()=>supabase.from('articles').select('*',{count:'exact',head:true}).eq('status','draft')),
@@ -108,7 +100,7 @@ export default async function AdminDashboard() {
     sq(()=>svc.from('partner_revenue').select('*').order('revenue_date',{ascending:false}).limit(10)),
 
     sq(()=>supabase.from('articles').select('id,title,status,published_at').order('created_at',{ascending:false}).limit(10)),
-    sq(()=>svc.from('ad_networks').select('*').order('priority',{ascending:true})),
+    // ad_networks table is empty; networks derived from partner_revenue.partner_slug below
     sq(()=>svc.from('partners').select('*').order('created_at',{ascending:true}).limit(20)),
     sq(()=>svc.from('sites').select('*').limit(6)),
   ])
@@ -116,9 +108,7 @@ export default async function AdminDashboard() {
   /* ── Normalise ─────────────────────────────────────────────────── */
   const rows      = rawRev.map(normRev)
   const recentRev = rawRecent.map(normRev)
-  // ad_networks = actual ad networks (Adsterra, HilltopAds etc.)
-  const nets  = rawNets.map(normNet)
-  // partners table confirmed to hold publisher sites
+  // Ad networks derived from unique partner_slugs in revenue data
   // partners table = publisher sites (Karunadasuddi, TrendingVerse, Kannada Dunia, Nitya Soubhagya)
   const sites = (rawPartners.length > 0 ? rawPartners : rawSites).map(normSite)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -292,14 +282,20 @@ export default async function AdminDashboard() {
 
         <div className="space-y-4">
           <Card c="p-4">
-            <SH t="Ad Networks" a={{l:'Manage',h:'/admin/monetization/ad-networks'}}/>
+            <SH t="Ad Networks" a={{l:'Manage',h:'/admin/monetization'}}/>
             <div className="space-y-2.5">
-              {nets.length===0?(
-                <Link href="/admin/monetization/ad-networks" className="text-[12px] text-red-500 block text-center py-3">+ Connect first network</Link>
-              ):nets.map(n=>(
-                <div key={n.id} className="flex items-center justify-between">
-                  <div className="flex items-center gap-2"><Dot on={n.active}/><span className="text-[13px]" style={{color:n.active?C.t:C.d}}>{n.name}</span></div>
-                  <span className={`text-[11px] font-semibold ${n.active?'text-emerald-500':'text-slate-700'}`}>{n.active?'Live':'Off'}</span>
+              {netChart.length===0?(
+                <p className="text-[12px] text-center py-3" style={{color:C.d}}>No networks synced yet</p>
+              ):netChart.map(n=>(
+                <div key={n.network} className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Dot on={true}/>
+                    <span className="text-[13px] capitalize" style={{color:C.t}}>{n.network}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-mono text-emerald-400">{$(n.revenue)}</span>
+                    <span className="text-[11px] font-semibold text-emerald-500">Active</span>
+                  </div>
                 </div>
               ))}
             </div>
