@@ -1,124 +1,112 @@
 // app/(admin)/admin/debug/page.tsx
-// TEMPORARY — delete after fixing. Shows exact DB tables, columns & env status.
+// TEMPORARY diagnostic page — delete after fixing
 
 import { createClient as svcClient } from '@supabase/supabase-js'
 
 export const dynamic = 'force-dynamic'
 
-async function run(svc: ReturnType<typeof svcClient>, sql: string) {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const r = await (svc as any).rpc('exec_sql', { sql }).select()
-    if (r.error) return { error: r.error.message, data: null }
-    return { data: r.data, error: null }
-  } catch (e: unknown) {
-    return { error: String(e), data: null }
-  }
-}
-
 export default async function DebugPage() {
-  const url  = process.env.NEXT_PUBLIC_SUPABASE_URL  ?? ''
-  const key  = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
-  const keyAlt = process.env.SUPABASE_SERVICE_KEY    ?? ''
+  const url    = process.env.NEXT_PUBLIC_SUPABASE_URL    ?? ''
+  const svcKey = process.env.SUPABASE_SERVICE_ROLE_KEY   ?? ''
+  const altKey = process.env.SUPABASE_SERVICE_KEY        ?? ''
+  const usedKey = svcKey || altKey
 
-  const usedKey = key || keyAlt
-  const svc = svcClient(url, usedKey || 'NO_KEY')
+  const svc = svcClient(url, usedKey || 'NO_KEY_SET')
 
-  // 1 — list all public tables
-  const tables = await run(svc,
-    `SELECT table_name FROM information_schema.tables WHERE table_schema='public' ORDER BY table_name`
-  )
+  // Direct table queries — no RPC, no type issues
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  const [
+    revCount, revSample,
+    netCount, netSample,
+    siteCount, siteSample,
+    partCount, partSample,
+    medCount,
+  ] = await Promise.all([
+    svc.from('partner_revenue').select('*', { count: 'exact', head: true }),
+    svc.from('partner_revenue').select('*').limit(2).order('id', { ascending: false }),
+    svc.from('ad_networks').select('*', { count: 'exact', head: true }),
+    svc.from('ad_networks').select('*').limit(2),
+    svc.from('sites').select('*', { count: 'exact', head: true }),
+    svc.from('sites').select('*').limit(2),
+    svc.from('partners').select('*', { count: 'exact', head: true }),
+    svc.from('partners').select('*').limit(2),
+    svc.from('mediation_events').select('*', { count: 'exact', head: true }),
+  ])
 
-  // 2 — Try reading partner_revenue directly (no RPC needed)
-  const revCount = await svc.from('partner_revenue').select('*', { count: 'exact', head: true })
-  const revSample = await svc.from('partner_revenue').select('*').limit(3)
+  const s = { background:'#0e1726', border:'1px solid #1a2840', borderRadius:8, padding:'16px', marginBottom:16 } as const
+  const code = { fontFamily:'monospace', fontSize:12, background:'#131f33', padding:'8px 12px', borderRadius:6, display:'block', marginTop:8, wordBreak:'break-all' as const, color:'#dde4f0' }
+  const ok  = { color: '#10b981' }
+  const err = { color: '#ef4444' }
+  const dim = { color: '#6b82a8', fontSize:12 }
 
-  // 3 — Try ad_networks
-  const netCount = await svc.from('ad_networks').select('*', { count: 'exact', head: true })
-  const netSample = await svc.from('ad_networks').select('*').limit(3)
+  function tableInfo(label: string, countRes: any, sampleRes: any) {
+    const hasErr   = !!countRes?.error
+    const count    = countRes?.count ?? 0
+    const cols     = sampleRes?.data?.[0] ? Object.keys(sampleRes.data[0]) : []
+    const sample   = sampleRes?.data?.[0]
 
-  // 4 — Try sites
-  const siteCount = await svc.from('sites').select('*', { count: 'exact', head: true })
-
-  // 5 — Try partner_mediation_events (another possible table)
-  const medCount = await svc.from('mediation_events').select('*', { count: 'exact', head: true })
-
-  // 6 — Try partners table
-  const partCount = await svc.from('partners').select('*', { count: 'exact', head: true })
-  const partSample = await svc.from('partners').select('*').limit(3)
-
-  const row = (label: string, value: string, ok?: boolean) => (
-    <tr style={{ borderBottom: '1px solid #1a2840' }}>
-      <td style={{ padding: '8px 16px', color: '#6b82a8', fontFamily: 'monospace', fontSize: 13 }}>{label}</td>
-      <td style={{ padding: '8px 16px', fontFamily: 'monospace', fontSize: 13,
-        color: ok === true ? '#10b981' : ok === false ? '#ef4444' : '#dde4f0' }}>{value}</td>
-    </tr>
-  )
-
-  const section = (title: string) => (
-    <tr><td colSpan={2} style={{ padding: '16px 16px 4px', color: '#dc2626', fontWeight: 700, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em' }}>{title}</td></tr>
-  )
+    return (
+      <div style={s}>
+        <p style={{ fontWeight:700, marginBottom:8, color:'#dde4f0' }}>{label}</p>
+        {hasErr ? (
+          <p style={err}>❌ Error: {countRes.error?.message} (code: {countRes.error?.code})</p>
+        ) : (
+          <>
+            <p style={ok}>✅ Table exists — <strong>{count}</strong> rows</p>
+            {cols.length > 0 && (
+              <>
+                <p style={{...dim, marginTop:8}}>Columns:</p>
+                <code style={code}>{cols.join(', ')}</code>
+              </>
+            )}
+            {sample && (
+              <>
+                <p style={{...dim, marginTop:8}}>Sample row:</p>
+                <code style={code}>{JSON.stringify(sample, null, 2).slice(0, 500)}</code>
+              </>
+            )}
+            {!sample && count === 0 && <p style={dim}>Table is empty</p>}
+          </>
+        )}
+      </div>
+    )
+  }
 
   return (
-    <div style={{ background: '#070c18', minHeight: '100vh', padding: 32, fontFamily: 'monospace' }}>
-      <h1 style={{ color: '#dde4f0', fontSize: 20, marginBottom: 8 }}>🔍 TrendingVerse Debug</h1>
-      <p style={{ color: '#6b82a8', fontSize: 13, marginBottom: 32 }}>
-        This page shows your exact Supabase tables and env setup. <strong style={{color:'#ef4444'}}>Delete after fixing.</strong>
+    <div style={{ background:'#070c18', minHeight:'100vh', padding:32, fontFamily:'system-ui', color:'#dde4f0' }}>
+      <h1 style={{ fontSize:22, marginBottom:4 }}>🔍 TrendingVerse Debug</h1>
+      <p style={{ color:'#ef4444', fontSize:13, marginBottom:32 }}>
+        ⚠️ TEMPORARY — Screenshot this page then delete <code>app/(admin)/admin/debug/page.tsx</code>
       </p>
 
-      <table style={{ width: '100%', borderCollapse: 'collapse', background: '#0e1726', borderRadius: 12, overflow: 'hidden', border: '1px solid #1a2840', marginBottom: 32 }}>
-        <tbody>
-          {section('Environment Variables')}
-          {row('NEXT_PUBLIC_SUPABASE_URL',       url  ? url.slice(0,40)+'…' : '❌ NOT SET', !!url)}
-          {row('SUPABASE_SERVICE_ROLE_KEY',      key  ? '✅ SET ('+key.length+' chars)' : '❌ NOT SET', !!key)}
-          {row('SUPABASE_SERVICE_KEY (alt)',     keyAlt ? '✅ SET ('+keyAlt.length+' chars)' : '❌ NOT SET', !!keyAlt)}
-          {row('Key being used',                 usedKey ? 'YES — '+usedKey.length+' chars' : '❌ NO KEY', !!usedKey)}
+      {/* Env vars */}
+      <div style={s}>
+        <p style={{ fontWeight:700, marginBottom:12, color:'#dde4f0' }}>Environment Variables</p>
+        <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
+          <tbody>
+            {[
+              ['NEXT_PUBLIC_SUPABASE_URL',    url     ? url.slice(0,50)+'…' : '❌ NOT SET',           !!url],
+              ['SUPABASE_SERVICE_ROLE_KEY',   svcKey  ? `✅ SET (${svcKey.length} chars)`  : '❌ NOT SET', !!svcKey],
+              ['SUPABASE_SERVICE_KEY (alt)',  altKey  ? `✅ SET (${altKey.length} chars)`   : '❌ NOT SET', !!altKey],
+              ['Active key being used',       usedKey ? `✅ YES — ${usedKey.length} chars`  : '❌ NO KEY — this is why revenue fails!', !!usedKey],
+            ].map(([k, v, good]) => (
+              <tr key={String(k)} style={{ borderBottom:'1px solid #1a2840' }}>
+                <td style={{ padding:'8px 0', color:'#6b82a8', width:'50%' }}>{k}</td>
+                <td style={{ padding:'8px 0', color: good ? '#10b981' : '#ef4444' }}>{String(v)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
-          {section('Table: partner_revenue')}
-          {row('Table exists / count',
-            revCount.error ? '❌ ERROR: '+revCount.error.message : '✅ '+revCount.count+' rows',
-            !revCount.error)}
-          {row('Sample columns (row 0)',
-            revSample.data && revSample.data.length > 0
-              ? Object.keys(revSample.data[0]).join(', ')
-              : revSample.error ? '❌ '+revSample.error.message : '(no rows)',
-            !revSample.error)}
-          {revSample.data && revSample.data.length > 0 && row('Sample row',
-            JSON.stringify(revSample.data[0]).slice(0, 200), undefined)}
+      {tableInfo('Table: partner_revenue', revCount, revSample)}
+      {tableInfo('Table: ad_networks',     netCount, netSample)}
+      {tableInfo('Table: sites',           siteCount, siteSample)}
+      {tableInfo('Table: partners (alt name?)', partCount, partSample)}
+      {tableInfo('Table: mediation_events',    medCount,  { data: null })}
 
-          {section('Table: ad_networks')}
-          {row('Table exists / count',
-            netCount.error ? '❌ ERROR: '+netCount.error.message : '✅ '+netCount.count+' rows',
-            !netCount.error)}
-          {row('Sample columns (row 0)',
-            netSample.data && netSample.data.length > 0
-              ? Object.keys(netSample.data[0]).join(', ')
-              : netSample.error ? '❌ '+netSample.error.message : '(no rows)',
-            !netSample.error)}
-          {netSample.data && netSample.data.length > 0 && row('Sample row',
-            JSON.stringify(netSample.data[0]).slice(0, 200), undefined)}
-
-          {section('Table: sites')}
-          {row('Table exists / count',
-            siteCount.error ? '❌ ERROR: '+siteCount.error.message : '✅ '+siteCount.count+' rows',
-            !siteCount.error)}
-
-          {section('Table: partners (alternate name?)')}
-          {row('Table exists / count',
-            partCount.error ? '❌ ERROR: '+partCount.error.message : '✅ '+partCount.count+' rows',
-            !partCount.error)}
-          {partSample.data && partSample.data.length > 0 && row('Sample columns',
-            Object.keys(partSample.data[0]).join(', '), undefined)}
-
-          {section('Table: mediation_events')}
-          {row('Table exists / count',
-            medCount.error ? '❌ ERROR: '+medCount.error.message : '✅ '+medCount.count+' rows',
-            !medCount.error)}
-        </tbody>
-      </table>
-
-      <p style={{ color: '#6b82a8', fontSize: 12 }}>
-        Screenshot this page and share it. It will instantly show what is wrong.
+      <p style={{ color:'#6b82a8', fontSize:12, marginTop:16 }}>
+        Screenshot this and share → will instantly show the exact problem.
       </p>
     </div>
   )
