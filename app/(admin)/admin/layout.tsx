@@ -4,7 +4,6 @@ import { redirect } from 'next/navigation'
 import { AdminSidebar } from '@/components/admin/AdminSidebar'
 import { AdminHeader } from '@/components/admin/AdminHeader'
 
-/* ── Admin-only gate ──────────────────────────────────────────────── */
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? 'khan.khan.yusuf@gmail.com'
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -14,11 +13,10 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   // Not logged in → go to login
   if (!user) redirect('/login')
 
-  // Logged in but not admin → sign them out and send to login
-  // (prevents publishers/advertisers seeing a confusing blank page)
+  // Logged in but not admin → redirect to their own area WITHOUT signing them out
+  // (signing out here was breaking publisher/advertiser logins)
   if (user.email !== ADMIN_EMAIL) {
-    await supabase.auth.signOut()
-    redirect('/login?error=unauthorized')
+    redirect('/dashboard')   // publishers/advertisers go to their own dashboard
   }
 
   return (
