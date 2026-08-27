@@ -1,7 +1,7 @@
 // app/(admin)/admin/page.tsx
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
-import { RevenueAreaChart, ImpressionsBarChart, NetworkBarChart } from './_components/DashboardCharts'
+import { RevenueAreaChart, ImpressionsBarChart, NetworkBarChart } from './_components/ChartWrapper'
 
 export const dynamic    = 'force-dynamic'
 export const revalidate = 0
