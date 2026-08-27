@@ -13,10 +13,10 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   // Not logged in → go to login
   if (!user) redirect('/login')
 
-  // Logged in but not admin → redirect to their own area WITHOUT signing them out
-  // (signing out here was breaking publisher/advertiser logins)
+  // Logged in but not admin → send back to login
+  // (do NOT sign them out — publishers need their session for their own portal)
   if (user.email !== ADMIN_EMAIL) {
-    redirect('/dashboard')   // publishers/advertisers go to their own dashboard
+    redirect('/login')
   }
 
   return (
