@@ -1,23 +1,36 @@
 // app/(admin)/admin/layout.tsx
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import { headers } from 'next/headers'
 import { AdminSidebar } from '@/components/admin/AdminSidebar'
 import { AdminHeader } from '@/components/admin/AdminHeader'
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? 'khan.khan.yusuf@gmail.com'
 
+// Non-admin authenticated users (advertisers) can access these paths
+const ADVERTISER_ALLOWED = ['/admin/outreach']
+
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
-  // Not logged in → go to login
+  // Not logged in → login page
   if (!user) redirect('/login')
 
-  // Logged in but not admin
-  // Do NOT redirect to /login — that causes a loop where login saves /admin/* as return URL
-  // Redirect to / (root) to break the cycle
-  if (user.email !== ADMIN_EMAIL) {
-    redirect('/')
+  const isAdmin = user.email === ADMIN_EMAIL
+
+  if (!isAdmin) {
+    // Check if the current path is one advertisers are allowed to see
+    const headersList = await headers()
+    const pathname = headersList.get('x-pathname') ??
+      headersList.get('x-invoke-path') ??
+      headersList.get('x-url') ?? ''
+
+    const allowed = ADVERTISER_ALLOWED.some(p => pathname.includes(p))
+    if (!allowed) {
+      // Not admin, not on an allowed page → send home (no loop)
+      redirect('/')
+    }
   }
 
   return (
