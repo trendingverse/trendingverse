@@ -1,8 +1,9 @@
 // middleware.ts — root of project
+// Restored to original working version + proper token refresh pattern
 import { type NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'khan.khan.yusuf@gmail.com'
+const ADMIN_EMAIL  = process.env.ADMIN_EMAIL || 'khan.khan.yusuf@gmail.com'
 const ADVERTISER_ALLOWED = ['/admin/outreach']
 
 export async function middleware(request: NextRequest) {
@@ -11,8 +12,7 @@ export async function middleware(request: NextRequest) {
   // Only protect /admin routes
   if (!pathname.startsWith('/admin')) return NextResponse.next()
 
-  // IMPORTANT: must recreate response each time setAll is called
-  // so that forwarded request has refreshed cookies too
+  // Must recreate supabaseResponse inside setAll for proper token refresh
   let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(
@@ -22,11 +22,10 @@ export async function middleware(request: NextRequest) {
       cookies: {
         getAll() { return request.cookies.getAll() },
         setAll(cookiesToSet) {
-          // Write to request so server components get refreshed tokens
+          // Update request cookies so server components see refreshed tokens
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
-          // Recreate response with updated request
           supabaseResponse = NextResponse.next({ request })
-          // Write to response so browser gets new cookies
+          // Set on response so browser receives updated cookies
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
           )
@@ -35,31 +34,42 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  // Verify user — this also refreshes expired tokens via setAll above
   const { data: { user } } = await supabase.auth.getUser()
 
-  // Not logged in → login with redirect back
+  // Not logged in → redirect to login
   if (!user) {
     const loginUrl = new URL('/login', request.url)
     loginUrl.searchParams.set('redirect', pathname)
-    const redirectResponse = NextResponse.redirect(loginUrl)
-    // Copy any refreshed cookies to redirect response
-    supabaseResponse.cookies.getAll().forEach(({ name, value }) =>
-      redirectResponse.cookies.set(name, value)
-    )
-    return redirectResponse
+    const res = NextResponse.redirect(loginUrl)
+    supabaseResponse.cookies.getAll().forEach(c => res.cookies.set(c.name, c.value))
+    return res
   }
 
-  // Admin → full access
+  // Admin → full access to all /admin/* pages
   if (user.email === ADMIN_EMAIL) return supabaseResponse
 
-  // Non-admin: only allowed on specific paths
-  const allowed = ADVERTISER_ALLOWED.some(p => pathname.startsWith(p))
-  if (!allowed) {
-    return NextResponse.redirect(new URL('/', request.url))
+  // Non-admin authenticated users:
+  // Check role from user_profiles
+  const { data: profile } = await supabase
+    .from('user_profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+
+  const role = profile?.role ?? 'publisher'
+
+  // Advertisers: only /admin/outreach
+  if (role === 'advertiser') {
+    const allowed = ADVERTISER_ALLOWED.some(p => pathname.startsWith(p))
+    if (!allowed) {
+      return NextResponse.redirect(new URL('/admin/outreach', request.url))
+    }
+    return supabaseResponse
   }
 
-  return supabaseResponse
+  // Publishers: redirect to their own portal (not admin)
+  // Change this URL to wherever the publisher dashboard actually lives
+  return NextResponse.redirect(new URL('/admin/outreach', request.url))
 }
 
 export const config = {
