@@ -13,10 +13,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   // Not logged in → go to login
   if (!user) redirect('/login')
 
-  // Logged in but not admin → send back to login
-  // (do NOT sign them out — publishers need their session for their own portal)
+  // Logged in but not admin
+  // Do NOT redirect to /login — that causes a loop where login saves /admin/* as return URL
+  // Redirect to / (root) to break the cycle
   if (user.email !== ADMIN_EMAIL) {
-    redirect('/login')
+    redirect('/')
   }
 
   return (
