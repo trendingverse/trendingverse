@@ -1,15 +1,12 @@
 'use client'
 // app/(admin)/admin/_components/ChartWrapper.tsx
-// Client component — the ONLY place where next/dynamic + ssr:false is allowed
+// Client component wrapper — allows ssr:false for recharts
 
 import dynamic from 'next/dynamic'
 
 function Skeleton() {
   return (
-    <div
-      className="animate-pulse rounded-lg"
-      style={{ height: 200, background: '#131f33' }}
-    />
+    <div className="animate-pulse rounded-lg" style={{ height: 200, background: '#131f33' }} />
   )
 }
 
@@ -26,12 +23,12 @@ const _Network = dynamic(
   { ssr: false, loading: () => <Skeleton /> }
 )
 
-export function RevenueChartWrapper(props: { data: { date: string; revenue: number }[] }) {
+export function RevenueAreaChart(props: { data: { date: string; revenue: number }[] }) {
   return <_Revenue {...props} />
 }
-export function ImpressionsChartWrapper(props: { data: { date: string; impressions: number }[] }) {
+export function ImpressionsBarChart(props: { data: { date: string; impressions: number }[] }) {
   return <_Impressions {...props} />
 }
-export function NetworkChartWrapper(props: { data: { network: string; revenue: number }[] }) {
+export function NetworkBarChart(props: { data: { network: string; revenue: number }[] }) {
   return <_Network {...props} />
 }
