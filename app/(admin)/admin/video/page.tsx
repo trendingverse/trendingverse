@@ -1,16 +1,6 @@
-// app/(admin)/admin/video/page.tsx
-import { createClient } from '@/lib/supabase/server'
-import { redirect } from 'next/navigation'
 import { VideoGenerator } from '@/components/admin/VideoGenerator'
 
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'khan.khan.yusuf@gmail.com'
-
-export default async function VideoPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-  if (user.email !== ADMIN_EMAIL) redirect('/admin')
-
+export default function VideoPage() {
   return (
     <div className="space-y-6">
       <div>
