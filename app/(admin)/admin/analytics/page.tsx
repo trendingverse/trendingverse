@@ -1,5 +1,4 @@
 import { createClient } from '@/lib/supabase/server'
-import { redirect } from 'next/navigation'
 import { AnalyticsDashboard } from '@/components/admin/AnalyticsDashboard'
 import { GSCDashboard } from '@/components/admin/GSCDashboard'
 import { GA4Dashboard } from '@/components/admin/GA4Dashboard'
@@ -11,10 +10,11 @@ const PLANS_WITH_GSC_GA4 = ['growth', 'pro', 'byoak', 'agency']
 export default async function AnalyticsPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
 
-  const { data: profile } = await supabase.from('user_profiles').select('plan').eq('id', user.id).single()
-  const plan = profile?.plan || 'free'
+  // Get plan — default to 'byoak' for admin so they see everything
+  const { data: profile } = await supabase
+    .from('user_profiles').select('plan').eq('id', user?.id || '').single()
+  const plan = profile?.plan || 'byoak'
   const hasGscGa4 = PLANS_WITH_GSC_GA4.includes(plan)
 
   return (
@@ -26,7 +26,6 @@ export default async function AnalyticsPage() {
 
       <AnalyticsDashboard />
 
-      {/* GSC */}
       <div className="border-t border-ink-100 pt-8">
         <div className="mb-5">
           <h2 className="font-display text-xl font-bold text-ink-950">🔍 Google Search Console</h2>
@@ -42,7 +41,7 @@ export default async function AnalyticsPage() {
               <span className="text-2xl">🔒</span>
               <div>
                 <p className="font-medium text-amber-900 text-sm">Google Search Console requires Growth plan or higher</p>
-                <p className="text-xs text-amber-600 mt-0.5">Your current plan: <strong>{plan}</strong></p>
+                <p className="text-xs text-amber-600 mt-0.5">Current plan: <strong>{plan}</strong></p>
               </div>
             </div>
             <Link href="/pricing" className="shrink-0 bg-amber-500 text-white text-xs font-semibold px-4 py-2 rounded-lg hover:bg-amber-600">
@@ -52,7 +51,6 @@ export default async function AnalyticsPage() {
         )}
       </div>
 
-      {/* GA4 */}
       <div className="border-t border-ink-100 pt-8">
         <div className="mb-5">
           <h2 className="font-display text-xl font-bold text-ink-950">📈 Google Analytics 4</h2>
@@ -68,7 +66,7 @@ export default async function AnalyticsPage() {
               <span className="text-2xl">🔒</span>
               <div>
                 <p className="font-medium text-amber-900 text-sm">Google Analytics 4 requires Growth plan or higher</p>
-                <p className="text-xs text-amber-600 mt-0.5">Your current plan: <strong>{plan}</strong></p>
+                <p className="text-xs text-amber-600 mt-0.5">Current plan: <strong>{plan}</strong></p>
               </div>
             </div>
             <Link href="/pricing" className="shrink-0 bg-amber-500 text-white text-xs font-semibold px-4 py-2 rounded-lg hover:bg-amber-600">
