@@ -24,6 +24,12 @@ export async function middleware(request: NextRequest) {
       cookies: {
         getAll() { return request.cookies.getAll() },
         setAll(cookiesToSet) {
+          // Update request so server components see refreshed tokens
+          cookiesToSet.forEach(({ name, value }) =>
+            request.cookies.set(name, value))
+          // Recreate response with updated request
+          response = NextResponse.next({ request })
+          // Set on response so browser receives new cookies
           cookiesToSet.forEach(({ name, value, options }) =>
             response.cookies.set(name, value, options))
         },
