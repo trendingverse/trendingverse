@@ -1,15 +1,6 @@
-import { createClient } from '@/lib/supabase/server'
-import { redirect } from 'next/navigation'
 import { SEORewriter } from '@/components/admin/SEORewriter'
 
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'khan.khan.yusuf@gmail.com'
-
-export default async function SEOPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-  if (user.email !== ADMIN_EMAIL) redirect('/admin')
-
+export default function SEOPage() {
   return (
     <div className="space-y-6">
       <div>
