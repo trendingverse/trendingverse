@@ -1,5 +1,4 @@
 // app/(admin)/admin/layout.tsx
-// This is where ALL admin auth happens — runs in Node.js, never flaps
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { AdminSidebar } from '@/components/admin/AdminSidebar'
@@ -7,22 +6,16 @@ import { AdminHeader } from '@/components/admin/AdminHeader'
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? 'khan.khan.yusuf@gmail.com'
 
-export default async function AdminLayout({ children }: { children: React.ReactNode }) {
+export default async function AdminLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
   const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  // Not authenticated — go to login
-  if (!user) {
-    redirect('/login')
-  }
-
-  // Not the admin — go home (preserves publisher/advertiser sessions)
-  if (user.email !== ADMIN_EMAIL) {
-    redirect('/')
-  }
+  if (!user) redirect('/login')
+  if (user.email !== ADMIN_EMAIL) redirect('/')
 
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: '#070c18' }}>
