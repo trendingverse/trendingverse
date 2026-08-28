@@ -1,13 +1,6 @@
-import { createClient } from '@/lib/supabase/server'
-import { redirect } from 'next/navigation'
 import { RevenueDashboard } from '@/components/admin/RevenueDashboard'
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'khan.khan.yusuf@gmail.com'
 
-export default async function RevenuePage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-  if (user.email !== ADMIN_EMAIL) redirect('/admin')
+export default function RevenuePage() {
   return (
     <div className="space-y-8">
       <div>
