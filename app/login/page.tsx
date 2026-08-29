@@ -3,18 +3,53 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
+
+const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'khan.khan.yusuf@gmail.com'
+
 export default function LoginPage() {
-  const [email, setEmail] = useState('')
+  const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
-  const [loading, setLoading] = useState(false)
-  const router = useRouter()
+  const [loading, setLoading]   = useState(false)
+  const router   = useRouter()
   const supabase = createClient()
+
   async function handleLogin(e: React.FormEvent) {
-    e.preventDefault(); setLoading(true)
+    e.preventDefault()
+    setLoading(true)
+
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) { toast.error(error.message); setLoading(false); return }
-    router.push('/admin'); router.refresh()
+
+    // Admin → dashboard
+    if (email === ADMIN_EMAIL) {
+      router.push('/admin')
+      router.refresh()
+      return
+    }
+
+    // Check role for non-admin users
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      const { data: profile } = await supabase
+        .from('user_profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single()
+
+      const role = profile?.role || 'publisher'
+
+      if (role === 'advertiser') {
+        router.push('/admin/outreach')  // Advertisers → outreach panel
+      } else {
+        router.push('/admin')           // Publishers → admin dashboard
+      }
+    } else {
+      router.push('/admin')
+    }
+
+    router.refresh()
   }
+
   return (
     <div className="min-h-screen bg-surface-2 flex items-center justify-center p-4">
       <div className="w-full max-w-sm">
