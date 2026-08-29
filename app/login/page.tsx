@@ -13,9 +13,7 @@ export default function LoginPage() {
     e.preventDefault(); setLoading(true)
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) { toast.error(error.message); setLoading(false); return }
-    const ADMIN = process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'khan.khan.yusuf@gmail.com'
-    router.push(email === ADMIN ? '/admin' : '/')
-    router.refresh()
+    router.push('/admin'); router.refresh()
   }
   return (
     <div className="min-h-screen bg-surface-2 flex items-center justify-center p-4">
