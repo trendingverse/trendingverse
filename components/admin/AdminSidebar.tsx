@@ -37,9 +37,6 @@ const advertiserNav = [
   { label: 'Outreach', items: [
     { href: '/admin/outreach', label: 'Publisher Outreach', icon: '📋' },
   ]},
-  { label: 'System', items: [
-    { href: '/admin/settings', label: 'Settings', icon: '⚙' },
-  ]},
 ]
 
 export function AdminSidebar({ isAdmin = false, isAdvertiser = false }: { isAdmin?: boolean; isAdvertiser?: boolean }) {
