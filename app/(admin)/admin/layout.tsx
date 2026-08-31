@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createClient as svcClient } from '@supabase/supabase-js'
 import { redirect } from 'next/navigation'
 import { AdminSidebar } from '@/components/admin/AdminSidebar'
 import { AdminHeader } from '@/components/admin/AdminHeader'
@@ -12,9 +13,26 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   const isAdmin = user.email === ADMIN_EMAIL
 
+  // Check if advertiser (only for non-admin users)
+  let isAdvertiser = false
+  if (!isAdmin) {
+    try {
+      const svc = svcClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!
+      )
+      const { data: profile } = await svc
+        .from('user_profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single()
+      isAdvertiser = profile?.role === 'advertiser'
+    } catch { /* default false */ }
+  }
+
   return (
     <div className="flex h-screen overflow-hidden bg-surface-3">
-      <AdminSidebar isAdmin={isAdmin} />
+      <AdminSidebar isAdmin={isAdmin} isAdvertiser={isAdvertiser} />
       <div className="flex-1 flex flex-col overflow-hidden">
         <AdminHeader email={user.email || ''} />
         <main className="flex-1 overflow-y-auto">
