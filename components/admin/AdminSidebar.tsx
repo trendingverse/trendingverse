@@ -33,12 +33,25 @@ const adminNav = {
   ]
 }
 
-export function AdminSidebar({ isAdmin = false }: { isAdmin?: boolean }) {
+const advertiserNav = [
+  { label: 'Outreach', items: [
+    { href: '/admin/outreach', label: 'Publisher Outreach', icon: '📋' },
+  ]},
+  { label: 'System', items: [
+    { href: '/admin/settings', label: 'Settings', icon: '⚙' },
+  ]},
+]
+
+export function AdminSidebar({ isAdmin = false, isAdvertiser = false }: { isAdmin?: boolean; isAdvertiser?: boolean }) {
   const path = usePathname()
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
 
-  const nav = isAdmin ? [...baseNav, adminNav] : baseNav
+  const nav = isAdvertiser
+    ? advertiserNav
+    : isAdmin
+      ? [...baseNav, adminNav]
+      : baseNav
 
   useEffect(() => { setMobileOpen(false) }, [path])
 
