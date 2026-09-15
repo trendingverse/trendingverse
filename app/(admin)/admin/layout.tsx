@@ -7,6 +7,18 @@ import { ThemeProvider } from '@/components/admin/ThemeProvider'
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'khan.khan.yusuf@gmail.com'
 
+// Inline script — runs before React, prevents flash of wrong theme
+const themeScript = `
+  (function(){
+    try {
+      var t = localStorage.getItem('tv-theme') || 'dark';
+      document.documentElement.classList.toggle('dark', t === 'dark');
+    } catch(e) {
+      document.documentElement.classList.add('dark');
+    }
+  })();
+`
+
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -25,18 +37,22 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   }
 
   return (
-    <ThemeProvider>
-      <div className="flex h-screen overflow-hidden bg-surface-2 dark:bg-dark-300">
-        <AdminSidebar isAdmin={isAdmin} isAdvertiser={isAdvertiser} />
-        <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-          <AdminHeader email={user.email ?? ''} />
-          <main className="flex-1 overflow-y-auto bg-surface-3 dark:bg-dark-200">
-            <div className="p-6 max-w-7xl mx-auto">
-              {children}
-            </div>
-          </main>
+    <>
+      {/* Runs before hydration — sets dark class instantly, no flash */}
+      <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+      <ThemeProvider>
+        <div className="flex h-screen overflow-hidden" style={{ background: 'var(--bg)' }}>
+          <AdminSidebar isAdmin={isAdmin} isAdvertiser={isAdvertiser} />
+          <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+            <AdminHeader email={user.email ?? ''} />
+            <main className="flex-1 overflow-y-auto" style={{ background: 'var(--bg)' }}>
+              <div className="p-6 max-w-7xl mx-auto">
+                {children}
+              </div>
+            </main>
+          </div>
         </div>
-      </div>
-    </ThemeProvider>
+      </ThemeProvider>
+    </>
   )
 }
