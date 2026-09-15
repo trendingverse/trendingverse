@@ -1,6 +1,7 @@
 import type { Config } from 'tailwindcss'
 const config: Config = {
   content: ['./app/**/*.{ts,tsx}','./components/**/*.{ts,tsx}','./lib/**/*.{ts,tsx}'],
+  darkMode: 'class',
   theme: {
     extend: {
       fontFamily: {
@@ -15,6 +16,10 @@ const config: Config = {
           800:'#524f48', 900:'#45423c', 950:'#252320',
         },
         surface: { DEFAULT:'#ffffff', 2:'#f9f9f7', 3:'#f2f1ee' },
+        dark: {
+          50:'#1c2333', 100:'#161b27', 200:'#111520', 300:'#0d1117',
+          border:'#2d3748', 'border-subtle':'#1e2837',
+        },
       },
     },
   },
