@@ -5,38 +5,25 @@ import Link from 'next/link'
 
 export const dynamic = 'force-dynamic'
 
-async function safe<T>(fn: () => any, fallback: T): Promise<T> {
-  try { const r = await fn(); return (r?.error ? fallback : r?.data ?? r?.count ?? fallback) } catch { return fallback }
+async function sq(fn: () => any, fb = 0): Promise<number> {
+  try { const r = await fn(); return r?.error ? fb : (r?.count ?? fb) } catch { return fb }
 }
-async function count(fn: () => any): Promise<number> {
-  try { const r = await fn(); return r?.error ? 0 : (r?.count ?? 0) } catch { return 0 }
-}
-
-function StatCard({ label, value, sub, color }: { label: string; value: string; sub?: string; color: string }) {
-  return (
-    <div className="card p-5 space-y-1">
-      <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-ink-400 dark:text-slate-600">{label}</p>
-      <p className={`text-3xl font-display font-bold ${color}`}>{value}</p>
-      {sub && <p className="text-xs text-ink-400 dark:text-slate-600">{sub}</p>}
-    </div>
-  )
+async function qData<T>(fn: () => any): Promise<T[]> {
+  try { const r = await fn(); return r?.data ?? [] } catch { return [] }
 }
 
-function QuickAction({ href, icon, label, desc, accent = false }: { href: string; icon: string; label: string; desc: string; accent?: boolean }) {
+// OneAds-style stat card
+function KpiCard({ icon, iconBg, value, label }: { icon: string; iconBg: string; value: string | number; label: string }) {
   return (
-    <Link href={href}
-      className={`group flex items-center gap-3 px-4 py-3.5 rounded-xl border transition-all duration-150 ${
-        accent
-          ? 'bg-accent text-white border-accent hover:bg-accent-hover hover:border-accent-hover shadow-sm'
-          : 'bg-white dark:bg-dark-100 border-ink-100 dark:border-dark-border hover:border-ink-200 dark:hover:border-dark-50 hover:shadow-sm'
-      }`}>
-      <span className="text-xl flex-shrink-0">{icon}</span>
-      <div className="min-w-0">
-        <p className={`text-sm font-semibold truncate ${accent ? 'text-white' : 'text-ink-900 dark:text-slate-100'}`}>{label}</p>
-        <p className={`text-xs truncate ${accent ? 'text-white/70' : 'text-ink-400 dark:text-slate-600'}`}>{desc}</p>
+    <div className="card p-5 flex items-center gap-4">
+      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 ${iconBg}`}>
+        <span className="text-2xl">{icon}</span>
       </div>
-      <span className={`ml-auto flex-shrink-0 ${accent ? 'text-white/60 group-hover:text-white' : 'text-ink-300 dark:text-slate-700 group-hover:text-ink-500 dark:group-hover:text-slate-400'} transition-colors`}>→</span>
-    </Link>
+      <div className="min-w-0">
+        <p className="text-2xl font-black text-ink-950 dark:text-white leading-none">{value}</p>
+        <p className="text-[11px] font-bold uppercase tracking-widest text-ink-400 dark:text-slate-600 mt-1">{label}</p>
+      </div>
+    </div>
   )
 }
 
@@ -45,99 +32,122 @@ export default async function AdminDashboard() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
+  const todayISO = new Date().toISOString().slice(0, 10)
   const now = new Date()
-  const todayISO = now.toISOString().slice(0, 10)
+  const hour = now.getHours()
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
+  const firstName = user.email?.split('@')[0] ?? 'there'
 
-  const [total, published, drafts, todayPub, recentArticles] = await Promise.all([
-    count(() => supabase.from('articles').select('*', { count: 'exact', head: true })),
-    count(() => supabase.from('articles').select('*', { count: 'exact', head: true }).eq('status', 'published')),
-    count(() => supabase.from('articles').select('*', { count: 'exact', head: true }).eq('status', 'draft')),
-    count(() => supabase.from('articles').select('*', { count: 'exact', head: true }).eq('status', 'published').gte('published_at', todayISO + 'T00:00:00Z')),
-    safe(() => supabase.from('articles').select('id,title,status,published_at,category_name').order('created_at', { ascending: false }).limit(8), []),
+  const [total, published, drafts, todayPub, articles] = await Promise.all([
+    sq(() => supabase.from('articles').select('*', { count: 'exact', head: true })),
+    sq(() => supabase.from('articles').select('*', { count: 'exact', head: true }).eq('status', 'published')),
+    sq(() => supabase.from('articles').select('*', { count: 'exact', head: true }).eq('status', 'draft')),
+    sq(() => supabase.from('articles').select('*', { count: 'exact', head: true }).eq('status', 'published').gte('published_at', todayISO + 'T00:00:00Z')),
+    qData<any>(() => supabase.from('articles').select('id,title,status,published_at,category_name').order('created_at', { ascending: false }).limit(8)),
   ])
 
-  const firstName = user.email?.split('@')[0] ?? 'there'
-  const dayName = now.toLocaleDateString('en-US', { weekday: 'long' })
+  const STATUS_BADGE: Record<string, string> = {
+    published: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-400',
+    draft:     'bg-ink-100 text-ink-600 dark:bg-navy-600 dark:text-slate-400',
+    scheduled: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
+  }
 
   return (
-    <div className="space-y-8 pb-8">
+    <div className="space-y-6 pb-8">
 
-      {/* Welcome */}
-      <div className="flex items-start justify-between gap-4 flex-wrap">
+      {/* Header */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-ink-300 dark:text-slate-700 mb-1">
-            {dayName}, {now.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+          <p className="text-[11px] font-black uppercase tracking-widest text-ink-400 dark:text-slate-600 mb-1">
+            {now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
           </p>
-          <h1 className="font-display text-2xl font-bold text-ink-950 dark:text-white">
-            Good {now.getHours() < 12 ? 'morning' : now.getHours() < 17 ? 'afternoon' : 'evening'}, {firstName}
+          <h1 className="text-2xl font-black text-ink-950 dark:text-white">
+            {greeting}, {firstName} 👋
           </h1>
-          <p className="text-sm text-ink-400 dark:text-slate-600 mt-1">Here&apos;s your CMS overview for today.</p>
         </div>
         <div className="flex items-center gap-2">
-          <Link href="/admin/trends" className="btn btn-secondary btn-sm">
+          <Link href="/admin/trends" className="btn btn-secondary">
             🔥 Trends
           </Link>
-          <Link href="/admin/articles/new" className="btn btn-primary btn-sm">
+          <Link href="/admin/articles/new" className="btn btn-primary">
             + New Article
           </Link>
         </div>
       </div>
 
-      {/* Stats */}
+      {/* KPI cards — OneAds style */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Total articles"    value={String(total)}     sub="All time"                color="text-ink-950 dark:text-white" />
-        <StatCard label="Published"         value={String(published)} sub={`${todayPub} today`}     color="text-emerald-600 dark:text-emerald-400" />
-        <StatCard label="Drafts"            value={String(drafts)}    sub="Pending review"          color="text-amber-500 dark:text-amber-400" />
-        <StatCard label="Published today"   value={String(todayPub)}  sub={todayISO}                color="text-accent dark:text-red-400" />
+        <KpiCard icon="📄" iconBg="bg-blue-100 dark:bg-blue-900/30"   value={total}     label="Total Articles" />
+        <KpiCard icon="✅" iconBg="bg-emerald-100 dark:bg-emerald-900/30" value={published} label="Published" />
+        <KpiCard icon="✏️" iconBg="bg-amber-100 dark:bg-amber-900/30"  value={drafts}    label="Drafts" />
+        <KpiCard icon="🚀" iconBg="bg-red-100 dark:bg-red-900/20"      value={todayPub}  label="Published Today" />
       </div>
 
-      {/* Main grid */}
-      <div className="grid lg:grid-cols-5 gap-6">
+      {/* Main content */}
+      <div className="grid lg:grid-cols-3 gap-5">
 
         {/* Recent articles */}
-        <div className="lg:col-span-3 card overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-3.5 border-b border-ink-50 dark:border-dark-border">
-            <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-ink-400 dark:text-slate-600">Recent Articles</p>
-            <Link href="/admin/articles" className="text-xs font-medium text-accent hover:text-accent-hover transition-colors">All articles →</Link>
-          </div>
-          {(recentArticles as any[]).length === 0 ? (
-            <div className="px-5 py-10 text-center">
-              <p className="text-ink-400 dark:text-slate-600 text-sm">No articles yet.</p>
-              <Link href="/admin/articles/new" className="text-accent text-sm mt-1 inline-block">Create your first →</Link>
-            </div>
-          ) : (
+        <div className="lg:col-span-2 card overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-ink-100 dark:border-navy-border">
             <div>
-              {(recentArticles as any[]).map((a: any) => {
-                const colors: Record<string, string> = {
-                  published: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
-                  draft: 'bg-ink-100 text-ink-600 dark:bg-dark-50 dark:text-slate-500',
-                  scheduled: 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
-                }
-                return (
-                  <Link key={a.id} href={`/admin/articles/${a.id}/edit`}
-                    className="group flex items-center gap-3 px-5 py-3 border-b border-ink-50 dark:border-dark-border last:border-0 hover:bg-ink-50/50 dark:hover:bg-dark-50/50 transition-colors">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-ink-900 dark:text-slate-100 truncate group-hover:text-accent dark:group-hover:text-red-400 transition-colors">{a.title}</p>
-                      <p className="text-xs text-ink-400 dark:text-slate-600 mt-0.5">{a.category_name || 'Uncategorized'} {a.published_at ? '· ' + new Date(a.published_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}</p>
-                    </div>
-                    <span className={`flex-shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full ${colors[a.status] ?? colors.draft}`}>{a.status}</span>
-                  </Link>
-                )
-              })}
+              <p className="font-bold text-ink-950 dark:text-white text-sm">Recent Articles</p>
+              <p className="text-[11px] text-ink-400 dark:text-slate-600 mt-0.5">Latest content across all publishers</p>
             </div>
-          )}
+            <Link href="/admin/articles" className="text-xs font-semibold text-accent hover:text-accent-hover transition-colors">
+              View all →
+            </Link>
+          </div>
+          {articles.length === 0 ? (
+            <div className="py-12 text-center">
+              <p className="text-ink-400 dark:text-slate-600 text-sm">No articles yet</p>
+              <Link href="/admin/articles/new" className="text-accent text-sm mt-2 inline-block font-medium">Write your first article →</Link>
+            </div>
+          ) : articles.map((a: any) => (
+            <Link key={a.id} href={`/admin/articles/${a.id}/edit`}
+              className="group flex items-center gap-3 px-5 py-3.5 border-b border-ink-50 dark:border-navy-border last:border-0 hover:bg-ink-50 dark:hover:bg-navy-700 transition-colors">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-ink-900 dark:text-slate-100 truncate group-hover:text-accent dark:group-hover:text-red-400 transition-colors">
+                  {a.title}
+                </p>
+                <p className="text-xs text-ink-400 dark:text-slate-600 mt-0.5">
+                  {a.category_name || 'Uncategorized'}
+                  {a.published_at && ` · ${new Date(a.published_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`}
+                </p>
+              </div>
+              <span className={`flex-shrink-0 text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wide ${STATUS_BADGE[a.status] ?? STATUS_BADGE.draft}`}>
+                {a.status}
+              </span>
+            </Link>
+          ))}
         </div>
 
         {/* Quick actions */}
-        <div className="lg:col-span-2 space-y-3">
-          <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-ink-400 dark:text-slate-600 px-0.5">Quick Actions</p>
-          <div className="space-y-2">
-            <QuickAction href="/admin/articles/new" icon="✏️" label="New Article" desc="Start writing" accent />
-            <QuickAction href="/admin/ai-writer"    icon="✦"  label="AI Writer"   desc="Generate content" />
-            <QuickAction href="/admin/trends"       icon="🔥" label="Trending Now" desc="What's hot today" />
-            <QuickAction href="/admin/seo"          icon="◈"  label="SEO Engine"  desc="Optimize articles" />
-            <QuickAction href="/admin/revenue"      icon="💰" label="Earnings"    desc="Revenue overview" />
-            <QuickAction href="/admin/monetization/site-scripts" icon="🔧" label="Site Scripts" desc="Inject ad tags" />
+        <div className="space-y-3">
+          <div className="card p-5">
+            <p className="font-bold text-ink-950 dark:text-white text-sm mb-1">Quick Actions</p>
+            <p className="text-[11px] text-ink-400 dark:text-slate-600 mb-4">Jump to common tasks</p>
+            <div className="space-y-2">
+              {[
+                { href: '/admin/articles/new', icon: '✏️', label: 'New Article',   accent: true },
+                { href: '/admin/ai-writer',    icon: '⚡', label: 'AI Writer'           },
+                { href: '/admin/trends',       icon: '🔥', label: 'Trending Topics'     },
+                { href: '/admin/seo',          icon: '🎯', label: 'SEO Engine'           },
+                { href: '/admin/revenue',      icon: '💰', label: 'Earnings'             },
+                { href: '/admin/monetization/site-scripts', icon: '🔧', label: 'Site Scripts' },
+                { href: '/admin/outreach',     icon: '📋', label: 'Outreach'             },
+              ].map(a => (
+                <Link key={a.href} href={a.href}
+                  className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+                    a.accent
+                      ? 'bg-accent text-white hover:bg-accent-hover shadow-sm'
+                      : 'text-ink-700 dark:text-slate-300 hover:bg-ink-100 dark:hover:bg-navy-700 hover:text-ink-900 dark:hover:text-white'
+                  }`}>
+                  <span className="text-base w-5 text-center">{a.icon}</span>
+                  <span className="flex-1">{a.label}</span>
+                  <span className="text-[10px] opacity-40">→</span>
+                </Link>
+              ))}
+            </div>
           </div>
         </div>
       </div>
