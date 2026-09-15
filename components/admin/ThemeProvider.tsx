@@ -1,35 +1,26 @@
 'use client'
-// components/admin/ThemeProvider.tsx
 import { createContext, useContext, useEffect, useState } from 'react'
 
 type Theme = 'light' | 'dark'
-const ThemeCtx = createContext<{ theme: Theme; toggle: () => void }>({
-  theme: 'light', toggle: () => {}
-})
-
-export function useTheme() { return useContext(ThemeCtx) }
+const Ctx = createContext<{ theme: Theme; toggle: () => void }>({ theme: 'dark', toggle: () => {} })
+export const useTheme = () => useContext(Ctx)
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<Theme>('light')
+  const [theme, setTheme] = useState<Theme>('dark') // default dark
 
   useEffect(() => {
     const saved = localStorage.getItem('tv-theme') as Theme | null
-    const preferred = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
-    const initial = saved || preferred
-    setTheme(initial)
-    document.documentElement.classList.toggle('dark', initial === 'dark')
+    const t = saved ?? 'dark' // default to dark like OneAds
+    setTheme(t)
+    document.documentElement.classList.toggle('dark', t === 'dark')
   }, [])
 
   function toggle() {
-    const next: Theme = theme === 'light' ? 'dark' : 'light'
+    const next: Theme = theme === 'dark' ? 'light' : 'dark'
     setTheme(next)
     localStorage.setItem('tv-theme', next)
     document.documentElement.classList.toggle('dark', next === 'dark')
   }
 
-  return (
-    <ThemeCtx.Provider value={{ theme, toggle }}>
-      {children}
-    </ThemeCtx.Provider>
-  )
+  return <Ctx.Provider value={{ theme, toggle }}>{children}</Ctx.Provider>
 }
