@@ -49,8 +49,7 @@
            dark:text-slate-400 dark:hover:bg-navy-600 dark:hover:text-slate-100;
   }
   .admin-nav-item.active {
-    @apply bg-accent/8 text-accent font-semibold
-           dark:bg-accent/10 dark:text-red-400;
+    @apply bg-red-50 text-accent font-semibold dark:bg-red-950/40 dark:text-red-400;
   }
 
   /* ── Article body ── */
