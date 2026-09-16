@@ -44,7 +44,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         <div className="flex h-screen overflow-hidden" style={{ background: 'var(--bg)' }}>
           <AdminSidebar isAdmin={isAdmin} isAdvertiser={isAdvertiser} />
           <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-            <AdminHeader email={user.email ?? ''} />
+            <AdminHeader email={user.email ?? ''} isAdmin={isAdmin} isAdvertiser={isAdvertiser} />
             <main className="flex-1 overflow-y-auto" style={{ background: 'var(--bg)' }}>
               <div className="p-6 max-w-7xl mx-auto">
                 {children}
