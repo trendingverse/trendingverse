@@ -24,7 +24,7 @@ function Icon({ d, size = 15 }: { d: string; size?: number }) {
   )
 }
 
-export function AdminHeader({ email }: { email: string }) {
+export function AdminHeader({ email, isAdmin = false, isAdvertiser = false }: { email: string; isAdmin?: boolean; isAdvertiser?: boolean }) {
   const [menu, setMenu]           = useState(false)
   const [showReset, setShowReset] = useState(false)
   const [resetSent, setResetSent] = useState(false)
@@ -34,6 +34,8 @@ export function AdminHeader({ email }: { email: string }) {
   const title   = TITLES[path] ?? 'Admin'
   const initial = email[0]?.toUpperCase() ?? 'A'
   const name    = email.split('@')[0]
+  // Advertiser: show simple title, no breadcrumb into admin areas
+  const showCrumbs = isAdmin && path !== '/admin'
 
   const S = { // style shorthand using CSS vars
     header:   { height:64, display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 24px', flexShrink:0, background:'var(--bg-card)', borderBottom:'1px solid var(--border)' } as const,
@@ -50,16 +52,36 @@ export function AdminHeader({ email }: { email: string }) {
   return (
     <header style={S.header}>
       {/* Left */}
-      <h1 style={{ fontSize:15, fontWeight:700, color:'var(--txt)', margin:0 }}>{title}</h1>
+      {showCrumbs ? (
+        <nav style={{ display:'flex', alignItems:'center', gap:6, fontSize:14 }}>
+          {path.split('/').filter(Boolean).map((seg, i, arr) => {
+            const href = '/' + arr.slice(0, i + 1).join('/')
+            const label = TITLES[href] ?? seg.replace(/-/g, ' ')
+            const isLast = i === arr.length - 1
+            return (
+              <span key={href} style={{ display:'flex', alignItems:'center', gap:6 }}>
+                {i > 0 && <span style={{ color:'var(--txt-3)', fontSize:12 }}>/</span>}
+                {isLast
+                  ? <span style={{ fontWeight:700, color:'var(--txt)' }}>{label}</span>
+                  : <Link href={href} style={{ color:'var(--txt-3)', textDecoration:'none', fontWeight:500 }}>{label}</Link>}
+              </span>
+            )
+          })}
+        </nav>
+      ) : (
+        <h1 style={{ fontSize:15, fontWeight:700, color:'var(--txt)', margin:0 }}>{title}</h1>
+      )}
 
       {/* Right */}
       <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-        <Link href="/admin/articles/new"
-          style={{ ...S.btn, background:'var(--accent)', color:'#fff' }}
-          onMouseEnter={e => (e.currentTarget.style.opacity = '0.9')}
-          onMouseLeave={e => (e.currentTarget.style.opacity = '1')}>
-          <Icon d="M12 4v16m8-8H4" size={13} /> New Article
-        </Link>
+        {isAdmin && (
+          <Link href="/admin/articles/new"
+            style={{ ...S.btn, background:'var(--accent)', color:'#fff' }}
+            onMouseEnter={e => (e.currentTarget.style.opacity = '0.9')}
+            onMouseLeave={e => (e.currentTarget.style.opacity = '1')}>
+            <Icon d="M12 4v16m8-8H4" size={13} /> New Article
+          </Link>
+        )}
 
         <button onClick={toggle} style={S.iconBtn} title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
           onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-subtle)'; e.currentTarget.style.color = 'var(--txt)' }}
