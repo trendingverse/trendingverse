@@ -2,7 +2,6 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter, usePathname } from 'next/navigation'
-import { useTheme } from './ThemeProvider'
 import Link from 'next/link'
 
 const TITLES: Record<string, string> = {
@@ -30,7 +29,8 @@ export function AdminHeader({ email, isAdmin = false, isAdvertiser = false }: { 
   const [resetSent, setResetSent] = useState(false)
   const router = useRouter()
   const path   = usePathname()
-  const { theme, toggle } = useTheme()
+  const [theme, setTheme] = useState<'light'|'dark'>('dark')
+  const toggle = () => { const n = theme==='dark'?'light':'dark'; setTheme(n); document.documentElement.classList.toggle('dark',n==='dark'); localStorage.setItem('tv-theme',n) }
   const title   = TITLES[path] ?? 'Admin'
   const initial = email[0]?.toUpperCase() ?? 'A'
   const name    = email.split('@')[0]
