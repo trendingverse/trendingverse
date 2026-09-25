@@ -12,30 +12,45 @@ async function safeData(fn: () => any): Promise<any[]> {
   try { const r = await fn(); return r?.data ?? [] } catch { return [] }
 }
 
+// Hover effects live in CSS (server components can't use onMouseEnter/onMouseLeave)
+const hoverCss = `
+.tv-row { background: transparent; transition: background 0.1s; }
+.tv-row:hover { background: var(--bg-subtle); }
+.tv-qa { background: transparent; color: var(--txt-2); transition: all 0.1s; }
+.tv-qa:hover { background: var(--bg-subtle); color: var(--txt); }
+`
+
 export default async function AdminDashboard() {
   let user: any = null
+  let noUser = false
   let total = 0, published = 0, drafts = 0, todayPub = 0
   let articles: any[] = []
 
   try {
     const supabase = await createClient()
     const { data: { user: u } } = await supabase.auth.getUser()
-    if (!u) redirect('/login')
-    user = u
+    if (!u) {
+      noUser = true
+    } else {
+      user = u
 
-    const now = new Date()
-    const todayISO = now.toISOString().slice(0, 10)
+      const now = new Date()
+      const todayISO = now.toISOString().slice(0, 10)
 
-    ;[total, published, drafts, todayPub, articles] = await Promise.all([
-      safeCount(() => supabase.from('articles').select('*', { count: 'exact', head: true })),
-      safeCount(() => supabase.from('articles').select('*', { count: 'exact', head: true }).eq('status', 'published')),
-      safeCount(() => supabase.from('articles').select('*', { count: 'exact', head: true }).eq('status', 'draft')),
-      safeCount(() => supabase.from('articles').select('*', { count: 'exact', head: true }).eq('status', 'published').gte('published_at', todayISO + 'T00:00:00Z')),
-      safeData(() => supabase.from('articles').select('id,title,status,published_at,category_name').order('created_at', { ascending: false }).limit(8)),
-    ])
+      ;[total, published, drafts, todayPub, articles] = await Promise.all([
+        safeCount(() => supabase.from('articles').select('*', { count: 'exact', head: true })),
+        safeCount(() => supabase.from('articles').select('*', { count: 'exact', head: true }).eq('status', 'published')),
+        safeCount(() => supabase.from('articles').select('*', { count: 'exact', head: true }).eq('status', 'draft')),
+        safeCount(() => supabase.from('articles').select('*', { count: 'exact', head: true }).eq('status', 'published').gte('published_at', todayISO + 'T00:00:00Z')),
+        safeData(() => supabase.from('articles').select('id,title,status,published_at,category_name').order('created_at', { ascending: false }).limit(8)),
+      ])
+    }
   } catch (e) {
     console.error('[AdminDashboard] error:', e)
   }
+
+  // redirect() must be called outside try/catch, otherwise the catch swallows it
+  if (noUser) redirect('/login')
 
   const now = new Date()
   const hour = now.getHours()
@@ -67,6 +82,7 @@ export default async function AdminDashboard() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24, paddingBottom: 32, color: 'var(--txt)' }}>
+      <style dangerouslySetInnerHTML={{ __html: hoverCss }} />
 
       {/* Welcome */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
@@ -124,10 +140,8 @@ export default async function AdminDashboard() {
           ) : articles.map((a: any) => {
             const st = statusStyle[a.status] ?? statusStyle.draft
             return (
-              <Link key={a.id} href={`/admin/articles/${a.id}/edit`}
-                style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 20px', borderBottom: '1px solid var(--border-dim)', textDecoration: 'none', transition: 'background 0.1s' }}
-                onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-subtle)')}
-                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+              <Link key={a.id} href={`/admin/articles/${a.id}/edit`} className="tv-row"
+                style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 20px', borderBottom: '1px solid var(--border-dim)', textDecoration: 'none' }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--txt)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', margin: 0 }}>{a.title}</p>
                   <p style={{ fontSize: 11, color: 'var(--txt-3)', marginTop: 2 }}>
@@ -151,10 +165,11 @@ export default async function AdminDashboard() {
           </div>
           <div style={{ padding: 8 }}>
             {actions.map(a => (
-              <Link key={a.href} href={a.href}
-                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 10, fontSize: 13, fontWeight: 600, textDecoration: 'none', transition: 'all 0.1s', marginBottom: 2, background: a.accent ? 'var(--accent)' : 'transparent', color: a.accent ? '#fff' : 'var(--txt-2)' }}
-                onMouseEnter={e => { if (!a.accent) { e.currentTarget.style.background = 'var(--bg-subtle)'; e.currentTarget.style.color = 'var(--txt)' } }}
-                onMouseLeave={e => { if (!a.accent) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--txt-2)' } }}>
+              <Link key={a.href} href={a.href} className={a.accent ? undefined : 'tv-qa'}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 10, fontSize: 13, fontWeight: 600, textDecoration: 'none', marginBottom: 2,
+                  ...(a.accent ? { background: 'var(--accent)', color: '#fff' } : {}),
+                }}>
                 <span style={{ fontSize: 16, width: 20, textAlign: 'center' }}>{a.icon}</span>
                 <span style={{ flex: 1 }}>{a.label}</span>
                 <span style={{ fontSize: 11, opacity: 0.4 }}>→</span>
