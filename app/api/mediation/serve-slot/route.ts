@@ -1,4 +1,4 @@
-// app/api/mediation/serve-slot/route.ts  — v3
+// app/api/mediation/serve-slot/route.ts  — v3.1
 // ══════════════════════════════════════════════════════════════════
 // UNIVERSAL SLOT SERVER — multi-partner mediation brain.
 //
@@ -11,6 +11,10 @@
 //   • If the unit doesn't fill, the waterfall falls through to other
 //     partners' placements/templates (never the same partner again).
 // v2: the DIRECT decision reuses serve-ad (geo / tier / gender / floor).
+//
+// v3.1: a unit is never reused on the same page (extra slots fall back to
+//   other partners' placements or collapse), and a site that has its own
+//   units never gets another site's generic partner template.
 //
 // Order: direct (serve-ad) → site ad unit → other partners by waterfall_order
 // ══════════════════════════════════════════════════════════════════
@@ -109,6 +113,7 @@ export async function POST(req: NextRequest) {
 
   // ── 3. SITE AD UNIT — the unit you created for this site/position/size ──
   let usedPartner = ''
+  let siteHasUnits = false
   if (site) {
     const { data: units } = await admin
       .from('ad_units')
@@ -123,8 +128,9 @@ export async function POST(req: NextRequest) {
       .filter((u: any) => (!u.size_width || u.size_width === w) && (!u.size_height || u.size_height === h))
       .sort((a: any, b: any) => String(a.name).localeCompare(String(b.name)))
 
-    if (cands.length) {
-      const u = cands[idx % cands.length] // each slot on the page gets a different unit
+    siteHasUnits = cands.length > 0
+    if (idx < cands.length) {
+      const u = cands[idx] // each slot on the page gets a different unit — never reused
       usedPartner = partnerSlugFor(u.network_name)
       demand.push({
         source: usedPartner,
@@ -160,8 +166,8 @@ export async function POST(req: NextRequest) {
     const chosen = candidates[0]
     const rawCode = chosen?.ad_code || p.ad_code_template
     if (!rawCode) continue
-    // a generic template is only a fallback when this site has no unit of its own
-    if (!chosen && usedPartner) continue
+    // a generic template is only used when this site has no units of its own
+    if (!chosen && siteHasUnits) continue
 
     demand.push({
       source: p.slug,
