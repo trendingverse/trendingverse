@@ -4,6 +4,13 @@
 // adapter, and upserts into partner_revenue. Used by the manual
 // "Sync now" button AND callable from the daily cron.
 //
+// v2 fixes:
+//  • Partners report several rows per site per day (one per placement).
+//    Previously each row overwrote the last (only the final placement
+//    survived). Rows are now SUMMED per site + day before saving.
+//  • revenue_usd and revenue_inr are now both correct, converted with
+//    the currency_rates table (fallback 83.5 INR per USD).
+//
 // POST { start?, end? }  (defaults: last 7 days)
 // Admin-gated for manual calls; cron calls it with the CRON secret.
 // ══════════════════════════════════════════════════════════════════
@@ -12,22 +19,48 @@ import { createClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { getAdapter } from '@/lib/revenue-adapters'
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'khan.khan.yusuf@gmail.com'
+const FALLBACK_USD_INR = 83.5
 
 function svc() {
   return createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 }
 
+// USD→INR rate for a given date, from currency_rates (either direction stored)
+async function loadFx(admin: any) {
+  const { data } = await admin
+    .from('currency_rates')
+    .select('base_currency,target_currency,rate,rate_date')
+    .or('and(base_currency.eq.USD,target_currency.eq.INR),and(base_currency.eq.INR,target_currency.eq.USD)')
+    .order('rate_date', { ascending: true })
+    .limit(5000)
+  const points: { d: string; r: number }[] = []
+  for (const x of data || []) {
+    const rate = Number(x.rate)
+    if (!rate) continue
+    const usdInr = x.base_currency === 'USD' ? rate : 1 / rate
+    if (usdInr > 10 && usdInr < 1000) points.push({ d: String(x.rate_date), r: usdInr })
+  }
+  return (date: string): number => {
+    if (!points.length) return FALLBACK_USD_INR
+    let best = points[0].r
+    for (const p of points) {
+      if (p.d <= date) best = p.r
+      else break
+    }
+    return best
+  }
+}
+
 async function runSync(start: string, end: string) {
   const admin = svc()
+  const fx = await loadFx(admin)
   const { data: partners } = await admin.from('demand_partners').select('*').eq('is_active', true)
   const results: any[] = []
 
   for (const p of partners || []) {
     const reportCfg = p.config?.report
-    if (!reportCfg || !reportCfg.adapter) {
-      // no reporting configured for this partner — skip quietly
-      continue
-    }
+    if (!reportCfg || !reportCfg.adapter) continue // no reporting configured — skip quietly
+
     const adapter = getAdapter(reportCfg.adapter)
     if (!adapter) {
       await admin.from('partner_revenue_sync_log').insert({
@@ -36,6 +69,7 @@ async function runSync(start: string, end: string) {
       results.push({ partner: p.slug, ok: false, error: `No adapter '${reportCfg.adapter}'` })
       continue
     }
+
     const res = await adapter(reportCfg, start, end)
     if (!res.ok) {
       await admin.from('partner_revenue_sync_log').insert({
@@ -44,29 +78,60 @@ async function runSync(start: string, end: string) {
       results.push({ partner: p.slug, ok: false, error: res.error })
       continue
     }
-    // Upsert normalized rows
-    let ingested = 0
-    for (const row of res.rows) {
-      const site = (row.site || '(all)').replace(/^https?:\/\//, '').replace(/\/$/, '').toLowerCase()
-      const { error } = await admin.from('partner_revenue').upsert({
+
+    // ── Sum all rows per site + day (placements, countries, etc.) ──
+    const agg = new Map<string, any>()
+    for (const row of res.rows || []) {
+      if (!row?.date) continue
+      const site = String(row.site || '(all)').replace(/^https?:\/\//, '').replace(/\/$/, '').toLowerCase()
+      const date = String(row.date).slice(0, 10)
+      const key = `${site}|${date}`
+      if (!agg.has(key)) {
+        agg.set(key, { site, date, impressions: 0, clicks: 0, revenue: 0, currency: String(row.currency || 'USD').toUpperCase(), parts: [] as any[] })
+      }
+      const a = agg.get(key)
+      a.impressions += Number(row.impressions) || 0
+      a.clicks += Number(row.clicks) || 0
+      a.revenue += Number(row.revenue) || 0
+      if (a.parts.length < 200) a.parts.push(row.raw ?? row)
+    }
+
+    const upserts = Array.from(agg.values()).map(a => {
+      const rate = fx(a.date)
+      const isInr = a.currency === 'INR'
+      const usd = isInr ? a.revenue / rate : a.revenue
+      const inr = isInr ? a.revenue : a.revenue * rate
+      return {
         partner_id: p.id,
         partner_slug: p.slug,
-        site_url: site,
-        revenue_date: row.date,
-        impressions: row.impressions,
-        clicks: row.clicks,
-        revenue_usd: row.revenue,
-        revenue_inr: row.revenue, // TODO: FX convert if needed; for now store native
-        currency: row.currency,
-        raw: row.raw,
+        site_url: a.site,
+        revenue_date: a.date,
+        impressions: Math.round(a.impressions),
+        clicks: Math.round(a.clicks),
+        revenue_usd: +usd.toFixed(6),
+        revenue_inr: +inr.toFixed(4),
+        currency: a.currency,
+        raw: { usd_inr_rate: rate, rows: a.parts },
         synced_at: new Date().toISOString(),
-      }, { onConflict: 'partner_id,site_url,revenue_date' })
-      if (!error) ingested++
-    }
-    await admin.from('partner_revenue_sync_log').insert({
-      partner_slug: p.slug, status: 'success', rows_ingested: ingested,
+      }
     })
-    results.push({ partner: p.slug, ok: true, rows: ingested })
+
+    let ingested = 0
+    let lastError = ''
+    for (let i = 0; i < upserts.length; i += 200) {
+      const batch = upserts.slice(i, i + 200)
+      const { error } = await admin.from('partner_revenue').upsert(batch, { onConflict: 'partner_id,site_url,revenue_date' })
+      if (error) lastError = error.message
+      else ingested += batch.length
+    }
+
+    await admin.from('partner_revenue_sync_log').insert({
+      partner_slug: p.slug,
+      status: lastError ? 'partial' : 'success',
+      rows_ingested: ingested,
+      error: lastError || null,
+    })
+    results.push({ partner: p.slug, ok: !lastError, rows: ingested, source_rows: (res.rows || []).length, error: lastError || undefined })
   }
   return results
 }
