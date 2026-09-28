@@ -1,4 +1,4 @@
-// app/api/mediation/serve-slot/route.ts  — v3.1
+// app/api/mediation/serve-slot/route.ts  — v3.2
 // ══════════════════════════════════════════════════════════════════
 // UNIVERSAL SLOT SERVER — multi-partner mediation brain.
 //
@@ -12,6 +12,8 @@
 //     partners' placements/templates (never the same partner again).
 // v2: the DIRECT decision reuses serve-ad (geo / tier / gender / floor).
 //
+// v3.2: a site that has ANY units of its own never receives a generic partner
+//   template (those zones belong to other sites).
 // v3.1: a unit is never reused on the same page (extra slots fall back to
 //   other partners' placements or collapse), and a site that has its own
 //   units never gets another site's generic partner template.
@@ -121,14 +123,15 @@ export async function POST(req: NextRequest) {
       .eq('is_active', true)
 
     const posOk = (p: string) => p === pos || (pos === 'sticky' && (p === 'footer' || p === 'sticky'))
-    const cands = (units || [])
+    const siteUnits = (units || [])
       .filter((u: any) => String(u.ad_code || '').trim())
       .filter((u: any) => siteMatches(normHost(u.site_url), site))
+    siteHasUnits = siteUnits.length > 0
+    const cands = siteUnits
       .filter((u: any) => posOk(u.position))
       .filter((u: any) => (!u.size_width || u.size_width === w) && (!u.size_height || u.size_height === h))
       .sort((a: any, b: any) => String(a.name).localeCompare(String(b.name)))
 
-    siteHasUnits = cands.length > 0
     if (idx < cands.length) {
       const u = cands[idx] // each slot on the page gets a different unit — never reused
       usedPartner = partnerSlugFor(u.network_name)
