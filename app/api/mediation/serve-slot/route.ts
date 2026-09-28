@@ -1,4 +1,4 @@
-// app/api/mediation/serve-slot/route.ts  — v3.2
+// app/api/mediation/serve-slot/route.ts  — v3.3
 // ══════════════════════════════════════════════════════════════════
 // UNIVERSAL SLOT SERVER — multi-partner mediation brain.
 //
@@ -12,6 +12,10 @@
 //     partners' placements/templates (never the same partner again).
 // v2: the DIRECT decision reuses serve-ad (geo / tier / gender / floor).
 //
+// v3.3: ASSIGNMENT-DRIVEN. When the plugin sends ad_unit_id (the unit assigned
+//   to that slot in "Assign to Publishers"), exactly that unit is served —
+//   direct campaigns first, then the assigned unit, nothing else.
+//   (Accepts an ad_units id, or a publisher_ads assignment id.)
 // v3.2: a site that has ANY units of its own never receives a generic partner
 //   template (those zones belong to other sites).
 // v3.1: a unit is never reused on the same page (extra slots fall back to
@@ -48,7 +52,7 @@ function siteMatches(a: string, b: string) {
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}))
-  const { site_url, position, width, height, fingerprint, slot_id, slot_index } = body
+  const { site_url, position, width, height, fingerprint, slot_id, slot_index, ad_unit_id } = body
   const admin = createServiceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -113,7 +117,41 @@ export async function POST(req: NextRequest) {
     return hit ? hit.slug : n
   }
 
-  // ── 3. SITE AD UNIT — the unit you created for this site/position/size ──
+  // ── 3a. ASSIGNED UNIT — serve exactly the unit assigned to this slot ──
+  const reqUnit = typeof ad_unit_id === 'string' && /^[0-9a-f-]{36}$/i.test(ad_unit_id) ? ad_unit_id : ''
+  if (reqUnit) {
+    let { data: unit } = await admin
+      .from('ad_units')
+      .select('id,name,network_name,ad_code,is_active')
+      .eq('id', reqUnit)
+      .maybeSingle()
+    if (!unit) {
+      // the plugin may have sent the assignment id instead of the unit id
+      const { data: asg } = await admin.from('publisher_ads').select('ad_unit_id,is_enabled').eq('id', reqUnit).maybeSingle()
+      if (asg?.ad_unit_id && asg.is_enabled !== false) {
+        const r = await admin.from('ad_units').select('id,name,network_name,ad_code,is_active').eq('id', asg.ad_unit_id).maybeSingle()
+        unit = r.data
+      }
+    }
+    if (unit && unit.is_active !== false && String(unit.ad_code || '').trim()) {
+      demand.push({
+        source: partnerSlugFor(unit.network_name),
+        type: 'network',
+        name: unit.name,
+        ad_unit_id: unit.id,
+        order: 0,
+        ad_code: fillTemplate(unit.ad_code, { w, h, slotId }),
+      })
+    }
+    admin.from('mediation_events').insert({
+      fingerprint, site_url: site, position: pos, partner_slug: null, event_type: 'request',
+    }).then(() => {}, () => {})
+    const direct = demand.filter(d => d.type === 'direct')
+    const network = demand.filter(d => d.type === 'network')
+    return NextResponse.json({ slot_id: slotId, demand: [...direct, ...network], width: w, height: h }, { headers: CORS })
+  }
+
+  // ── 3b. (no assignment sent) SITE AD UNIT by site/position/size ──
   let usedPartner = ''
   let siteHasUnits = false
   if (site) {
