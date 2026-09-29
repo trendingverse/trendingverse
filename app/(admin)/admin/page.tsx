@@ -1,9 +1,14 @@
-// app/(admin)/admin/page.tsx
+// app/(admin)/admin/page.tsx — v4
+// Publishers see ONLY their own articles (written by them or on their sites),
+// their own quick actions, and their earnings (last 30 days, their share).
+// Admin sees everything. Hover effects in CSS; redirect outside try/catch.
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 
 export const dynamic = 'force-dynamic'
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'khan.khan.yusuf@gmail.com'
 
 async function safeCount(fn: () => any): Promise<number> {
   try { const r = await fn(); return r?.error ? 0 : (r?.count ?? 0) } catch { return 0 }
@@ -12,7 +17,48 @@ async function safeData(fn: () => any): Promise<any[]> {
   try { const r = await fn(); return r?.data ?? [] } catch { return [] }
 }
 
-// Hover effects live in CSS (server components can't use onMouseEnter/onMouseLeave)
+
+const hostOf = (s: any) =>
+  String(s || '').trim().replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/.*$/, '').toLowerCase()
+
+// Publisher earnings for the last 30 days (their share, INR). No partner names involved.
+async function publisherEarnings30d(userId: string): Promise<number> {
+  try {
+    const admin = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+    const [{ data: owned }, { data: asg }, { data: fx }] = await Promise.all([
+      admin.from('sites').select('id,site_url').eq('user_id', userId),
+      admin.from('publisher_ads').select('site_id,revenue_share_pct').eq('publisher_id', userId),
+      admin.from('currency_rates').select('base_currency,target_currency,rate')
+        .or('and(base_currency.eq.USD,target_currency.eq.INR),and(base_currency.eq.INR,target_currency.eq.USD)')
+        .order('rate_date', { ascending: false }).limit(1),
+    ])
+    const ids = new Set<string>([...(owned || []).map((s: any) => s.id), ...(asg || []).map((a: any) => a.site_id).filter(Boolean)])
+    if (!ids.size) return 0
+    const { data: sites } = await admin.from('sites').select('id,site_url').in('id', Array.from(ids))
+    const share: Record<string, number> = {}
+    for (const s of sites || []) {
+      const p = (asg || []).filter((a: any) => a.site_id === s.id).map((a: any) => Number(a.revenue_share_pct) || 0).filter(Boolean)
+      share[hostOf(s.site_url)] = p.length ? Math.max(...p) : 70
+    }
+    const hosts = Object.keys(share).filter(Boolean)
+    const x = fx?.[0]
+    let rate = x && Number(x.rate) ? (x.base_currency === 'USD' ? Number(x.rate) : 1 / Number(x.rate)) : 83.5
+    if (!(rate > 10 && rate < 1000)) rate = 83.5
+    const since = new Date(Date.now() - 29 * 864e5).toISOString().slice(0, 10)
+    let total = 0
+    for (let from = 0; from < 50000; from += 1000) {
+      const { data } = await admin.from('partner_revenue').select('site_url,revenue_usd').gte('revenue_date', since).range(from, from + 999)
+      for (const r of data || []) {
+        const h = hostOf(r.site_url)
+        const m = hosts.find(x => h === x || h.endsWith('.' + x) || x.endsWith('.' + h))
+        if (m) total += (Number(r.revenue_usd) || 0) * share[m] / 100
+      }
+      if (!data || data.length < 1000) break
+    }
+    return Math.round(total * rate * 100) / 100
+  } catch { return 0 }
+}
+
 const hoverCss = `
 .tv-row { background: transparent; transition: background 0.1s; }
 .tv-row:hover { background: var(--bg-subtle); }
@@ -23,8 +69,10 @@ const hoverCss = `
 export default async function AdminDashboard() {
   let user: any = null
   let noUser = false
+  let isAdmin = false
   let total = 0, published = 0, drafts = 0, todayPub = 0
   let articles: any[] = []
+  let earnings30 = 0
 
   try {
     const supabase = await createClient()
@@ -33,17 +81,29 @@ export default async function AdminDashboard() {
       noUser = true
     } else {
       user = u
+      isAdmin = u.email === ADMIN_EMAIL
 
-      const now = new Date()
-      const todayISO = now.toISOString().slice(0, 10)
+      // Scope for publishers: their own articles, or articles on sites they own
+      let scope: (q: any) => any = q => q
+      if (!isAdmin) {
+        const { data: mySites } = await supabase.from('sites').select('id').eq('user_id', u.id)
+        const siteIds = (mySites || []).map((s: any) => s.id)
+        scope = siteIds.length
+          ? (q: any) => q.or(`user_id.eq.${u.id},site_id.in.(${siteIds.join(',')})`)
+          : (q: any) => q.eq('user_id', u.id)
+      }
+
+      const todayISO = new Date().toISOString().slice(0, 10)
+      const base = () => supabase.from('articles').select('*', { count: 'exact', head: true })
 
       ;[total, published, drafts, todayPub, articles] = await Promise.all([
-        safeCount(() => supabase.from('articles').select('*', { count: 'exact', head: true })),
-        safeCount(() => supabase.from('articles').select('*', { count: 'exact', head: true }).eq('status', 'published')),
-        safeCount(() => supabase.from('articles').select('*', { count: 'exact', head: true }).eq('status', 'draft')),
-        safeCount(() => supabase.from('articles').select('*', { count: 'exact', head: true }).eq('status', 'published').gte('published_at', todayISO + 'T00:00:00Z')),
-        safeData(() => supabase.from('articles').select('id,title,status,published_at,category_name').order('created_at', { ascending: false }).limit(8)),
+        safeCount(() => scope(base())),
+        safeCount(() => scope(base().eq('status', 'published'))),
+        safeCount(() => scope(base().eq('status', 'draft'))),
+        safeCount(() => scope(base().eq('status', 'published').gte('published_at', todayISO + 'T00:00:00Z'))),
+        safeData(() => scope(supabase.from('articles').select('id,title,status,published_at,category_name')).order('created_at', { ascending: false }).limit(8)),
       ])
+      if (!isAdmin) earnings30 = await publisherEarnings30d(u.id)
     }
   } catch (e) {
     console.error('[AdminDashboard] error:', e)
@@ -57,11 +117,13 @@ export default async function AdminDashboard() {
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
   const firstName = user?.email?.split('@')[0] ?? 'there'
 
-  const kpis = [
-    { icon: '📄', label: 'TOTAL ARTICLES',  value: total,     bg: 'rgba(59,130,246,0.12)',  color: '#60a5fa' },
-    { icon: '✅', label: 'PUBLISHED',        value: published, bg: 'rgba(16,185,129,0.12)', color: '#34d399' },
-    { icon: '✏️', label: 'DRAFTS',           value: drafts,    bg: 'rgba(245,158,11,0.12)', color: '#fbbf24' },
-    { icon: '🚀', label: 'TODAY',            value: todayPub,  bg: 'rgba(239,68,68,0.12)',  color: '#f87171' },
+  const kpis: { icon: string; label: string; value: any; bg: string; href?: string }[] = [
+    { icon: '📄', label: 'TOTAL ARTICLES',  value: total,     bg: 'rgba(59,130,246,0.12)' },
+    { icon: '✅', label: 'PUBLISHED',        value: published, bg: 'rgba(16,185,129,0.12)' },
+    { icon: '✏️', label: 'DRAFTS',           value: drafts,    bg: 'rgba(245,158,11,0.12)' },
+    isAdmin
+      ? { icon: '🚀', label: 'TODAY', value: todayPub, bg: 'rgba(239,68,68,0.12)' }
+      : { icon: '💰', label: 'EARNINGS · 30 DAYS', value: '₹' + earnings30.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), bg: 'rgba(16,185,129,0.12)', href: '/admin/revenue' },
   ]
 
   const statusStyle: Record<string, { bg: string; color: string }> = {
@@ -70,7 +132,8 @@ export default async function AdminDashboard() {
     scheduled: { bg: 'rgba(245,158,11,0.12)', color: '#fbbf24' },
   }
 
-  const actions = [
+  // Publishers get only their own tools
+  const actions = isAdmin ? [
     { href: '/admin/articles/new',               icon: '✏️', label: 'New Article',    accent: true },
     { href: '/admin/ai-writer',                  icon: '⚡', label: 'AI Writer'            },
     { href: '/admin/trends',                     icon: '🔥', label: 'Trending Topics'      },
@@ -78,13 +141,18 @@ export default async function AdminDashboard() {
     { href: '/admin/revenue',                    icon: '💰', label: 'Earnings'             },
     { href: '/admin/monetization/site-scripts',  icon: '🔧', label: 'Site Scripts'         },
     { href: '/admin/outreach',                   icon: '📋', label: 'Outreach'             },
+  ] : [
+    { href: '/admin/articles/new',               icon: '✏️', label: 'New Article',    accent: true },
+    { href: '/admin/articles',                   icon: '📄', label: 'My Articles'          },
+    { href: '/admin/ai-writer',                  icon: '⚡', label: 'AI Writer'            },
+    { href: '/admin/seo',                        icon: '🎯', label: 'SEO Engine'           },
+    { href: '/admin/revenue',                    icon: '💰', label: 'My Earnings'          },
   ]
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24, paddingBottom: 32, color: 'var(--txt)' }}>
       <style dangerouslySetInnerHTML={{ __html: hoverCss }} />
 
-      {/* Welcome */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
         <div>
           <p style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'var(--txt-3)', marginBottom: 6 }}>
@@ -95,10 +163,12 @@ export default async function AdminDashboard() {
           </h1>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <Link href="/admin/trends"
-            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 10, fontSize: 13, fontWeight: 600, background: 'var(--bg-subtle)', color: 'var(--txt-2)', border: '1px solid var(--border)', textDecoration: 'none' }}>
-            🔥 Trends
-          </Link>
+          {isAdmin && (
+            <Link href="/admin/trends"
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 10, fontSize: 13, fontWeight: 600, background: 'var(--bg-subtle)', color: 'var(--txt-2)', border: '1px solid var(--border)', textDecoration: 'none' }}>
+              🔥 Trends
+            </Link>
+          )}
           <Link href="/admin/articles/new"
             style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 10, fontSize: 13, fontWeight: 600, background: 'var(--accent)', color: '#fff', textDecoration: 'none' }}>
             + New Article
@@ -106,10 +176,10 @@ export default async function AdminDashboard() {
         </div>
       </div>
 
-      {/* KPIs */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14 }}>
-        {kpis.map(k => (
-          <div key={k.label} style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 14, padding: 20, display: 'flex', alignItems: 'center', gap: 14 }}>
+        {kpis.map(k => {
+          const card = (
+          <div key={k.label} style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 14, padding: 20, display: 'flex', alignItems: 'center', gap: 14, height: '100%', boxSizing: 'border-box' }}>
             <div style={{ width: 48, height: 48, borderRadius: 12, background: k.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>
               {k.icon}
             </div>
@@ -118,18 +188,17 @@ export default async function AdminDashboard() {
               <p style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--txt-3)', marginTop: 4 }}>{k.label}</p>
             </div>
           </div>
-        ))}
+          )
+          return k.href ? <Link key={k.label} href={k.href} style={{ textDecoration: 'none' }}>{card}</Link> : card
+        })}
       </div>
 
-      {/* Main grid */}
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16 }}>
-
-        {/* Recent articles */}
         <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 14, overflow: 'hidden' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
             <div>
               <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--txt)', margin: 0 }}>Recent Articles</p>
-              <p style={{ fontSize: 11, color: 'var(--txt-3)', marginTop: 2 }}>Latest content across all publishers</p>
+              <p style={{ fontSize: 11, color: 'var(--txt-3)', marginTop: 2 }}>{isAdmin ? 'Latest content across all publishers' : 'Your latest content'}</p>
             </div>
             <Link href="/admin/articles" style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent)', textDecoration: 'none' }}>View all →</Link>
           </div>
@@ -157,7 +226,6 @@ export default async function AdminDashboard() {
           })}
         </div>
 
-        {/* Quick actions */}
         <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 14, overflow: 'hidden' }}>
           <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
             <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--txt)', margin: 0 }}>Quick Actions</p>
