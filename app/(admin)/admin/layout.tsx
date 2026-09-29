@@ -1,6 +1,7 @@
-// app/(admin)/admin/layout.tsx — v2
+// app/(admin)/admin/layout.tsx — v3
 // v2: publishers (not admin, not advertiser) are kept out of admin-only pages
 //     by AdminRouteGuard. Real data protection is enforced in the database (RLS).
+// v3: reads the publisher's package (plan) — Analytics is Pro-only.
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { AdminSidebar } from '@/components/admin/AdminSidebar'
@@ -17,6 +18,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const isAdmin = user.email === ADMIN_EMAIL
 
   let isAdvertiser = false
+  let plan = 'free'
   if (!isAdmin) {
     try {
       const { createClient: svc } = require('@supabase/supabase-js')
@@ -24,8 +26,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.SUPABASE_SERVICE_ROLE_KEY!
       )
-      const { data } = await admin.from('user_profiles').select('role').eq('id', user.id).single()
+      const { data } = await admin.from('user_profiles').select('role,plan').eq('id', user.id).single()
       isAdvertiser = data?.role === 'advertiser'
+      plan = String(data?.plan || 'free').toLowerCase()
     } catch { /* default false */ }
   }
 
@@ -38,7 +41,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         <AdminHeader email={user.email ?? ''} isAdmin={isAdmin} isAdvertiser={isAdvertiser} />
         <main style={{ flex:1, overflowY:'auto', background:'var(--bg)' }}>
           <div style={{ padding:24, maxWidth:1400, margin:'0 auto' }}>
-            <AdminRouteGuard isPublisher={isPublisher}>
+            <AdminRouteGuard isPublisher={isPublisher} plan={plan}>
               {children}
             </AdminRouteGuard>
           </div>
