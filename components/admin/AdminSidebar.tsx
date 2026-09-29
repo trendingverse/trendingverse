@@ -1,5 +1,6 @@
 'use client'
-// components/admin/AdminSidebar.tsx — v2
+// components/admin/AdminSidebar.tsx — v3
+// v3: Analytics added to the publisher menu (Pro-only content, upsell for others).
 // v2: publishers get their own menu (content tools, AI & SEO, My Earnings) —
 //     admin-only sections are no longer shown to them.
 import { usePathname } from 'next/navigation'
@@ -52,7 +53,7 @@ const ADV_NAV = [{ group: 'Outreach', items: [{ label: 'Publisher Outreach', hre
 // Publisher menu: only their own content tools + their earnings
 const PUB_ALLOWED = [
   '/admin', '/admin/articles', '/admin/categories', '/admin/media', '/admin/paste-enrich', '/admin/video',
-  '/admin/ai-writer', '/admin/seo', '/admin/revenue', '/admin/settings',
+  '/admin/ai-writer', '/admin/seo', '/admin/revenue', '/admin/analytics', '/admin/settings',
 ]
 const PUB_NAV = NAV
   .map(g => ({
