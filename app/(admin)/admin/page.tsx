@@ -1,6 +1,7 @@
-// app/(admin)/admin/page.tsx — v4
+// app/(admin)/admin/page.tsx — v5
 // Publishers see ONLY their own articles (written by them or on their sites),
-// their own quick actions, and their earnings (last 30 days, their share).
+// their own quick actions, and their earnings (last 30 days, their share) —
+// earnings only for packages that include ads; free plan sees an upgrade link.
 // Admin sees everything. Hover effects in CSS; redirect outside try/catch.
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
@@ -9,6 +10,7 @@ import Link from 'next/link'
 
 export const dynamic = 'force-dynamic'
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'khan.khan.yusuf@gmail.com'
+const PLANS_WITH_ADS = ['growth', 'pro', 'byoak', 'agency']
 
 async function safeCount(fn: () => any): Promise<number> {
   try { const r = await fn(); return r?.error ? 0 : (r?.count ?? 0) } catch { return 0 }
@@ -73,6 +75,7 @@ export default async function AdminDashboard() {
   let total = 0, published = 0, drafts = 0, todayPub = 0
   let articles: any[] = []
   let earnings30 = 0
+  let adsPlan = true
 
   try {
     const supabase = await createClient()
@@ -103,7 +106,11 @@ export default async function AdminDashboard() {
         safeCount(() => scope(base().eq('status', 'published').gte('published_at', todayISO + 'T00:00:00Z'))),
         safeData(() => scope(supabase.from('articles').select('id,title,status,published_at,category_name')).order('created_at', { ascending: false }).limit(8)),
       ])
-      if (!isAdmin) earnings30 = await publisherEarnings30d(u.id)
+      if (!isAdmin) {
+        const { data: prof } = await supabase.from('user_profiles').select('plan').eq('id', u.id).maybeSingle()
+        adsPlan = PLANS_WITH_ADS.includes(String(prof?.plan || 'free').toLowerCase())
+        if (adsPlan) earnings30 = await publisherEarnings30d(u.id)
+      }
     }
   } catch (e) {
     console.error('[AdminDashboard] error:', e)
@@ -123,7 +130,9 @@ export default async function AdminDashboard() {
     { icon: '✏️', label: 'DRAFTS',           value: drafts,    bg: 'rgba(245,158,11,0.12)' },
     isAdmin
       ? { icon: '🚀', label: 'TODAY', value: todayPub, bg: 'rgba(239,68,68,0.12)' }
-      : { icon: '💰', label: 'EARNINGS · 30 DAYS', value: '₹' + earnings30.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), bg: 'rgba(16,185,129,0.12)', href: '/admin/revenue' },
+      : adsPlan
+        ? { icon: '💰', label: 'EARNINGS · 30 DAYS', value: '₹' + earnings30.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), bg: 'rgba(16,185,129,0.12)', href: '/admin/revenue' }
+        : { icon: '💰', label: 'UPGRADE TO EARN FROM ADS', value: 'Upgrade', bg: 'rgba(245,158,11,0.12)', href: '/pricing' },
   ]
 
   const statusStyle: Record<string, { bg: string; color: string }> = {
