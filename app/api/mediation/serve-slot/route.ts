@@ -1,4 +1,4 @@
-// app/api/mediation/serve-slot/route.ts  — v3.3
+// app/api/mediation/serve-slot/route.ts  — v3.5
 // ══════════════════════════════════════════════════════════════════
 // UNIVERSAL SLOT SERVER — multi-partner mediation brain.
 //
@@ -12,6 +12,8 @@
 //     partners' placements/templates (never the same partner again).
 // v2: the DIRECT decision reuses serve-ad (geo / tier / gender / floor).
 //
+// v3.5: each 'request' event is logged with the partner of the unit served,
+//   so reports show true per-partner requests and fill rates.
 // v3.3: ASSIGNMENT-DRIVEN. When the plugin sends ad_unit_id (the unit assigned
 //   to that slot in "Assign to Publishers"), exactly that unit is served —
 //   direct campaigns first, then the assigned unit, nothing else.
@@ -143,8 +145,9 @@ export async function POST(req: NextRequest) {
         ad_code: fillTemplate(unit.ad_code, { w, h, slotId }),
       })
     }
+    const servedA = demand.find(d => d.type === 'network')
     admin.from('mediation_events').insert({
-      fingerprint, site_url: site, position: pos, partner_slug: null, event_type: 'request',
+      fingerprint, site_url: site, position: pos, partner_slug: servedA ? servedA.source : null, event_type: 'request',
     }).then(() => {}, () => {})
     const direct = demand.filter(d => d.type === 'direct')
     const network = demand.filter(d => d.type === 'network')
@@ -223,9 +226,10 @@ export async function POST(req: NextRequest) {
   const network = demand.filter(d => d.type === 'network').sort((a, b) => (a.order ?? 100) - (b.order ?? 100))
   const ordered = [...direct, ...network]
 
+  const servedB = network[0]
   admin.from('mediation_events').insert({
     fingerprint, site_url: site, position: pos,
-    partner_slug: null, event_type: 'request',
+    partner_slug: servedB ? servedB.source : null, event_type: 'request',
   }).then(() => {}, () => {})
 
   return NextResponse.json({
