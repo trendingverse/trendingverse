@@ -1,4 +1,7 @@
 'use client'
+// components/admin/AdminSidebar.tsx — v2
+// v2: publishers get their own menu (content tools, AI & SEO, My Earnings) —
+//     admin-only sections are no longer shown to them.
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
@@ -46,11 +49,25 @@ const NAV = [
 const ADMIN_G = { group: 'Admin', items: [{ label: 'Publishers', href: '/admin/publishers', d: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z' }]}
 const ADV_NAV = [{ group: 'Outreach', items: [{ label: 'Publisher Outreach', href: '/admin/outreach', d: 'M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z' }]}]
 
+// Publisher menu: only their own content tools + their earnings
+const PUB_ALLOWED = [
+  '/admin', '/admin/articles', '/admin/categories', '/admin/media', '/admin/paste-enrich', '/admin/video',
+  '/admin/ai-writer', '/admin/seo', '/admin/revenue', '/admin/settings',
+]
+const PUB_NAV = NAV
+  .map(g => ({
+    group: g.group,
+    items: g.items
+      .filter(i => PUB_ALLOWED.includes(i.href))
+      .map(i => (i.href === '/admin/revenue' ? { ...i, label: 'My Earnings' } : i)),
+  }))
+  .filter(g => g.items.length > 0)
+
 export function AdminSidebar({ isAdmin = false, isAdvertiser = false }: { isAdmin?: boolean; isAdvertiser?: boolean }) {
   const path = usePathname()
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
-  const nav = isAdvertiser ? ADV_NAV : isAdmin ? [...NAV, ADMIN_G] : NAV
+  const nav = isAdvertiser ? ADV_NAV : isAdmin ? [...NAV, ADMIN_G] : PUB_NAV
   useEffect(() => { setMobileOpen(false) }, [path])
   const on = (href: string) => href === '/admin' ? path === '/admin' : path.startsWith(href)
 
