@@ -1,8 +1,11 @@
-// app/(admin)/admin/layout.tsx
+// app/(admin)/admin/layout.tsx — v2
+// v2: publishers (not admin, not advertiser) are kept out of admin-only pages
+//     by AdminRouteGuard. Real data protection is enforced in the database (RLS).
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { AdminSidebar } from '@/components/admin/AdminSidebar'
 import { AdminHeader } from '@/components/admin/AdminHeader'
+import { AdminRouteGuard } from '@/components/admin/AdminRouteGuard'
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'khan.khan.yusuf@gmail.com'
 
@@ -26,6 +29,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     } catch { /* default false */ }
   }
 
+  const isPublisher = !isAdmin && !isAdvertiser
+
   return (
     <div style={{ display:'flex', height:'100vh', overflow:'hidden', background:'var(--bg)' }}>
       <AdminSidebar isAdmin={isAdmin} isAdvertiser={isAdvertiser} />
@@ -33,7 +38,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         <AdminHeader email={user.email ?? ''} isAdmin={isAdmin} isAdvertiser={isAdvertiser} />
         <main style={{ flex:1, overflowY:'auto', background:'var(--bg)' }}>
           <div style={{ padding:24, maxWidth:1400, margin:'0 auto' }}>
-            {children}
+            <AdminRouteGuard isPublisher={isPublisher}>
+              {children}
+            </AdminRouteGuard>
           </div>
         </main>
       </div>
