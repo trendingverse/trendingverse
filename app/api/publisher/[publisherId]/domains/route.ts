@@ -5,6 +5,8 @@ import { createClient as svc } from '@supabase/supabase-js'
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'khan.khan.yusuf@gmail.com'
 
+type Params = Promise<{ publisherId: string }>
+
 function adminClient() {
   return svc(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -13,10 +15,8 @@ function adminClient() {
 }
 
 // GET  /api/admin/publishers/[publisherId]/domains
-export async function GET(
-  _req: NextRequest,
-  { params }: { params: { publisherId: string } }
-) {
+export async function GET(_req: NextRequest, { params }: { params: Params }) {
+  const { publisherId } = await params
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user || user.email !== ADMIN_EMAIL) {
@@ -24,11 +24,10 @@ export async function GET(
   }
 
   const db = adminClient()
-  // Get the site for this publisher
   const { data: site } = await db
     .from('sites')
     .select('id')
-    .eq('user_id', params.publisherId)
+    .eq('user_id', publisherId)
     .single()
 
   if (!site) return NextResponse.json({ domains: [] })
@@ -44,10 +43,8 @@ export async function GET(
 }
 
 // POST /api/admin/publishers/[publisherId]/domains
-export async function POST(
-  req: NextRequest,
-  { params }: { params: { publisherId: string } }
-) {
+export async function POST(req: NextRequest, { params }: { params: Params }) {
+  const { publisherId } = await params
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user || user.email !== ADMIN_EMAIL) {
@@ -65,7 +62,7 @@ export async function POST(
   const { data: site } = await db
     .from('sites')
     .select('id')
-    .eq('user_id', params.publisherId)
+    .eq('user_id', publisherId)
     .single()
 
   if (!site) return NextResponse.json({ error: 'Publisher site not found' }, { status: 404 })
@@ -81,10 +78,8 @@ export async function POST(
 }
 
 // DELETE /api/admin/publishers/[publisherId]/domains  (body: { id })
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: { publisherId: string } }
-) {
+export async function DELETE(req: NextRequest, { params }: { params: Params }) {
+  await params // satisfy Next.js 15 requirement
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user || user.email !== ADMIN_EMAIL) {
@@ -101,10 +96,8 @@ export async function DELETE(
 }
 
 // PATCH /api/admin/publishers/[publisherId]/domains  (body: { id, label, is_pwa, is_active })
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: { publisherId: string } }
-) {
+export async function PATCH(req: NextRequest, { params }: { params: Params }) {
+  await params // satisfy Next.js 15 requirement
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user || user.email !== ADMIN_EMAIL) {
