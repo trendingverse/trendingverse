@@ -30,7 +30,7 @@ export function PublisherDomainsPanel({ publisherId, publisherName }: Props) {
   const [newIsPwa,  setNewIsPwa]  = useState(false)
   const [showForm,  setShowForm]  = useState(false)
 
-  const BASE = `/api/admin/publishers/${publisherId}/domains`
+  const BASE = `/api/publisher/${publisherId}/domains`
 
   const load = useCallback(async () => {
     setLoading(true)
