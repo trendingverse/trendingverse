@@ -38,10 +38,17 @@ export default function LoginPage() {
 
       const role = profile?.role || 'publisher'
 
+      // Send login notification email for advertisers
       if (role === 'advertiser') {
-        router.push('/admin/outreach')  // Advertisers → outreach panel
+        fetch('/api/auth/login-notification', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: user.email, name: user.user_metadata?.full_name || '', role }),
+        }).catch(() => {}) // fire and forget
+
+        router.push('/admin/outreach')
       } else {
-        router.push('/admin')           // Publishers → admin dashboard
+        router.push('/admin')
       }
     } else {
       router.push('/admin')
