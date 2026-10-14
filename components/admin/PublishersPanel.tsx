@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
+import { PublisherDomainsPanel } from '@/components/admin/PublisherDomainsPanel'
 
 interface Site { name: string; site_url: string; articles_count: number }
 interface Publisher {
@@ -151,28 +152,38 @@ export function PublishersPanel() {
                     {p.last_sign_in ? new Date(p.last_sign_in).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '—'}
                   </td>
                   <td className="px-4 py-3">
-                    {p.sites_count > 0 && (
-                      <button onClick={() => setExpanded(expanded === p.id ? null : p.id)}
-                        className="text-xs text-accent hover:underline">
-                        {expanded === p.id ? 'Hide sites ▲' : 'Sites ▼'}
-                      </button>
-                    )}
+                    <button onClick={() => setExpanded(expanded === p.id ? null : p.id)}
+                      className="text-xs text-accent hover:underline">
+                      {expanded === p.id ? 'Hide ▲' : 'Manage ▼'}
+                    </button>
                   </td>
                 </tr>
-                {expanded === p.id && p.sites.length > 0 && (
-                  <tr key={`${p.id}-sites`} className="bg-blue-50/30">
-                    <td colSpan={7} className="px-8 py-3">
-                      <div className="space-y-1">
-                        {p.sites.map((s, i) => (
-                          <div key={i} className="flex items-center gap-4 text-xs">
-                            <span className="text-ink-500">🌐</span>
-                            <span className="font-medium text-ink-700">{s.name}</span>
-                            <a href={s.site_url} target="_blank" rel="noopener noreferrer"
-                              className="text-blue-500 hover:underline">{s.site_url}</a>
-                            <span className="text-ink-400">{s.articles_count || 0} articles</span>
-                          </div>
-                        ))}
-                      </div>
+
+                {expanded === p.id && (
+                  <tr key={`${p.id}-detail`} className="bg-blue-50/30">
+                    <td colSpan={7} className="px-8 py-4">
+
+                      {/* Existing sites list */}
+                      {p.sites.length > 0 && (
+                        <div className="space-y-1 mb-4">
+                          {p.sites.map((s, i) => (
+                            <div key={i} className="flex items-center gap-4 text-xs">
+                              <span className="text-ink-500">🌐</span>
+                              <span className="font-medium text-ink-700">{s.name}</span>
+                              <a href={s.site_url} target="_blank" rel="noopener noreferrer"
+                                className="text-blue-500 hover:underline">{s.site_url}</a>
+                              <span className="text-ink-400">{s.articles_count || 0} articles</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Additional domains (PWA, AMP, etc.) */}
+                      <PublisherDomainsPanel
+                        publisherId={p.id}
+                        publisherName={p.full_name || p.email}
+                      />
+
                     </td>
                   </tr>
                 )}
