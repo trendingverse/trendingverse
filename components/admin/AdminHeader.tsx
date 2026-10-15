@@ -102,7 +102,7 @@ export function AdminHeader({ email, isAdmin = false, isAdvertiser = false }: { 
             </div>
             <div style={{ textAlign:'left' }} className="hidden sm:block">
               <p style={{ fontSize:13, fontWeight:600, color:'var(--txt)', lineHeight:1.2 }}>{name}</p>
-              <p style={{ fontSize:10, color:'var(--txt-3)', lineHeight:1.2 }}>Admin</p>
+              <p style={{ fontSize:10, color:'var(--txt-3)', lineHeight:1.2 }}>{isAdvertiser ? 'Advertiser' : isAdmin ? 'Admin' : 'Publisher'}</p>
             </div>
             <span style={{ color:'var(--txt-3)', fontSize:10 }}>▾</span>
           </button>

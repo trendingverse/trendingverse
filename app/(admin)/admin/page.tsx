@@ -72,6 +72,7 @@ export default async function AdminDashboard() {
   let user: any = null
   let noUser = false
   let isAdmin = false
+  let isAdvertiser = false
   let total = 0, published = 0, drafts = 0, todayPub = 0
   let articles: any[] = []
   let earnings30 = 0
@@ -91,7 +92,7 @@ export default async function AdminDashboard() {
         const { createClient: svc } = await import('@supabase/supabase-js')
         const adminClient = svc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
         const { data: prof } = await adminClient.from('user_profiles').select('role').eq('id', u.id).single()
-        if (prof?.role === 'advertiser') redirect('/admin/outreach')
+        isAdvertiser = prof?.role === 'advertiser'
       }
 
       // Scope for publishers: their own articles, or articles on sites they own
@@ -126,6 +127,7 @@ export default async function AdminDashboard() {
 
   // redirect() must be called outside try/catch, otherwise the catch swallows it
   if (noUser) redirect('/login')
+  if (isAdvertiser) redirect('/admin/outreach')
 
   const now = new Date()
   const hour = now.getHours()
