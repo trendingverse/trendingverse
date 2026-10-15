@@ -10,21 +10,12 @@ export default async function ArticlesPage() {
   const [{ data: articles }, { data: categories }] = await Promise.all([
     supabase
       .from('articles')
-      .select(`
-        id, title, slug, status, is_featured, is_sponsored, sponsor_name,
-        view_count, seo_score, word_count, published_at, created_at, updated_at,
-        categories(name),
-        profiles(full_name)
-      `)
+      .select('id, title, slug, status, is_featured, is_sponsored, sponsor_name, view_count, seo_score, word_count, published_at, created_at, updated_at, category_name, author_name')
       .order('created_at', { ascending: false }),
     supabase.from('categories').select('id, name, slug').order('name'),
   ])
 
-  const mapped = (articles || []).map((a: any) => ({
-    ...a,
-    category_name: a.categories?.name || '',
-    author_name: a.profiles?.full_name || '',
-  }))
+  const mapped = articles || []
 
   return (
     <div className="space-y-6">
