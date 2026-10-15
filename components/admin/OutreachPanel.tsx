@@ -43,6 +43,36 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
   const [editCampaignForm, setEditCampaignForm] = useState<any>({})
   const [savingCampaign, setSavingCampaign] = useState(false)
   const [selectedCampaignId, setSelectedCampaignId] = useState<string>('')
+  const [selectedCountries, setSelectedCountries] = useState<string[]>([])
+
+  const COUNTRIES = [
+    { code: 'IN', label: '🇮🇳 India' },
+    { code: 'US', label: '🇺🇸 United States' },
+    { code: 'UK', label: '🇬🇧 United Kingdom' },
+    { code: 'AE', label: '🇦🇪 UAE' },
+    { code: 'SG', label: '🇸🇬 Singapore' },
+    { code: 'BD', label: '🇧🇩 Bangladesh' },
+    { code: 'PK', label: '🇵🇰 Pakistan' },
+    { code: 'LK', label: '🇱🇰 Sri Lanka' },
+    { code: 'MY', label: '🇲🇾 Malaysia' },
+    { code: 'PH', label: '🇵🇭 Philippines' },
+    { code: 'ID', label: '🇮🇩 Indonesia' },
+    { code: 'TH', label: '🇹🇭 Thailand' },
+    { code: 'VN', label: '🇻🇳 Vietnam' },
+    { code: 'MX', label: '🇲🇽 Mexico' },
+    { code: 'BR', label: '🇧🇷 Brazil' },
+    { code: 'NG', label: '🇳🇬 Nigeria' },
+    { code: 'ZA', label: '🇿🇦 South Africa' },
+    { code: 'AU', label: '🇦🇺 Australia' },
+    { code: 'CA', label: '🇨🇦 Canada' },
+    { code: 'DE', label: '🇩🇪 Germany' },
+  ]
+
+  function toggleCountry(code: string) {
+    setSelectedCountries(prev =>
+      prev.includes(code) ? prev.filter(c => c !== code) : [...prev, code]
+    )
+  }
 
   useEffect(() => { fetchAll() }, [])
 
@@ -116,9 +146,15 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
     setSuggesting(true)
     toast.loading('AI analyzing campaign brief...', { id: 'suggest' })
 
+    // Build explicit geo context from country picker if any selected
+    const countryNames = selectedCountries.map(code => COUNTRIES.find(c => c.code === code)?.label.replace(/^.+? /, '') || code)
+    const briefWithGeo = selectedCountries.length > 0
+      ? `Geo/Regions: ${countryNames.join(', ')}\n\n${briefInput}`
+      : briefInput
+
     const suggestRes = await fetch('/api/outreach/suggest', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ brief: briefInput, publisher_scope: pubScope }),
+      body: JSON.stringify({ brief: briefWithGeo, publisher_scope: pubScope }),
     })
     const data = await suggestRes.json()
     toast.dismiss('suggest')
@@ -129,7 +165,7 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         name: campaignName || (data.summary?.brand || 'Campaign') + ' — Outreach',
-        brief: briefInput,
+        brief: briefWithGeo,
         brand: data.summary?.brand,
         category: data.summary?.category,
         target_audience: data.summary?.target_audience,
@@ -146,6 +182,7 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
     setShowCampaignForm(false)
     setBriefInput('')
     setCampaignName('')
+    setSelectedCountries([])
     setCampaigns(prev => [saved, ...prev])
     toast.success(`${data.suggestions?.length || 0} publishers matched!`)
     setSuggesting(false)
@@ -327,6 +364,27 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
                 <textarea className="input resize-none" rows={8} value={briefInput}
                   onChange={e => setBriefInput(e.target.value)}
                   placeholder={`Brand: Nykaa\nProduct: Summer skincare range\nTarget Audience: Women 18-35, urban\nRegion: Karnataka, Maharashtra, Tamil Nadu\nBudget: ₹5-10 Lakhs\nGoal: Brand awareness + app installs\nLanguage: Kannada, Hindi, English\nTimeline: June–August 2026\nAd formats: Display banner, native`} />
+              </div>
+              <div>
+                <label className="label">Target Countries <span className="text-ink-400 font-normal">(select all that apply — speeds up matching)</span></label>
+                <div className="flex flex-wrap gap-1.5 mt-1">
+                  {COUNTRIES.map(c => (
+                    <button key={c.code} type="button" onClick={() => toggleCountry(c.code)}
+                      className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${
+                        selectedCountries.includes(c.code)
+                          ? 'bg-accent text-white border-accent font-semibold'
+                          : 'border-ink-200 text-ink-600 hover:border-accent hover:text-accent'
+                      }`}>
+                      {c.label}
+                    </button>
+                  ))}
+                </div>
+                {selectedCountries.length > 0 && (
+                  <p className="text-xs text-accent mt-1.5">
+                    ✓ {selectedCountries.length} countr{selectedCountries.length > 1 ? 'ies' : 'y'} selected — will override geo from brief
+                    <button onClick={() => setSelectedCountries([])} className="ml-2 text-ink-400 hover:text-red-500 underline">Clear</button>
+                  </p>
+                )}
               </div>
               <div>
                 <label className="label">Publisher Scope</label>
