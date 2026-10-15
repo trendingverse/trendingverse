@@ -44,6 +44,19 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
   const [savingCampaign, setSavingCampaign] = useState(false)
   const [selectedCampaignId, setSelectedCampaignId] = useState<string>('')
   const [selectedCountries, setSelectedCountries] = useState<string[]>([])
+  const [campaignForm, setCampaignForm] = useState({
+    brand: '',
+    vertical: '',
+    budget: '',
+    audience: '',
+    formats: [] as string[],
+    devices: [] as string[],
+    dealType: '',
+    kpi: '',
+    startDate: '',
+    endDate: '',
+    notes: '',
+  })
 
   const COUNTRIES = [
     { code: 'IN', label: '🇮🇳 India' },
@@ -142,19 +155,31 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
   }
 
   async function createCampaign() {
-    if (!briefInput.trim()) { toast.error('Paste a campaign brief first'); return }
+    if (!campaignForm.brand.trim()) { toast.error('Enter a brand name'); return }
     setSuggesting(true)
-    toast.loading('AI analyzing campaign brief...', { id: 'suggest' })
+    toast.loading('Finding best publishers...', { id: 'suggest' })
 
-    // Build explicit geo context from country picker if any selected
+    // Build structured brief from form fields
     const countryNames = selectedCountries.map(code => COUNTRIES.find(c => c.code === code)?.label.replace(/^.+? /, '') || code)
-    const briefWithGeo = selectedCountries.length > 0
-      ? `Geo/Regions: ${countryNames.join(', ')}\n\n${briefInput}`
-      : briefInput
+    const builtBrief = [
+      `Brand: ${campaignForm.brand}`,
+      campaignForm.vertical && `Vertical: ${campaignForm.vertical}`,
+      countryNames.length > 0 && `Geo/Regions: ${countryNames.join(', ')}`,
+      campaignForm.audience && `Target Audience: ${campaignForm.audience}`,
+      campaignForm.formats.length > 0 && `Ad Formats: ${campaignForm.formats.join(', ')}`,
+      campaignForm.devices.length > 0 && `Device: ${campaignForm.devices.join(', ')}`,
+      campaignForm.dealType && `Deal Type: ${campaignForm.dealType}`,
+      campaignForm.kpi && `KPI: ${campaignForm.kpi}`,
+      campaignForm.budget && `Budget: ${campaignForm.budget}`,
+      (campaignForm.startDate || campaignForm.endDate) && `Timeline: ${[campaignForm.startDate, campaignForm.endDate].filter(Boolean).join(' to ')}`,
+      campaignForm.notes && `Additional Notes: ${campaignForm.notes}`,
+    ].filter(Boolean).join('\n')
+
+    const briefWithGeo = builtBrief
 
     const suggestRes = await fetch('/api/outreach/suggest', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ brief: briefWithGeo, publisher_scope: pubScope }),
+      body: JSON.stringify({ brief: briefWithGeo }),
     })
     const data = await suggestRes.json()
     toast.dismiss('suggest')
@@ -164,7 +189,7 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
     const saveRes = await fetch('/api/outreach/campaigns', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        name: campaignName || (data.summary?.brand || 'Campaign') + ' — Outreach',
+        name: campaignName || (data.summary?.brand || campaignForm.brand || 'Campaign') + ' — Outreach',
         brief: briefWithGeo,
         brand: data.summary?.brand,
         category: data.summary?.category,
@@ -183,6 +208,7 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
     setBriefInput('')
     setCampaignName('')
     setSelectedCountries([])
+    setCampaignForm({ brand: '', vertical: '', budget: '', audience: '', formats: [], devices: [], dealType: '', kpi: '', startDate: '', endDate: '', notes: '' })
     setCampaigns(prev => [saved, ...prev])
     toast.success(`${data.suggestions?.length || 0} publishers matched!`)
     setSuggesting(false)
@@ -353,20 +379,42 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
 
           {/* Campaign form */}
           {showCampaignForm && (
-            <div className="card p-5 space-y-4 border-2 border-accent/20">
-              <h3 className="font-semibold text-ink-900">New Campaign Brief</h3>
-              <div>
-                <label className="label">Campaign Name (optional)</label>
-                <input className="input" value={campaignName} onChange={e => setCampaignName(e.target.value)} placeholder="e.g. Diwali Sale 2026" />
+            <div className="card p-5 space-y-5 border-2 border-accent/20">
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold text-ink-900">New Campaign</h3>
+                <button onClick={() => setShowCampaignForm(false)} className="text-ink-400 hover:text-ink-700 text-lg leading-none">×</button>
               </div>
-              <div>
-                <label className="label">Paste Campaign Requirements *</label>
-                <textarea className="input resize-none" rows={8} value={briefInput}
-                  onChange={e => setBriefInput(e.target.value)}
-                  placeholder={`Brand: Nykaa\nProduct: Summer skincare range\nTarget Audience: Women 18-35, urban\nRegion: Karnataka, Maharashtra, Tamil Nadu\nBudget: ₹5-10 Lakhs\nGoal: Brand awareness + app installs\nLanguage: Kannada, Hindi, English\nTimeline: June–August 2026\nAd formats: Display banner, native`} />
+
+              {/* Row 1: Brand + Campaign Name */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">Brand *</label>
+                  <input className="input" value={campaignForm.brand} onChange={e => setCampaignForm(f => ({ ...f, brand: e.target.value }))} placeholder="e.g. Nykaa" />
+                </div>
+                <div>
+                  <label className="label">Campaign Name <span className="text-ink-400 font-normal">(optional)</span></label>
+                  <input className="input" value={campaignName} onChange={e => setCampaignName(e.target.value)} placeholder="e.g. Diwali Sale 2026" />
+                </div>
               </div>
+
+              {/* Row 2: Vertical + Audience */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">Vertical / Category</label>
+                  <select className="input" value={campaignForm.vertical} onChange={e => setCampaignForm(f => ({ ...f, vertical: e.target.value }))}>
+                    <option value="">Select vertical…</option>
+                    {['E-Commerce','BFSI','Auto','FMCG','OTT / Entertainment','Ed-Tech','Gaming','Travel','Health & Pharma','Real Estate','Fashion & Lifestyle','Food & Beverage','Technology','Telecom','Sports'].map(v => <option key={v} value={v}>{v}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="label">Target Audience</label>
+                  <input className="input" value={campaignForm.audience} onChange={e => setCampaignForm(f => ({ ...f, audience: e.target.value }))} placeholder="e.g. Males 25–44, urban, SEC A/B" />
+                </div>
+              </div>
+
+              {/* Target Countries */}
               <div>
-                <label className="label">Target Countries <span className="text-ink-400 font-normal">(select all that apply — speeds up matching)</span></label>
+                <label className="label">Target Countries</label>
                 <div className="flex flex-wrap gap-1.5 mt-1">
                   {COUNTRIES.map(c => (
                     <button key={c.code} type="button" onClick={() => toggleCountry(c.code)}
@@ -381,22 +429,104 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
                 </div>
                 {selectedCountries.length > 0 && (
                   <p className="text-xs text-accent mt-1.5">
-                    ✓ {selectedCountries.length} countr{selectedCountries.length > 1 ? 'ies' : 'y'} selected — will override geo from brief
+                    ✓ {selectedCountries.length} countr{selectedCountries.length > 1 ? 'ies' : 'y'} selected
                     <button onClick={() => setSelectedCountries([])} className="ml-2 text-ink-400 hover:text-red-500 underline">Clear</button>
                   </p>
                 )}
               </div>
+
+              {/* Ad Formats */}
               <div>
-                <label className="label">Your Name (for email draft)</label>
-                <input className="input" value={senderName} onChange={e => setSenderName(e.target.value)} placeholder="e.g. Bhanushree" />
+                <label className="label">Ad Formats</label>
+                <div className="flex flex-wrap gap-1.5 mt-1">
+                  {['Display / Banner','Native','Video (In-stream)','Video (Out-stream)','CTV','Interstitial','Rich Media','Skin / Roadblock','Sponsored Content'].map(f => (
+                    <button key={f} type="button"
+                      onClick={() => setCampaignForm(prev => ({ ...prev, formats: prev.formats.includes(f) ? prev.formats.filter(x => x !== f) : [...prev.formats, f] }))}
+                      className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${campaignForm.formats.includes(f) ? 'bg-blue-600 text-white border-blue-600 font-semibold' : 'border-ink-200 text-ink-600 hover:border-blue-400 hover:text-blue-600'}`}>
+                      {f}
+                    </button>
+                  ))}
+                </div>
               </div>
+
+              {/* Device + Deal Type */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label">Device</label>
+                  <div className="flex flex-wrap gap-1.5 mt-1">
+                    {['Mobile','Desktop','CTV','Tablet','All'].map(d => (
+                      <button key={d} type="button"
+                        onClick={() => setCampaignForm(prev => ({ ...prev, devices: prev.devices.includes(d) ? prev.devices.filter(x => x !== d) : [...prev.devices, d] }))}
+                        className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${campaignForm.devices.includes(d) ? 'bg-purple-600 text-white border-purple-600 font-semibold' : 'border-ink-200 text-ink-600 hover:border-purple-400'}`}>
+                        {d}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label className="label">Deal Type</label>
+                  <div className="flex flex-wrap gap-1.5 mt-1">
+                    {['Open Auction','PMP','PG','Direct','DV360','Xandr','TTD'].map(d => (
+                      <button key={d} type="button"
+                        onClick={() => setCampaignForm(prev => ({ ...prev, dealType: prev.dealType === d ? '' : d }))}
+                        className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${campaignForm.dealType === d ? 'bg-green-600 text-white border-green-600 font-semibold' : 'border-ink-200 text-ink-600 hover:border-green-400'}`}>
+                        {d}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* KPI + Budget */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">KPI / Goal</label>
+                  <select className="input" value={campaignForm.kpi} onChange={e => setCampaignForm(f => ({ ...f, kpi: e.target.value }))}>
+                    <option value="">Select KPI…</option>
+                    {['Brand Awareness','CTR / Clicks','App Installs','Lead Generation','Video Views','Reach & Frequency','Sales / Conversions','Viewability'].map(k => <option key={k} value={k}>{k}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="label">Budget Range</label>
+                  <input className="input" value={campaignForm.budget} onChange={e => setCampaignForm(f => ({ ...f, budget: e.target.value }))} placeholder="e.g. ₹5–10L / $10k–$50k" />
+                </div>
+              </div>
+
+              {/* Timeline */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">Start Date</label>
+                  <input type="date" className="input" value={campaignForm.startDate} onChange={e => setCampaignForm(f => ({ ...f, startDate: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="label">End Date</label>
+                  <input type="date" className="input" value={campaignForm.endDate} onChange={e => setCampaignForm(f => ({ ...f, endDate: e.target.value }))} />
+                </div>
+              </div>
+
+              {/* Additional Notes */}
               <div>
-                <label className="label">Your Title</label>
-                <input className="input" value={senderTitle} onChange={e => setSenderTitle(e.target.value)} placeholder="e.g. Manager - Business Development" />
+                <label className="label">Additional Notes <span className="text-ink-400 font-normal">(optional — any extra context)</span></label>
+                <textarea className="input resize-none" rows={2} value={campaignForm.notes}
+                  onChange={e => setCampaignForm(f => ({ ...f, notes: e.target.value }))}
+                  placeholder="e.g. Prefer premium publishers, Hindi + English content, no competitor adjacency" />
               </div>
+
+              {/* Sender info */}
+              <div className="grid grid-cols-2 gap-3 pt-1 border-t border-ink-100">
+                <div>
+                  <label className="label">Your Name <span className="text-ink-400 font-normal">(for email drafts)</span></label>
+                  <input className="input" value={senderName} onChange={e => setSenderName(e.target.value)} placeholder="e.g. Bhanushree" />
+                </div>
+                <div>
+                  <label className="label">Your Title</label>
+                  <input className="input" value={senderTitle} onChange={e => setSenderTitle(e.target.value)} placeholder="e.g. Manager – Business Development" />
+                </div>
+              </div>
+
               <div className="flex gap-3">
-                <button onClick={createCampaign} disabled={!briefInput.trim() || suggesting} className="btn-primary">
-                  {suggesting ? '✦ Analyzing...' : '✦ Analyze & Find Publishers'}
+                <button onClick={createCampaign} disabled={!campaignForm.brand.trim() || suggesting} className="btn-primary">
+                  {suggesting ? '✦ Finding Publishers...' : '✦ Find Publishers'}
                 </button>
                 <button onClick={() => { setShowCampaignForm(false); setBriefInput('') }}
                   className="px-4 py-2 text-sm bg-ink-100 text-ink-600 rounded-xl">Cancel</button>
