@@ -603,148 +603,199 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
 
           {/* Suggestions */}
           {activeCampaign && suggestions.length > 0 && !suggesting && (
-            <div className="card overflow-hidden">
-              <div className="p-4 bg-ink-50 border-b border-ink-100 flex items-center justify-between">
-                <div>
-                  <p className="font-semibold text-ink-900">{activeCampaign.brand || activeCampaign.name}</p>
-                  <p className="text-xs text-ink-400">{suggestions.length} matched publishers — save to DB or draft outreach email</p>
+            <div className="space-y-3">
+              {/* Campaign summary header */}
+              <div className="card p-4 border-l-4 border-accent">
+                <div className="flex items-start justify-between gap-4 mb-3">
+                  <div>
+                    <p className="font-semibold text-ink-900 text-base">{activeCampaign.brand || activeCampaign.name}</p>
+                    <p className="text-xs text-ink-400 mt-0.5">{activeCampaign.name && activeCampaign.name !== activeCampaign.brand ? activeCampaign.name : ''}</p>
+                  </div>
+                  <button onClick={() => downloadCSV(suggestions)}
+                    className="text-xs px-3 py-1.5 bg-green-50 text-green-700 border border-green-200 rounded-lg hover:bg-green-100 font-medium whitespace-nowrap shrink-0">
+                    ⬇ Export CSV
+                  </button>
                 </div>
-                <button onClick={() => downloadCSV(suggestions)}
-                  className="text-xs px-3 py-1.5 bg-green-50 text-green-700 border border-green-200 rounded-lg hover:bg-green-100">
-                  ⬇ Export CSV
-                </button>
-              </div>
-
-              {(summary || activeCampaign) && (
-                <div className="px-4 py-3 border-b border-ink-50 flex flex-wrap gap-2">
+                <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs">
                   {[
-                    { l: 'Brand', v: summary?.brand || activeCampaign?.brand },
-                    { l: 'Category', v: summary?.category || activeCampaign?.category },
-                    { l: 'Audience', v: summary?.target_audience || activeCampaign?.target_audience },
-                    { l: 'Regions', v: (summary?.regions?.length ? summary.regions : activeCampaign?.regions || []).join(', ') },
-                    { l: 'Budget', v: summary?.budget_range || activeCampaign?.budget_range },
-                    { l: 'Device', v: summary?.device },
-                    { l: 'Deal Type', v: summary?.deal_type || summary?.campaign_type },
-                    { l: 'KPI', v: summary?.kpi || summary?.key_message },
+                    { l: '🏷 Brand', v: summary?.brand || activeCampaign?.brand },
+                    { l: '📂 Vertical', v: summary?.category || activeCampaign?.category },
+                    { l: '👥 Audience', v: summary?.target_audience || activeCampaign?.target_audience },
+                    { l: '🌏 Regions', v: (summary?.regions?.length ? summary.regions : activeCampaign?.regions || []).filter(Boolean).join(', ') },
+                    { l: '💰 Budget', v: summary?.budget_range || activeCampaign?.budget_range },
+                    { l: '🎯 KPI', v: summary?.kpi || summary?.key_message },
+                    { l: '📱 Device', v: summary?.device },
+                    { l: '🔒 Deal Type', v: summary?.deal_type || summary?.campaign_type },
                   ].filter(s => s.v).map(s => (
-                    <span key={s.l} className="text-xs bg-ink-100 text-ink-600 px-2 py-0.5 rounded-full">
-                      <span className="text-ink-400">{s.l}:</span> {s.v}
-                    </span>
+                    <div key={s.l} className="flex gap-1.5">
+                      <span className="text-ink-400 shrink-0">{s.l}:</span>
+                      <span className="text-ink-700 font-medium">{s.v}</span>
+                    </div>
                   ))}
                 </div>
-              )}
+                <p className="text-xs text-ink-400 mt-3 pt-3 border-t border-ink-100">
+                  {suggestions.length} publishers matched — save to your Publisher DB or draft an outreach email
+                </p>
+              </div>
 
-              <div className="divide-y divide-ink-50">
-                {suggestions.map((pub, i) => {
-                  const saved = alreadySaved(pub)
-                  return (
-                    <div key={i} className="px-4 py-3 hover:bg-ink-50/50">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex items-start gap-3 flex-1 min-w-0">
-                          <span className="text-xs text-ink-400 w-5 shrink-0 mt-0.5">{i + 1}</span>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2 flex-wrap mb-0.5">
-                              <p className="text-sm font-semibold text-ink-900">{pub.name}</p>
-                              <a href={`https://${pub.site}`} target="_blank" rel="noreferrer"
-                                className="text-xs text-blue-500 hover:underline">{pub.site}</a>
-                              {saved && <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">✓ Saved</span>}
-                            </div>
-                            <p className="text-xs text-ink-400">{pub.region} · {pub.language} · {pub.monthly_audience}</p>
-                            <div className="flex gap-1 mt-1 flex-wrap">
-                              {(pub as any).ctv_available && <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full font-medium">📺 CTV</span>}
-                              {(pub as any).pmp_supported && <span className="text-[10px] bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded-full font-medium">🔒 PMP</span>}
-                            </div>
-                            {pub.why && <p className="text-xs text-blue-600 mt-1">{pub.why}</p>}
-                            <div className="flex items-center gap-3 mt-1 flex-wrap">
-                              <span className="text-xs text-ink-500">📧 {pub.contact_email}</span>
-                              <span className="text-xs text-ink-500">📞 {pub.contact_phone}</span>
-                              {pub.contact_verified ? (
-                                <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-medium" title={pub.contact_source}>
-                                  ✓ Found on site
-                                </span>
-                              ) : (
-                                <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-medium" title={pub.contact_source || 'AI estimate — not found on site, please verify'}>
-                                  ⚠️ Not found on site — verify
-                                </span>
-                              )}
-                            </div>
-                          </div>
+              {/* Publisher cards */}
+              {suggestions.map((pub, i) => {
+                const saved = alreadySaved(pub)
+                return (
+                  <div key={i} className="card p-4 hover:shadow-md transition-shadow">
+                    <div className="flex items-start justify-between gap-4">
+                      {/* Rank + info */}
+                      <div className="flex items-start gap-3 flex-1 min-w-0">
+                        <div className={`shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${i === 0 ? 'bg-amber-100 text-amber-700' : i === 1 ? 'bg-slate-100 text-slate-600' : i === 2 ? 'bg-orange-100 text-orange-700' : 'bg-ink-100 text-ink-500'}`}>
+                          {i + 1}
                         </div>
-                        <div className="flex flex-col items-end gap-2 shrink-0">
-                          <div className="text-right">
-                            <p className={`text-base font-bold ${fitColor(pub.fit_score)}`}>{pub.fit_score}%</p>
-                            <p className="text-xs text-ink-400">fit</p>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                            <p className="text-sm font-semibold text-ink-900">{pub.name}</p>
+                            <a href={pub.site?.startsWith('http') ? pub.site : `https://${pub.site}`} target="_blank" rel="noreferrer"
+                              className="text-xs text-blue-500 hover:underline hover:text-blue-700">↗ {pub.site}</a>
+                            {saved && <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-medium">✓ Saved to DB</span>}
                           </div>
-                          <div className="flex gap-1.5">
-                            {!saved && (
-                              <button onClick={() => savePublisher(pub)} disabled={savingPub === pub.name}
-                                className="text-xs px-2.5 py-1.5 bg-ink-100 text-ink-600 rounded-lg hover:bg-ink-200 disabled:opacity-50">
-                                {savingPub === pub.name ? '...' : '+ Save'}
-                              </button>
+
+                          <div className="flex gap-3 text-xs text-ink-500 mb-1.5">
+                            {pub.region && <span>📍 {pub.region}</span>}
+                            {pub.language && <span>🗣 {pub.language}</span>}
+                            {pub.monthly_audience && <span>👁 {pub.monthly_audience}</span>}
+                            {pub.category && <span>📂 {pub.category}</span>}
+                          </div>
+
+                          <div className="flex gap-1 flex-wrap mb-1.5">
+                            {(pub as any).ctv_available && <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full font-medium">📺 CTV</span>}
+                            {(pub as any).pmp_supported && <span className="text-[10px] bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded-full font-medium">🔒 PMP</span>}
+                          </div>
+
+                          {pub.why && (
+                            <p className="text-xs text-blue-600 bg-blue-50 rounded-lg px-2.5 py-1.5 mb-2 border border-blue-100">
+                              💡 {pub.why}
+                            </p>
+                          )}
+
+                          <div className="flex items-center gap-3 flex-wrap">
+                            <span className="text-xs text-ink-600 font-mono">📧 {pub.contact_email}</span>
+                            {pub.contact_phone && <span className="text-xs text-ink-500 font-mono">📞 {pub.contact_phone}</span>}
+                            {pub.contact_verified ? (
+                              <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-medium" title={pub.contact_source}>✓ Verified on site</span>
+                            ) : (
+                              <span className="text-[10px] bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded-full font-medium" title={pub.contact_source || 'AI estimate — verify before sending'}>⚠ Unverified — confirm before use</span>
                             )}
-                            <button onClick={() => draftEmail(pub)}
-                              className="text-xs px-3 py-1.5 bg-accent text-white rounded-lg hover:bg-accent/90">
-                              ✉ Draft Email
-                            </button>
                           </div>
                         </div>
                       </div>
+
+                      {/* Score + actions */}
+                      <div className="flex flex-col items-end gap-2 shrink-0">
+                        <div className="text-right">
+                          <p className={`text-lg font-bold leading-none ${fitColor(pub.fit_score)}`}>{pub.fit_score}%</p>
+                          <p className="text-[10px] text-ink-400 mt-0.5">fit score</p>
+                        </div>
+                        <div className="flex gap-1.5 mt-1">
+                          {!saved && (
+                            <button onClick={() => savePublisher(pub)} disabled={savingPub === pub.name}
+                              className="text-xs px-2.5 py-1.5 bg-ink-100 text-ink-700 rounded-lg hover:bg-ink-200 disabled:opacity-50 font-medium">
+                              {savingPub === pub.name ? '...' : '+ Save'}
+                            </button>
+                          )}
+                          <button onClick={() => draftEmail(pub)}
+                            className="text-xs px-3 py-1.5 bg-accent text-white rounded-lg hover:bg-accent/90 font-medium">
+                            ✉ Draft Email
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                  )
-                })}
-              </div>
+                  </div>
+                )
+              })}
             </div>
           )}
 
           {/* Campaigns list */}
           {campaigns.length === 0 && !showCampaignForm ? (
-            <div className="card p-8 text-center">
-              <p className="text-2xl mb-2">📋</p>
-              <p className="text-sm text-ink-500 mb-1">No campaigns yet</p>
-              <p className="text-xs text-ink-400">Paste a campaign brief to find matching publishers and draft outreach emails</p>
+            <div className="card p-12 text-center border-2 border-dashed border-ink-200">
+              <p className="text-4xl mb-3">📋</p>
+              <p className="text-sm font-medium text-ink-700 mb-1">No campaigns yet</p>
+              <p className="text-xs text-ink-400 mb-4">Create a campaign brief to find matching publishers and draft outreach emails</p>
+              <button onClick={() => setShowCampaignForm(true)} className="btn-primary text-xs px-5 py-2">+ New Campaign</button>
             </div>
           ) : campaigns.length > 0 && !activeCampaign && !showCampaignForm && (
-            <div className="card overflow-hidden">
-              <table className="w-full text-sm">
-                <thead><tr className="bg-ink-50 border-b border-ink-100">
-                  <th className="text-left px-4 py-2.5 text-xs font-medium text-ink-500">Campaign</th>
-                  <th className="text-center px-3 py-2.5 text-xs font-medium text-ink-500">Category</th>
-                  <th className="text-center px-3 py-2.5 text-xs font-medium text-ink-500">Budget</th>
-                  <th className="text-center px-3 py-2.5 text-xs font-medium text-ink-500">Status</th>
-                  <th className="text-right px-4 py-2.5 text-xs font-medium text-ink-500">Date</th>
-                  <th className="text-center px-3 py-2.5 text-xs font-medium text-ink-500">Action</th>
-                </tr></thead>
-                <tbody>
-                  {campaigns.map(c => (
-                    <tr key={c.id} className="border-b border-ink-50 hover:bg-ink-50/50">
-                      <td className="px-4 py-2.5">
-                        <p className="text-xs font-medium text-ink-900">{c.name || c.brand}</p>
-                        <p className="text-xs text-ink-400 truncate max-w-xs">{c.target_audience}</p>
-                      </td>
-                      <td className="px-3 py-2.5 text-center text-xs text-ink-600">{c.category}</td>
-                      <td className="px-3 py-2.5 text-center text-xs text-ink-600">{c.budget_range || '—'}</td>
-                      <td className="px-3 py-2.5 text-center">
-                        <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full capitalize">{c.status}</span>
-                      </td>
-                      <td className="px-4 py-2.5 text-right text-xs text-ink-400">
-                        {new Date(c.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
-                      </td>
-                      <td className="px-3 py-2.5 text-center">
-                        <div className="flex items-center justify-center gap-1">
-                          <button onClick={() => reRunCampaign(c)}
-                            className="text-xs px-2 py-1 bg-accent text-white rounded-lg hover:bg-accent/90">🔍 Find Publishers</button>
-                          <button onClick={() => openEditCampaign(c)}
-                            className="text-xs px-2 py-1 bg-ink-100 text-ink-600 rounded-lg hover:bg-ink-200">✏</button>
-                          {isAdmin && (
-                            <button onClick={() => deleteCampaign(c.id)}
-                              className="text-xs text-red-500 hover:bg-red-50 px-2 py-1 rounded-lg">🗑</button>
+            <div className="space-y-3">
+              {campaigns.map(c => {
+                // Parse geo/deal/device/format from brief for display
+                const getField = (key: string) => { const m = (c.brief || '').match(new RegExp(`^${key}:\\s*(.+)`, 'mi')); return m ? m[1].trim() : '' }
+                const geoDisplay = getField('Geo/Regions') || (c.regions?.join(', ') || '')
+                const dealDisplay = getField('Deal Type')
+                const deviceDisplay = getField('Device')
+                const formatDisplay = getField('Ad Formats')
+                const kpiDisplay = getField('KPI')
+                const statusColors: Record<string, string> = {
+                  active: 'bg-green-100 text-green-700',
+                  paused: 'bg-amber-100 text-amber-700',
+                  closed: 'bg-ink-100 text-ink-500',
+                }
+                return (
+                  <div key={c.id} className="card p-4 hover:shadow-md transition-shadow">
+                    <div className="flex items-start justify-between gap-4">
+                      {/* Left: campaign identity */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                          <p className="font-semibold text-ink-900 text-sm">{c.name || `${c.brand} — Outreach`}</p>
+                          <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full capitalize ${statusColors[c.status] || 'bg-ink-100 text-ink-500'}`}>{c.status}</span>
+                          <span className="text-[10px] text-ink-400">{new Date(c.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                        </div>
+
+                        {/* Key details row */}
+                        <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 mb-2">
+                          {c.brand && <span className="text-xs text-ink-600"><span className="text-ink-400">Brand:</span> {c.brand}</span>}
+                          {c.category && <span className="text-xs text-ink-600"><span className="text-ink-400">Vertical:</span> {c.category}</span>}
+                          {c.budget_range && <span className="text-xs text-ink-600"><span className="text-ink-400">Budget:</span> {c.budget_range}</span>}
+                          {kpiDisplay && <span className="text-xs text-ink-600"><span className="text-ink-400">KPI:</span> {kpiDisplay}</span>}
+                        </div>
+
+                        {/* Tags row */}
+                        <div className="flex flex-wrap gap-1.5">
+                          {geoDisplay && geoDisplay.split(',').map(g => (
+                            <span key={g} className="text-[10px] bg-blue-50 text-blue-700 border border-blue-100 px-2 py-0.5 rounded-full font-medium">🌏 {g.trim()}</span>
+                          ))}
+                          {dealDisplay && <span className="text-[10px] bg-violet-50 text-violet-700 border border-violet-100 px-2 py-0.5 rounded-full font-medium">🔒 {dealDisplay}</span>}
+                          {deviceDisplay && deviceDisplay.split(',').map(d => (
+                            <span key={d} className="text-[10px] bg-purple-50 text-purple-700 border border-purple-100 px-2 py-0.5 rounded-full font-medium">📱 {d.trim()}</span>
+                          ))}
+                          {formatDisplay && formatDisplay.split(',').slice(0, 3).map(f => (
+                            <span key={f} className="text-[10px] bg-ink-100 text-ink-600 px-2 py-0.5 rounded-full">{f.trim()}</span>
+                          ))}
+                          {formatDisplay && formatDisplay.split(',').length > 3 && (
+                            <span className="text-[10px] text-ink-400 px-1">+{formatDisplay.split(',').length - 3} more</span>
                           )}
                         </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+
+                        {c.target_audience && (
+                          <p className="text-xs text-ink-400 mt-1.5">👥 {c.target_audience}</p>
+                        )}
+                      </div>
+
+                      {/* Right: actions */}
+                      <div className="flex flex-col gap-2 shrink-0 items-end">
+                        <button onClick={() => reRunCampaign(c)}
+                          className="text-xs px-3 py-1.5 bg-accent text-white rounded-lg hover:bg-accent/90 font-medium whitespace-nowrap">
+                          🔍 Find Publishers
+                        </button>
+                        <div className="flex gap-1">
+                          <button onClick={() => openEditCampaign(c)}
+                            className="text-xs px-2.5 py-1.5 bg-ink-100 text-ink-600 rounded-lg hover:bg-ink-200">✏ Edit</button>
+                          {isAdmin && (
+                            <button onClick={() => deleteCampaign(c.id)}
+                              className="text-xs px-2.5 py-1.5 text-red-500 hover:bg-red-50 rounded-lg">🗑</button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           )}
         </div>
