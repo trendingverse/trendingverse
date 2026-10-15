@@ -387,21 +387,6 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
                 )}
               </div>
               <div>
-                <label className="label">Publisher Scope</label>
-                <div className="flex gap-2">
-                  {[
-                    { k: 'both', l: '🌏 India + Global' },
-                    { k: 'india', l: '🇮🇳 India Only' },
-                    { k: 'global', l: '🌐 Global Only' },
-                  ].map(opt => (
-                    <button key={opt.k} onClick={() => setPubScope(opt.k as any)}
-                      className={`text-xs px-4 py-2 rounded-xl border transition-colors ${pubScope === opt.k ? 'border-accent bg-accent/5 text-accent font-semibold' : 'border-ink-200 text-ink-600 hover:border-ink-300'}`}>
-                      {opt.l}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div>
                 <label className="label">Your Name (for email draft)</label>
                 <input className="input" value={senderName} onChange={e => setSenderName(e.target.value)} placeholder="e.g. Bhanushree" />
               </div>
