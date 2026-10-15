@@ -1,15 +1,34 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import { PasteEnrich } from '@/components/admin/PasteEnrich'
+import { ArticleManager } from '@/components/admin/ArticleManager'
 
-export default async function PasteEnrichPage() {
+export default async function ArticlesPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
+  const [{ data: articles }, { data: categories }] = await Promise.all([
+    supabase
+      .from('articles')
+      .select(`
+        id, title, slug, status, is_featured, is_sponsored, sponsor_name,
+        view_count, seo_score, word_count, published_at, created_at, updated_at,
+        categories(name),
+        profiles(full_name)
+      `)
+      .order('created_at', { ascending: false }),
+    supabase.from('categories').select('id, name, slug').order('name'),
+  ])
+
+  const mapped = (articles || []).map((a: any) => ({
+    ...a,
+    category_name: a.categories?.name || '',
+    author_name: a.profiles?.full_name || '',
+  }))
+
   return (
     <div className="space-y-6">
-      <PasteEnrich />
+      <ArticleManager articles={mapped} categories={categories || []} />
     </div>
   )
 }
