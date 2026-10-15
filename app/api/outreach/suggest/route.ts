@@ -30,7 +30,7 @@ async function fetchHtml(url: string, timeoutMs = 5000): Promise<string | null> 
   try {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), timeoutMs)
-    const html = await fetchHtml(base + path, 2500)
+    const res = await fetch(url, {
       signal: controller.signal,
       headers: { 'User-Agent': 'Mozilla/5.0 (compatible; TrendingVerseBot/1.0; +https://trendingverse.online)' },
       redirect: 'follow',
@@ -66,7 +66,7 @@ async function scanSiteForContact(siteUrl: string): Promise<{ email: string | nu
   // Priority order — advertise/contact pages first, homepage last
 const paths = ['/advertise', '/contact', '']
   for (const path of paths) {
-    const html = await fetchHtml(base + path, 4500)
+    const html = await fetchHtml(base + path, 2500)
     if (!html) continue
     const emails = extractEmails(html, domainHint)
     if (emails.length > 0) {
