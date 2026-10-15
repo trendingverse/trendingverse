@@ -86,6 +86,14 @@ export default async function AdminDashboard() {
       user = u
       isAdmin = u.email === ADMIN_EMAIL
 
+      // Advertisers belong on the outreach page, not the CMS dashboard
+      if (!isAdmin) {
+        const { createClient: svc } = await import('@supabase/supabase-js')
+        const adminClient = svc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+        const { data: prof } = await adminClient.from('user_profiles').select('role').eq('id', u.id).single()
+        if (prof?.role === 'advertiser') redirect('/admin/outreach')
+      }
+
       // Scope for publishers: their own articles, or articles on sites they own
       let scope: (q: any) => any = q => q
       if (!isAdmin) {
