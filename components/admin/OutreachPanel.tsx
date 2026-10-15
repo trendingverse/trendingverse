@@ -126,29 +126,88 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
     setSuggesting(false)
   }
 
+  function parseBriefToForm(brief: string) {
+    const get = (key: string) => {
+      const m = brief.match(new RegExp(`^${key}:\\s*(.+)`, 'mi'))
+      return m ? m[1].trim() : ''
+    }
+    const getList = (key: string): string[] => {
+      const v = get(key)
+      return v ? v.split(',').map(s => s.trim()).filter(Boolean) : []
+    }
+    // Parse geo back to country codes
+    const geoStr = get('Geo/Regions').toLowerCase()
+    const parsedCountries = COUNTRIES
+      .filter(c => geoStr.includes(c.label.replace(/^.+? /, '').toLowerCase()))
+      .map(c => c.code)
+    // Parse timeline
+    const timeline = get('Timeline')
+    const [startDate, endDate] = timeline.includes(' to ') ? timeline.split(' to ').map(s => s.trim()) : [timeline, '']
+    return {
+      form: {
+        brand: get('Brand'),
+        vertical: get('Vertical'),
+        budget: get('Budget'),
+        audience: get('Target Audience'),
+        formats: getList('Ad Formats'),
+        devices: getList('Device'),
+        dealType: get('Deal Type'),
+        kpi: get('KPI'),
+        startDate: startDate || '',
+        endDate: endDate || '',
+        notes: get('Additional Notes'),
+      },
+      countries: parsedCountries,
+      campaignName: '',
+    }
+  }
+
   function openEditCampaign(c: Campaign) {
     setEditCampaign(c)
-    setEditCampaignForm({
-      name: c.name || '',
-      brand: c.brand || '',
-      category: c.category || '',
-      target_audience: c.target_audience || '',
-      budget_range: c.budget_range || '',
-      brief: c.brief || '',
-      status: c.status || 'active',
-    })
+    setEditCampaignForm({ status: c.status || 'active' })
+    const parsed = parseBriefToForm(c.brief || '')
+    setCampaignForm({ ...parsed.form, brand: parsed.form.brand || c.brand || '', vertical: parsed.form.vertical || c.category || '' })
+    setSelectedCountries(parsed.countries)
+    setCampaignName(c.name || '')
+    setShowCampaignForm(false) // ensure new form is hidden; edit uses modal
   }
 
   async function updateCampaign() {
     if (!editCampaign) return
     setSavingCampaign(true)
+    // Build brief from structured form (same logic as createCampaign)
+    const countryNames = selectedCountries.map(code => COUNTRIES.find(c => c.code === code)?.label.replace(/^.+? /, '') || code)
+    const builtBrief = [
+      `Brand: ${campaignForm.brand}`,
+      campaignForm.vertical && `Vertical: ${campaignForm.vertical}`,
+      countryNames.length > 0 && `Geo/Regions: ${countryNames.join(', ')}`,
+      campaignForm.audience && `Target Audience: ${campaignForm.audience}`,
+      campaignForm.formats.length > 0 && `Ad Formats: ${campaignForm.formats.join(', ')}`,
+      campaignForm.devices.length > 0 && `Device: ${campaignForm.devices.join(', ')}`,
+      campaignForm.dealType && `Deal Type: ${campaignForm.dealType}`,
+      campaignForm.kpi && `KPI: ${campaignForm.kpi}`,
+      campaignForm.budget && `Budget: ${campaignForm.budget}`,
+      (campaignForm.startDate || campaignForm.endDate) && `Timeline: ${[campaignForm.startDate, campaignForm.endDate].filter(Boolean).join(' to ')}`,
+      campaignForm.notes && `Additional Notes: ${campaignForm.notes}`,
+    ].filter(Boolean).join('\n')
+
+    const payload = {
+      id: editCampaign.id,
+      name: campaignName || editCampaign.name,
+      brand: campaignForm.brand,
+      category: campaignForm.vertical,
+      target_audience: campaignForm.audience,
+      budget_range: campaignForm.budget,
+      brief: builtBrief,
+      status: editCampaignForm.status || 'active',
+    }
     const res = await fetch('/api/outreach/campaigns', {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: editCampaign.id, ...editCampaignForm }),
+      body: JSON.stringify(payload),
     })
     if (res.ok) {
       toast.success('Campaign updated!')
-      setCampaigns(prev => prev.map(c => c.id === editCampaign.id ? { ...c, ...editCampaignForm } : c))
+      setCampaigns(prev => prev.map(c => c.id === editCampaign.id ? { ...c, ...payload } : c))
       setEditCampaign(null)
     } else toast.error('Failed to update')
     setSavingCampaign(false)
@@ -846,42 +905,138 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
         </div>
       )}
 
-      {/* Edit Campaign Modal */}
+      {/* Edit Campaign Modal — full structured form */}
       {editCampaign && (
         <>
           <div className="fixed inset-0 bg-black/40 z-40" onClick={() => setEditCampaign(null)} />
           <div className="fixed inset-0 flex items-center justify-center z-50 p-4">
-            <div className="card p-6 w-full max-w-lg space-y-4">
+            <div className="card w-full max-w-3xl max-h-[92vh] overflow-y-auto p-6 space-y-5">
               <div className="flex items-center justify-between">
                 <p className="font-semibold text-ink-900">✏ Edit Campaign</p>
-                <button onClick={() => setEditCampaign(null)} className="text-xs text-ink-400 hover:text-ink-600">✕</button>
+                <button onClick={() => setEditCampaign(null)} className="text-ink-400 hover:text-ink-700 text-lg leading-none">×</button>
               </div>
+
+              {/* Row 1: Brand + Campaign Name */}
               <div className="grid grid-cols-2 gap-3">
-                <div className="col-span-2">
+                <div>
+                  <label className="label">Brand *</label>
+                  <input className="input" value={campaignForm.brand} onChange={e => setCampaignForm(f => ({ ...f, brand: e.target.value }))} placeholder="e.g. Nykaa" />
+                </div>
+                <div>
                   <label className="label">Campaign Name</label>
-                  <input className="input" value={editCampaignForm.name || ''}
-                    onChange={e => setEditCampaignForm((f: any) => ({ ...f, name: e.target.value }))} />
+                  <input className="input" value={campaignName} onChange={e => setCampaignName(e.target.value)} placeholder="e.g. Diwali Sale 2026" />
                 </div>
+              </div>
+
+              {/* Row 2: Vertical + Audience */}
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="label">Brand</label>
-                  <input className="input" value={editCampaignForm.brand || ''}
-                    onChange={e => setEditCampaignForm((f: any) => ({ ...f, brand: e.target.value }))} />
-                </div>
-                <div>
-                  <label className="label">Category</label>
-                  <input className="input" value={editCampaignForm.category || ''}
-                    onChange={e => setEditCampaignForm((f: any) => ({ ...f, category: e.target.value }))} />
+                  <label className="label">Vertical / Category</label>
+                  <select className="input" value={campaignForm.vertical} onChange={e => setCampaignForm(f => ({ ...f, vertical: e.target.value }))}>
+                    <option value="">Select vertical…</option>
+                    {['E-Commerce','BFSI','Auto','FMCG','OTT / Entertainment','Ed-Tech','Gaming','Travel','Health & Pharma','Real Estate','Fashion & Lifestyle','Food & Beverage','Technology','Telecom','Sports'].map(v => <option key={v} value={v}>{v}</option>)}
+                  </select>
                 </div>
                 <div>
                   <label className="label">Target Audience</label>
-                  <input className="input" value={editCampaignForm.target_audience || ''}
-                    onChange={e => setEditCampaignForm((f: any) => ({ ...f, target_audience: e.target.value }))} />
+                  <input className="input" value={campaignForm.audience} onChange={e => setCampaignForm(f => ({ ...f, audience: e.target.value }))} placeholder="e.g. Males 25–44, urban, SEC A/B" />
+                </div>
+              </div>
+
+              {/* Target Countries */}
+              <div>
+                <label className="label">Target Countries</label>
+                <div className="flex flex-wrap gap-1.5 mt-1">
+                  {COUNTRIES.map(c => (
+                    <button key={c.code} type="button" onClick={() => toggleCountry(c.code)}
+                      className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${
+                        selectedCountries.includes(c.code)
+                          ? 'bg-accent text-white border-accent font-semibold'
+                          : 'border-ink-200 text-ink-600 hover:border-accent hover:text-accent'
+                      }`}>
+                      {c.label}
+                    </button>
+                  ))}
+                </div>
+                {selectedCountries.length > 0 && (
+                  <p className="text-xs text-accent mt-1.5">
+                    ✓ {selectedCountries.length} countr{selectedCountries.length > 1 ? 'ies' : 'y'} selected
+                    <button onClick={() => setSelectedCountries([])} className="ml-2 text-ink-400 hover:text-red-500 underline">Clear</button>
+                  </p>
+                )}
+              </div>
+
+              {/* Ad Formats */}
+              <div>
+                <label className="label">Ad Formats</label>
+                <div className="flex flex-wrap gap-1.5 mt-1">
+                  {['Display / Banner','Native','Video (In-stream)','Video (Out-stream)','CTV','Interstitial','Rich Media','Skin / Roadblock','Sponsored Content'].map(f => (
+                    <button key={f} type="button"
+                      onClick={() => setCampaignForm(prev => ({ ...prev, formats: prev.formats.includes(f) ? prev.formats.filter(x => x !== f) : [...prev.formats, f] }))}
+                      className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${campaignForm.formats.includes(f) ? 'bg-blue-600 text-white border-blue-600 font-semibold' : 'border-ink-200 text-ink-600 hover:border-blue-400 hover:text-blue-600'}`}>
+                      {f}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Device + Deal Type */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label">Device</label>
+                  <div className="flex flex-wrap gap-1.5 mt-1">
+                    {['Mobile','Desktop','CTV','Tablet','All'].map(d => (
+                      <button key={d} type="button"
+                        onClick={() => setCampaignForm(prev => ({ ...prev, devices: prev.devices.includes(d) ? prev.devices.filter(x => x !== d) : [...prev.devices, d] }))}
+                        className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${campaignForm.devices.includes(d) ? 'bg-purple-600 text-white border-purple-600 font-semibold' : 'border-ink-200 text-ink-600 hover:border-purple-400'}`}>
+                        {d}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label className="label">Deal Type</label>
+                  <div className="flex flex-wrap gap-1.5 mt-1">
+                    {['Open Auction','PMP','PG','Direct','DV360','Xandr','TTD'].map(d => (
+                      <button key={d} type="button"
+                        onClick={() => setCampaignForm(prev => ({ ...prev, dealType: prev.dealType === d ? '' : d }))}
+                        className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${campaignForm.dealType === d ? 'bg-green-600 text-white border-green-600 font-semibold' : 'border-ink-200 text-ink-600 hover:border-green-400'}`}>
+                        {d}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* KPI + Budget */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">KPI / Goal</label>
+                  <select className="input" value={campaignForm.kpi} onChange={e => setCampaignForm(f => ({ ...f, kpi: e.target.value }))}>
+                    <option value="">Select KPI…</option>
+                    {['Brand Awareness','CTR / Clicks','App Installs','Lead Generation','Video Views','Reach & Frequency','Sales / Conversions','Viewability'].map(k => <option key={k} value={k}>{k}</option>)}
+                  </select>
                 </div>
                 <div>
                   <label className="label">Budget Range</label>
-                  <input className="input" value={editCampaignForm.budget_range || ''}
-                    onChange={e => setEditCampaignForm((f: any) => ({ ...f, budget_range: e.target.value }))} />
+                  <input className="input" value={campaignForm.budget} onChange={e => setCampaignForm(f => ({ ...f, budget: e.target.value }))} placeholder="e.g. ₹5–10L / $10k–$50k" />
                 </div>
+              </div>
+
+              {/* Timeline */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">Start Date</label>
+                  <input type="date" className="input" value={campaignForm.startDate} onChange={e => setCampaignForm(f => ({ ...f, startDate: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="label">End Date</label>
+                  <input type="date" className="input" value={campaignForm.endDate} onChange={e => setCampaignForm(f => ({ ...f, endDate: e.target.value }))} />
+                </div>
+              </div>
+
+              {/* Status + Notes */}
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="label">Status</label>
                   <select className="input" value={editCampaignForm.status || 'active'}
@@ -891,14 +1046,14 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
                     <option value="closed">Closed</option>
                   </select>
                 </div>
-                <div className="col-span-2">
-                  <label className="label">Campaign Brief</label>
-                  <textarea className="input resize-none" rows={4} value={editCampaignForm.brief || ''}
-                    onChange={e => setEditCampaignForm((f: any) => ({ ...f, brief: e.target.value }))} />
+                <div>
+                  <label className="label">Additional Notes</label>
+                  <input className="input" value={campaignForm.notes} onChange={e => setCampaignForm(f => ({ ...f, notes: e.target.value }))} placeholder="Any extra context…" />
                 </div>
               </div>
-              <div className="flex gap-3">
-                <button onClick={updateCampaign} disabled={savingCampaign} className="flex-1 btn-primary disabled:opacity-50">
+
+              <div className="flex gap-3 pt-1 border-t border-ink-100">
+                <button onClick={updateCampaign} disabled={savingCampaign || !campaignForm.brand.trim()} className="flex-1 btn-primary disabled:opacity-50">
                   {savingCampaign ? 'Saving...' : '✓ Save Changes'}
                 </button>
                 <button onClick={() => setEditCampaign(null)} className="px-4 py-2 text-sm bg-ink-100 text-ink-600 rounded-xl">Cancel</button>
