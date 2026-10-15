@@ -146,7 +146,10 @@ IMPORTANT:
     ? `CRITICAL: Campaign targets Bangladesh/Dhaka. ONLY suggest publishers with real Bangladesh presence:
 Hoichoi, Bongo, Chorki, Toffee/BRAC TV, Channel i Digital, NTV Digital, Prothom Alo Digital, Daily Star Bangladesh.
 DO NOT suggest JioCinema, Hotstar, SonyLIV, Zee5 — they have no Bangladesh operations.`
-    : `Target geography: ${regions.join(', ')}`
+    : `CRITICAL: Campaign targets ONLY these geographies: ${regions.join(', ')}.
+ONLY suggest publishers whose PRIMARY audience is in ${regions.join(' / ')}.
+DO NOT suggest publishers from other countries even if they are well-known.
+Example: if target is Indonesia, suggest Detik, Kompas, Tribunnews, Kumparan — NOT Times of India, Hindustan Times, or any Indian publisher.`
 
   const deviceContext = isCTV
     ? `CTV CAMPAIGN: Only suggest OTT/streaming platforms with Smart TV apps and CTV ad inventory.`
@@ -156,18 +159,14 @@ DO NOT suggest JioCinema, Hotstar, SonyLIV, Zee5 — they have no Bangladesh ope
     ? `PMP DEAL: Only suggest publishers supporting programmatic PMP deals${isDV360 ? ' and DV360 integration' : ''}.`
     : ''
 
-  const scope = publisher_scope || 'both'
-  const scopeInstruction = scope === 'india' ? 'Indian publishers only.' : scope === 'global' ? 'International publishers only.' : 'Publishers from relevant geography.'
-
   const prompt = `You are a programmatic media buying expert. Suggest 6 publishers for this campaign.
 
 Campaign: ${JSON.stringify(summary)}
-Brief: ${(brief || '').slice(0, 300)}
+Brief: ${(brief || '').slice(0, 400)}
 
 ${geoContext}
 ${deviceContext}
 ${dealContext}
-${scopeInstruction}
 
 Keep ALL field values SHORT. "why" = max 12 words. "monthly_audience" = format like "5M/mo".
 
