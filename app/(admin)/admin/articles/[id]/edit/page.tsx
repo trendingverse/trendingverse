@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { createClient } from '@/lib/supabase/server'
 import { ArticleEditor } from '@/components/admin/ArticleEditor'
+import { WordPressPublisher } from '@/components/admin/WordPressPublisher'
 import { notFound } from 'next/navigation'
 
 export default async function EditArticlePage({ params }: { params: Promise<{ id: string }> }) {
@@ -24,6 +25,11 @@ export default async function EditArticlePage({ params }: { params: Promise<{ id
         categories={(categories || []) as any}
         tags={(tags || []) as any}
       />
+      <div className="mt-6">
+        <WordPressPublisher
+          articles={[{ id: article.id, title: article.title, content: article.content || '', status: article.status }]}
+        />
+      </div>
     </div>
   )
 }
