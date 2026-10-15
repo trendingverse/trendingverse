@@ -30,7 +30,7 @@ async function fetchHtml(url: string, timeoutMs = 5000): Promise<string | null> 
   try {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), timeoutMs)
-    const res = await fetch(url, {
+    const html = await fetchHtml(base + path, 2500)
       signal: controller.signal,
       headers: { 'User-Agent': 'Mozilla/5.0 (compatible; TrendingVerseBot/1.0; +https://trendingverse.online)' },
       redirect: 'follow',
@@ -64,8 +64,7 @@ async function scanSiteForContact(siteUrl: string): Promise<{ email: string | nu
   try { domainHint = new URL(base).hostname } catch { domainHint = siteUrl }
 
   // Priority order — advertise/contact pages first, homepage last
-  const paths = ['/advertise', '/advertise-with-us', '/advertising', '/contact', '/contact-us', '/about', '/about-us', '']
-
+const paths = ['/advertise', '/contact', '']
   for (const path of paths) {
     const html = await fetchHtml(base + path, 4500)
     if (!html) continue
@@ -214,7 +213,7 @@ Return ONLY a JSON array, no markdown:
     // Runs in parallel, capped at 8s per site so total added latency stays bounded.
     const scanResults = await Promise.all(
       suggestions.map((s: any) =>
-        withTimeout(scanSiteForContact(s.site || s.site_url || ''), 8000, { email: null, source: null })
+        withTimeout(scanSiteForContact(s.site || s.site_url || ''), 3000, { email: null, source: null })
       )
     )
 
