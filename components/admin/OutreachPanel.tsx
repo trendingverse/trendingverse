@@ -113,9 +113,20 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
     setSummary(null)
     setSuggesting(true)
     toast.loading('Finding publishers for this campaign...', { id: 'rerun' })
+    // Pass campaign_summary directly so the API never re-parses the brief
+    // and can never fall back to the wrong default region (India)
+    const campaignSummary = {
+      brand: c.brand,
+      category: c.category,
+      target_audience: c.target_audience,
+      regions: Array.isArray(c.regions) && c.regions.length > 0 ? c.regions : [],
+      budget_range: c.budget_range,
+      key_message: (c as any).key_message || '',
+      campaign_type: (c as any).campaign_type || '',
+    }
     const res = await fetch('/api/outreach/suggest', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ brief: c.brief, publisher_scope: pubScope }),
+      body: JSON.stringify({ brief: c.brief, campaign_summary: campaignSummary }),
     })
     const data = await res.json()
     toast.dismiss('rerun')
@@ -191,6 +202,7 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
       campaignForm.notes && `Additional Notes: ${campaignForm.notes}`,
     ].filter(Boolean).join('\n')
 
+    const countryNamesForRegions = selectedCountries.map(code => COUNTRIES.find(c => c.code === code)?.label.replace(/^.+? /, '') || code)
     const payload = {
       id: editCampaign.id,
       name: campaignName || editCampaign.name,
@@ -199,6 +211,7 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
       target_audience: campaignForm.audience,
       budget_range: campaignForm.budget,
       brief: builtBrief,
+      regions: countryNamesForRegions,
       status: editCampaignForm.status || 'active',
     }
     const res = await fetch('/api/outreach/campaigns', {

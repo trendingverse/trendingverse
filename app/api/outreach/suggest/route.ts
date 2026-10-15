@@ -97,7 +97,7 @@ export async function POST(req: NextRequest) {
   }
 
   const geminiKey = process.env.GEMINI_API_KEY!
-  let summary = campaign_summary || { brand: 'Brand', category: 'General', regions: ['India'] }
+  let summary = campaign_summary || { brand: 'Brand', category: 'General', regions: [] }
 
   // Parse brief
   if (!campaign_summary && brief) {
@@ -134,7 +134,11 @@ IMPORTANT:
   }
 
   // Detect signals
-  const regions: string[] = Array.isArray(summary.regions) ? summary.regions : [summary.regions || 'India']
+  const regions: string[] = Array.isArray(summary.regions) && summary.regions.length > 0
+    ? summary.regions
+    : summary.regions
+      ? [summary.regions]
+      : []
   const regionsStr = regions.join(', ').toLowerCase()
   const briefLower = (brief || '').toLowerCase()
   const isBangladesh = regionsStr.includes('bangladesh') || regionsStr.includes('dhaka')
@@ -146,10 +150,14 @@ IMPORTANT:
     ? `CRITICAL: Campaign targets Bangladesh/Dhaka. ONLY suggest publishers with real Bangladesh presence:
 Hoichoi, Bongo, Chorki, Toffee/BRAC TV, Channel i Digital, NTV Digital, Prothom Alo Digital, Daily Star Bangladesh.
 DO NOT suggest JioCinema, Hotstar, SonyLIV, Zee5 — they have no Bangladesh operations.`
-    : `CRITICAL: Campaign targets ONLY these geographies: ${regions.join(', ')}.
+    : regions.length > 0
+    ? `CRITICAL: Campaign targets ONLY these geographies: ${regions.join(', ')}.
 ONLY suggest publishers whose PRIMARY audience is in ${regions.join(' / ')}.
 DO NOT suggest publishers from other countries even if they are well-known.
-Example: if target is Indonesia, suggest Detik, Kompas, Tribunnews, Kumparan — NOT Times of India, Hindustan Times, or any Indian publisher.`
+Example: if target is Indonesia → suggest Detik, Kompas, Tribunnews, Kumparan — NOT Indian publishers.
+Example: if target is Philippines → suggest Rappler, ABS-CBN, GMA Network — NOT Indian publishers.
+Example: if target is UAE → suggest Gulf News, Khaleej Times, Zawya — NOT Indian publishers.`
+    : `Suggest publishers best suited for this campaign's vertical and audience.`
 
   const deviceContext = isCTV
     ? `CTV CAMPAIGN: Only suggest OTT/streaming platforms with Smart TV apps and CTV ad inventory.`
