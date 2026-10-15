@@ -19,6 +19,17 @@ export function ArticleEditor({ article, categories, tags }: Props) {
   const [saving, setSaving] = useState(false)
   const [aiLoading, setAiLoading] = useState<string|null>(null)
 
+  // WordPress sync state
+  const [savedArticleId, setSavedArticleId] = useState<string|null>((article?.id as string)||null)
+  const [wpPushing, setWpPushing] = useState(false)
+  const [wpLink, setWpLink] = useState<string|null>((article as any)?.wp_url || null)
+  const [wpPostId, setWpPostId] = useState<number|null>((article as any)?.wp_post_id || null)
+  const [wpUrl, setWpUrl] = useState('')
+  const [wpUser, setWpUser] = useState('')
+  const [wpPass, setWpPass] = useState('')
+  const [wpCredsLoaded, setWpCredsLoaded] = useState(false)
+  const [showWpCreds, setShowWpCreds] = useState(false)
+
   const [title, setTitle] = useState((article?.title as string)||'')
   const [slug, setSlug] = useState((article?.slug as string)||'')
   const [excerpt, setExcerpt] = useState((article?.excerpt as string)||'')
@@ -69,6 +80,71 @@ export function ArticleEditor({ article, categories, tags }: Props) {
   }
   const removeKeyword = (kw: string) => setKeywords(k=>k.filter(x=>x!==kw))
   const toggleTag = (id: string) => setSelectedTags(t=>t.includes(id)?t.filter(x=>x!==id):[...t,id])
+
+  // Load WP credentials from user settings on mount
+  useEffect(() => {
+    fetch('/api/settings').then(r=>r.ok?r.json():null).then(s=>{
+      if (s?.wp_url) setWpUrl(s.wp_url)
+      if (s?.wp_username) setWpUser(s.wp_username)
+      if (s?.wp_password) setWpPass(s.wp_password)
+      setWpCredsLoaded(true)
+    }).catch(()=>setWpCredsLoaded(true))
+  }, [])
+
+  async function saveWpCreds() {
+    const existing = await fetch('/api/settings').then(r=>r.ok?r.json():{})
+    await fetch('/api/settings', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ ...existing, wp_url: wpUrl, wp_username: wpUser, wp_password: wpPass }) })
+    toast.success('WordPress credentials saved')
+    setShowWpCreds(false)
+  }
+
+  async function pushToWordPress(articleId: string) {
+    if (!wpUrl || !wpUser || !wpPass) { setShowWpCreds(true); toast.error('Enter WordPress credentials first'); return }
+    setWpPushing(true)
+    try {
+      const res = await fetch('/api/wordpress', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ article_id: articleId, wp_url: wpUrl, wp_username: wpUser, wp_password: wpPass }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'WordPress push failed')
+      setWpLink(data.wp_url)
+      setWpPostId(data.wp_post_id)
+      toast.success('Published to WordPress! 🚀')
+    } catch(e) { toast.error((e as Error).message) }
+    setWpPushing(false)
+  }
+
+  async function saveAndPushToWordPress() {
+    if (!title) { toast.error('Title is required'); return }
+    setSaving(true)
+    let aid = savedArticleId
+    try {
+      const content = editor?.getHTML()||''
+      const body = {
+        title, slug, excerpt, content,
+        cover_image_url: coverUrl, cover_image_alt: coverAlt,
+        category_id: categoryId||null, tag_ids: selectedTags,
+        status: 'published',
+        is_featured: isFeatured, is_sponsored: isSponsored, sponsor_name: sponsorName,
+        scheduled_at: scheduledAt||null,
+        seo_title: seoTitle||title, meta_description: metaDesc,
+        focus_keyword: focusKw, keywords,
+        reading_time_min: readingTime(content), word_count: wordCount(content),
+      }
+      const url = isEdit ? `/api/articles/${article!.id}` : '/api/articles'
+      const method = isEdit ? 'PATCH' : 'POST'
+      const res = await fetch(url, { method, headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      aid = data.id
+      setSavedArticleId(aid)
+      toast.success('Article saved!')
+    } catch(e) { toast.error((e as Error).message); setSaving(false); return }
+    setSaving(false)
+    if (aid) await pushToWordPress(aid)
+  }
 
   async function aiGenerate() {
     if (!title) { toast.error('Enter a title first'); return }
@@ -355,6 +431,44 @@ export function ArticleEditor({ article, categories, tags }: Props) {
           </div>
           {isSponsored && (
             <input value={sponsorName} onChange={e=>setSponsorName(e.target.value)} className="input" placeholder="Sponsor name"/>
+          )}
+        </div>
+
+        {/* WordPress publish */}
+        <div className="card p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold text-ink-600 uppercase tracking-wide">WordPress</p>
+            <button onClick={()=>setShowWpCreds(v=>!v)} className="text-xs text-accent hover:underline">
+              {showWpCreds ? 'Hide' : (wpUrl ? 'Change creds' : 'Set up')}
+            </button>
+          </div>
+
+          {showWpCreds && (
+            <div className="space-y-2">
+              <input value={wpUrl} onChange={e=>setWpUrl(e.target.value)} className="input text-xs" placeholder="https://yoursite.com"/>
+              <input value={wpUser} onChange={e=>setWpUser(e.target.value)} className="input text-xs" placeholder="WP username"/>
+              <input type="password" value={wpPass} onChange={e=>setWpPass(e.target.value)} className="input text-xs" placeholder="App password"/>
+              <button onClick={saveWpCreds} className="btn-secondary btn-sm w-full justify-center">Save credentials</button>
+            </div>
+          )}
+
+          {wpLink ? (
+            <div className="space-y-2">
+              <div className="flex items-center gap-1.5 text-xs text-emerald-600 font-medium">
+                <span>✓</span><span>Live on WordPress</span>
+              </div>
+              <a href={wpLink} target="_blank" rel="noopener noreferrer"
+                className="block text-xs text-accent hover:underline truncate">{wpLink}</a>
+              <button onClick={saveAndPushToWordPress} disabled={wpPushing||saving}
+                className="btn-secondary btn-sm w-full justify-center">
+                {wpPushing ? 'Updating…' : 'Sync to WordPress'}
+              </button>
+            </div>
+          ) : (
+            <button onClick={saveAndPushToWordPress} disabled={wpPushing||saving||!wpCredsLoaded}
+              className="btn-primary w-full justify-center text-sm">
+              {wpPushing ? 'Publishing…' : '🚀 Publish to WordPress'}
+            </button>
           )}
         </div>
 
