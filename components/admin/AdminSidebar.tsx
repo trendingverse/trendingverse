@@ -75,8 +75,15 @@ export function AdminSidebar({ isAdmin = false, isAdvertiser = false }: { isAdmi
   const Inner = () => (
     <div className="flex flex-col h-full" style={{ background: 'var(--nav-bg)', backgroundImage: 'linear-gradient(180deg, #040b16 0%, #060d1a 100%)' }}>
       {/* Logo */}
-      <div style={{ height:64, display:'flex', alignItems:'center', borderBottom:'1px solid rgba(56,189,248,0.08)', padding: collapsed ? '0 12px' : '0 20px', justifyContent: collapsed ? 'center' : 'space-between', flexShrink:0 }}>
-        {!collapsed && (
+      <div style={{ height:64, display:'flex', alignItems:'center', borderBottom:'1px solid rgba(56,189,248,0.08)', padding: collapsed ? '0 8px' : '0 20px', justifyContent: collapsed ? 'center' : 'space-between', flexShrink:0, gap:8 }}>
+        {collapsed ? (
+          /* When collapsed: click the logo to expand */
+          <button onClick={() => setCollapsed(false)}
+            style={{ width:34, height:34, borderRadius:10, background:'linear-gradient(135deg,#e63946,#c1121f)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, boxShadow:'0 0 12px rgba(230,57,70,0.4)', border:'none', cursor:'pointer' }}
+            title="Expand sidebar">
+            <span style={{ color:'#fff', fontSize:11, fontWeight:900 }}>TV</span>
+          </button>
+        ) : (
           <Link href="/" style={{ display:'flex', alignItems:'center', gap:10, textDecoration:'none' }}>
             <div style={{ width:32, height:32, borderRadius:10, background:'linear-gradient(135deg,#e63946,#c1121f)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, boxShadow:'0 0 12px rgba(230,57,70,0.4)' }}>
               <span style={{ color:'#fff', fontSize:11, fontWeight:900 }}>TV</span>
@@ -87,12 +94,15 @@ export function AdminSidebar({ isAdmin = false, isAdvertiser = false }: { isAdmi
             </div>
           </Link>
         )}
-        <button onClick={() => setCollapsed(!collapsed)}
-          className="hidden lg:flex" style={{ width:28, height:28, borderRadius:8, alignItems:'center', justifyContent:'center', color:'var(--txt-3)', cursor:'pointer', border:'none', background:'transparent' }}
-          onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-subtle)')}
-          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-          <Icon d={collapsed ? 'M9 5l7 7-7 7' : 'M15 19l-7-7 7-7'} size={14} />
-        </button>
+        {/* Collapse button — only show when expanded (collapsed state uses the TV logo button instead) */}
+        {!collapsed && (
+          <button onClick={() => setCollapsed(true)}
+            className="hidden lg:flex" style={{ width:28, height:28, borderRadius:8, alignItems:'center', justifyContent:'center', color:'rgba(126,168,201,0.7)', cursor:'pointer', border:'1px solid rgba(56,189,248,0.12)', background:'rgba(56,189,248,0.04)', flexShrink:0 }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(56,189,248,0.10)'; e.currentTarget.style.color = '#e8f4ff' }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(56,189,248,0.04)'; e.currentTarget.style.color = 'rgba(126,168,201,0.7)' }}>
+            <Icon d="M15 19l-7-7 7-7" size={14} />
+          </button>
+        )}
       </div>
 
       {/* Nav */}
