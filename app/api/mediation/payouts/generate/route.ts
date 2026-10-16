@@ -63,11 +63,13 @@ async function runPayouts(start: string, end: string) {
   const DEFAULT_SHARE = 70 // fallback when a site has no publisher_ads config
 
   // 4. Compute + upsert revenue_reports rows
-  let generated = 0, skipped = 0
+  let generated = 0, skipped = 0, urlMiss = 0
+  const firstErrors: string[] = []
+
   for (const r of revRows) {
     const host = normHost(r.site_url)
     const site = siteByHost[host]
-    if (!site) { skipped++; continue } // revenue for a site we don't recognise
+    if (!site) { skipped++; urlMiss++; continue } // revenue for a site we don't recognise
     const sharePct = shareBySite[site.id] ?? DEFAULT_SHARE
     const grossUsd = Number(r.revenue_usd || 0)
     const grossInr = Number(r.revenue_inr || 0)
@@ -89,10 +91,22 @@ async function runPayouts(start: string, end: string) {
       network: r.partner_slug || null,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'publisher_id,site_id,report_date,network' })
-    if (upErr) { skipped++; continue }
+    if (upErr) {
+      skipped++
+      if (firstErrors.length < 3) firstErrors.push(upErr.message)
+      continue
+    }
     generated++
   }
-  return { ok: true, generated, skipped, range: { start, end } }
+  return {
+    ok: true,
+    generated,
+    skipped,
+    url_misses: urlMiss,
+    upsert_errors: skipped - urlMiss,
+    first_errors: firstErrors.length ? firstErrors : undefined,
+    range: { start, end },
+  }
 }
 
 function isCronAuthed(req: NextRequest): boolean {
