@@ -72,34 +72,36 @@ export function AdminSidebar({ isAdmin = false, isAdvertiser = false }: { isAdmi
   useEffect(() => { setMobileOpen(false) }, [path])
   const on = (href: string) => href === '/admin' ? path === '/admin' : path.startsWith(href)
 
-  const Inner = () => (
+  // Plain JSX variable — NOT a component — so React reconciles the DOM
+  // instead of unmounting/remounting on every collapsed state change.
+  const sidebarContent = (
     <div className="flex flex-col h-full" style={{ background: 'linear-gradient(180deg, #071020 0%, #0b1628 60%, #0e1e35 100%)' }}>
-      {/* Logo */}
+      {/* Logo / collapse header */}
       <div style={{ height:64, display:'flex', alignItems:'center', borderBottom:'1px solid rgba(255,255,255,0.08)', padding: collapsed ? '0 8px' : '0 20px', justifyContent: collapsed ? 'center' : 'space-between', flexShrink:0, gap:8 }}>
         {collapsed ? (
-          /* When collapsed: click the logo to expand */
           <button onClick={() => setCollapsed(false)}
-            style={{ width:34, height:34, borderRadius:10, background:'linear-gradient(135deg,#e63946,#c1121f)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, boxShadow:'0 0 12px rgba(230,57,70,0.4)', border:'none', cursor:'pointer' }}
+            style={{ width:34, height:34, borderRadius:10, background:'linear-gradient(135deg,#e63946,#c1121f)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, boxShadow:'0 0 14px rgba(230,57,70,0.45)', border:'none', cursor:'pointer' }}
             title="Expand sidebar">
-            <span style={{ color:'#fff', fontSize:11, fontWeight:900 }}>TV</span>
+            <span style={{ color:'#fff', fontSize:11, fontWeight:900, pointerEvents:'none' }}>TV</span>
           </button>
         ) : (
           <Link href="/" style={{ display:'flex', alignItems:'center', gap:10, textDecoration:'none' }}>
-            <div style={{ width:32, height:32, borderRadius:10, background:'linear-gradient(135deg,#e63946,#c1121f)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, boxShadow:'0 0 12px rgba(230,57,70,0.4)' }}>
+            <div style={{ width:32, height:32, borderRadius:10, background:'linear-gradient(135deg,#e63946,#c1121f)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, boxShadow:'0 0 14px rgba(230,57,70,0.45)' }}>
               <span style={{ color:'#fff', fontSize:11, fontWeight:900 }}>TV</span>
             </div>
             <div>
-              <span style={{ fontWeight:800, fontSize:14, color:'#e8f4ff', letterSpacing:'-0.3px', display:'block' }}>TrendingVerse</span>
-              <span style={{ fontSize:9, fontWeight:600, color:'rgba(56,189,248,0.6)', letterSpacing:'0.15em', textTransform:'uppercase' }}>CMS Studio</span>
+              <span style={{ fontWeight:800, fontSize:14, color:'#f0f8ff', letterSpacing:'-0.3px', display:'block' }}>TrendingVerse</span>
+              <span style={{ fontSize:9, fontWeight:600, color:'rgba(148,184,212,0.55)', letterSpacing:'0.15em', textTransform:'uppercase' }}>CMS Studio</span>
             </div>
           </Link>
         )}
-        {/* Collapse button — only show when expanded (collapsed state uses the TV logo button instead) */}
         {!collapsed && (
           <button onClick={() => setCollapsed(true)}
-            className="hidden lg:flex" style={{ width:28, height:28, borderRadius:8, alignItems:'center', justifyContent:'center', color:'rgba(126,168,201,0.7)', cursor:'pointer', border:'1px solid rgba(56,189,248,0.12)', background:'rgba(56,189,248,0.04)', flexShrink:0 }}
-            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(56,189,248,0.10)'; e.currentTarget.style.color = '#e8f4ff' }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(56,189,248,0.04)'; e.currentTarget.style.color = 'rgba(126,168,201,0.7)' }}>
+            className="hidden lg:flex"
+            style={{ width:28, height:28, borderRadius:8, alignItems:'center', justifyContent:'center', color:'rgba(148,184,212,0.6)', cursor:'pointer', border:'1px solid rgba(255,255,255,0.10)', background:'rgba(255,255,255,0.04)', flexShrink:0 }}
+            title="Collapse sidebar"
+            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.10)'; e.currentTarget.style.color = '#f0f8ff' }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; e.currentTarget.style.color = 'rgba(148,184,212,0.6)' }}>
             <Icon d="M15 19l-7-7 7-7" size={14} />
           </button>
         )}
@@ -120,7 +122,8 @@ export function AdminSidebar({ isAdmin = false, isAdvertiser = false }: { isAdmi
                 return (
                   <Link key={item.href} href={item.href} title={collapsed ? item.label : undefined}
                     style={{
-                      display:'flex', alignItems:'center', gap:10, padding: collapsed ? '10px' : '8px 12px',
+                      display:'flex', alignItems:'center', gap:10,
+                      padding: collapsed ? '10px' : '8px 12px',
                       borderRadius:10, fontSize:13, fontWeight: active ? 600 : 400,
                       color: active ? '#ff8a8a' : 'rgba(148,184,212,0.9)',
                       background: active ? 'rgba(230,57,70,0.12)' : 'transparent',
@@ -132,7 +135,7 @@ export function AdminSidebar({ isAdmin = false, isAdvertiser = false }: { isAdmi
                     }}
                     onMouseEnter={e => { if (!active) { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; e.currentTarget.style.color = '#f0f8ff' } }}
                     onMouseLeave={e => { if (!active) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(148,184,212,0.9)' } }}>
-                    <span style={{ flexShrink:0, color: active ? '#ff8a8a' : 'rgba(148,184,212,0.55)', display:'flex' }}>
+                    <span style={{ flexShrink:0, color: active ? '#ff8a8a' : 'rgba(148,184,212,0.50)', display:'flex' }}>
                       <Icon d={item.d} size={15} />
                     </span>
                     {!collapsed && <span style={{ flex:1 }}>{item.label}</span>}
@@ -145,11 +148,11 @@ export function AdminSidebar({ isAdmin = false, isAdvertiser = false }: { isAdmi
       </nav>
 
       {/* View Site */}
-      <div style={{ padding:'10px', borderTop:'1px solid rgba(56,189,248,0.08)', flexShrink:0 }}>
+      <div style={{ padding:'10px', borderTop:'1px solid rgba(255,255,255,0.08)', flexShrink:0 }}>
         <a href="/" target="_blank" rel="noopener noreferrer"
-          style={{ display:'flex', alignItems:'center', gap:10, padding: collapsed ? '9px' : '9px 12px', borderRadius:10, fontSize:12, fontWeight:500, color:'rgba(148,184,212,0.45)', textDecoration:'none', justifyContent: collapsed ? 'center' : 'flex-start' }}
-          onMouseEnter={e => { e.currentTarget.style.background = 'var(--nav-hover)'; e.currentTarget.style.color = 'var(--txt)' }}
-          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--txt-3)' }}>
+          style={{ display:'flex', alignItems:'center', gap:10, padding: collapsed ? '9px' : '9px 12px', borderRadius:10, fontSize:12, fontWeight:500, color:'rgba(148,184,212,0.40)', textDecoration:'none', justifyContent: collapsed ? 'center' : 'flex-start' }}
+          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; e.currentTarget.style.color = '#f0f8ff' }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(148,184,212,0.40)' }}>
           <Icon d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" size={14} />
           {!collapsed && <span>View Site</span>}
         </a>
@@ -159,16 +162,31 @@ export function AdminSidebar({ isAdmin = false, isAdvertiser = false }: { isAdmi
 
   return (
     <>
-      <button onClick={() => setMobileOpen(!mobileOpen)} className="lg:hidden"
-        style={{ position:'fixed', top:14, left:14, zIndex:50, width:36, height:36, borderRadius:10, background:'var(--bg-card)', border:'1px solid var(--border)', display:'flex', alignItems:'center', justifyContent:'center', color:'var(--txt)', cursor:'pointer' }}>
+      {/* Mobile hamburger — only rendered on small screens */}
+      <button onClick={() => setMobileOpen(v => !v)} className="lg:hidden"
+        style={{ position:'fixed', top:14, left:14, zIndex:60, width:36, height:36, borderRadius:10, background:'#0b1628', border:'1px solid rgba(255,255,255,0.12)', display:'flex', alignItems:'center', justifyContent:'center', color:'#f0f8ff', cursor:'pointer', boxShadow:'0 2px 12px rgba(0,0,0,0.4)' }}>
         <Icon d={mobileOpen ? 'M6 18L18 6M6 6l12 12' : 'M4 6h16M4 12h16M4 18h16'} size={16} />
       </button>
-      {mobileOpen && <div className="lg:hidden fixed inset-0 z-40" style={{ background:'rgba(0,0,0,0.5)', backdropFilter:'blur(4px)' }} onClick={() => setMobileOpen(false)} />}
-      <aside className="lg:hidden fixed inset-y-0 left-0 z-50 w-64 shadow-2xl" style={{ transform: mobileOpen ? 'none' : 'translateX(-100%)', transition:'transform 0.2s', borderRight:'1px solid rgba(56,189,248,0.10)' }}>
-        <Inner />
-      </aside>
-      <aside className="hidden lg:flex flex-col flex-shrink-0" style={{ width: collapsed ? 58 : 228, transition:'width 0.2s', borderRight:'1px solid rgba(56,189,248,0.10)' }}>
-        <Inner />
+
+      {/* Mobile overlay */}
+      {mobileOpen && (
+        <div className="lg:hidden fixed inset-0 z-50"
+          style={{ background:'rgba(0,0,0,0.6)', backdropFilter:'blur(4px)' }}
+          onClick={() => setMobileOpen(false)} />
+      )}
+
+      {/* Mobile sidebar */}
+      {mobileOpen && (
+        <aside className="lg:hidden fixed inset-y-0 left-0 z-[60] w-64 shadow-2xl"
+          style={{ borderRight:'1px solid rgba(255,255,255,0.10)' }}>
+          {sidebarContent}
+        </aside>
+      )}
+
+      {/* Desktop sidebar */}
+      <aside className="hidden lg:flex flex-col flex-shrink-0"
+        style={{ width: collapsed ? 58 : 228, transition:'width 0.2s ease', borderRight:'1px solid rgba(255,255,255,0.08)', overflow:'hidden' }}>
+        {sidebarContent}
       </aside>
     </>
   )
