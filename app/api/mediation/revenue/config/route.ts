@@ -47,7 +47,7 @@ function validate(r: any): string | null {
   if (!r.api_key) return 'Enter the API key'
   if (r.adapter === 'generic') {
     if (!/^https?:\/\//i.test(r.endpoint || '')) return 'Enter the full stats URL (starting with https://)'
-    if (/NETWORK-STATS-URL/i.test(r.endpoint)) return 'Replace the example URL with the network's real stats URL'
+    if (/NETWORK-STATS-URL/i.test(r.endpoint)) return "Replace the example URL with the network's real stats URL"
     if (!r.auth_name) return 'Enter the key parameter / header name (e.g. key)'
     if (!['query', 'header'].includes(r.auth_type || 'query')) return 'Choose where the key goes'
   }
