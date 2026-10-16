@@ -39,7 +39,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       <AdminSidebar isAdmin={isAdmin} isAdvertiser={isAdvertiser} />
       <div style={{ flex:1, display:'flex', flexDirection:'column', overflow:'hidden', minWidth:0 }}>
         <AdminHeader email={user.email ?? ''} isAdmin={isAdmin} isAdvertiser={isAdvertiser} />
-        <main style={{ flex:1, overflowY:'auto', background:'var(--bg)' }}>
+        <main data-main-bg style={{ flex:1, overflowY:'auto', background:'var(--bg)' }}>
           <div style={{ padding:24, maxWidth:1400, margin:'0 auto' }}>
             <AdminRouteGuard isPublisher={isPublisher} plan={plan}>
               {children}

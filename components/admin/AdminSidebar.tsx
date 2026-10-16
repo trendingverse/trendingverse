@@ -73,15 +73,18 @@ export function AdminSidebar({ isAdmin = false, isAdvertiser = false }: { isAdmi
   const on = (href: string) => href === '/admin' ? path === '/admin' : path.startsWith(href)
 
   const Inner = () => (
-    <div className="flex flex-col h-full" style={{ background: 'var(--nav-bg)' }}>
+    <div className="flex flex-col h-full" style={{ background: 'var(--nav-bg)', backgroundImage: 'linear-gradient(180deg, #040b16 0%, #060d1a 100%)' }}>
       {/* Logo */}
-      <div style={{ height:64, display:'flex', alignItems:'center', borderBottom:'1px solid var(--border)', padding: collapsed ? '0 12px' : '0 20px', justifyContent: collapsed ? 'center' : 'space-between', flexShrink:0 }}>
+      <div style={{ height:64, display:'flex', alignItems:'center', borderBottom:'1px solid rgba(56,189,248,0.08)', padding: collapsed ? '0 12px' : '0 20px', justifyContent: collapsed ? 'center' : 'space-between', flexShrink:0 }}>
         {!collapsed && (
           <Link href="/" style={{ display:'flex', alignItems:'center', gap:10, textDecoration:'none' }}>
-            <div style={{ width:30, height:30, borderRadius:8, background:'var(--accent)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+            <div style={{ width:32, height:32, borderRadius:10, background:'linear-gradient(135deg,#e63946,#c1121f)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, boxShadow:'0 0 12px rgba(230,57,70,0.4)' }}>
               <span style={{ color:'#fff', fontSize:11, fontWeight:900 }}>TV</span>
             </div>
-            <span style={{ fontWeight:800, fontSize:15, color:'var(--txt)', letterSpacing:'-0.3px' }}>TrendingVerse</span>
+            <div>
+              <span style={{ fontWeight:800, fontSize:14, color:'#e8f4ff', letterSpacing:'-0.3px', display:'block' }}>TrendingVerse</span>
+              <span style={{ fontSize:9, fontWeight:600, color:'rgba(56,189,248,0.6)', letterSpacing:'0.15em', textTransform:'uppercase' }}>CMS Studio</span>
+            </div>
           </Link>
         )}
         <button onClick={() => setCollapsed(!collapsed)}
@@ -97,29 +100,30 @@ export function AdminSidebar({ isAdmin = false, isAdvertiser = false }: { isAdmi
         {nav.map(s => (
           <div key={s.group} style={{ marginBottom:24 }}>
             {!collapsed && (
-              <p style={{ fontSize:10, fontWeight:800, textTransform:'uppercase', letterSpacing:'0.14em', color:'var(--txt-3)', padding:'0 10px', marginBottom:6 }}>
+              <p style={{ fontSize:10, fontWeight:800, textTransform:'uppercase', letterSpacing:'0.16em', color:'rgba(56,189,248,0.35)', padding:'0 10px', marginBottom:6 }}>
                 {s.group}
               </p>
             )}
-            <div style={{ display:'flex', flexDirection:'column', gap:2 }}>
+            <div style={{ display:'flex', flexDirection:'column', gap:1 }}>
               {s.items.map(item => {
                 const active = on(item.href)
                 return (
                   <Link key={item.href} href={item.href} title={collapsed ? item.label : undefined}
                     style={{
-                      display:'flex', alignItems:'center', gap:10, padding: collapsed ? '10px' : '9px 12px',
-                      borderRadius:10, fontSize:13.5, fontWeight: active ? 600 : 500,
-                      color: active ? 'var(--nav-active)' : 'var(--txt-2)',
-                      background: active ? 'var(--nav-active-bg)' : 'transparent',
+                      display:'flex', alignItems:'center', gap:10, padding: collapsed ? '10px' : '8px 12px',
+                      borderRadius:10, fontSize:13, fontWeight: active ? 600 : 400,
+                      color: active ? '#ff7b84' : 'rgba(126,168,201,0.8)',
+                      background: active ? 'rgba(230,57,70,0.12)' : 'transparent',
                       textDecoration:'none', transition:'all 0.12s',
                       justifyContent: collapsed ? 'center' : 'flex-start',
-                      borderLeft: active && !collapsed ? '2px solid var(--nav-active)' : '2px solid transparent',
+                      borderLeft: active && !collapsed ? '2px solid #e63946' : '2px solid transparent',
                       paddingLeft: active && !collapsed ? '10px' : collapsed ? '10px' : '12px',
+                      boxShadow: active ? 'inset 0 0 20px rgba(230,57,70,0.05)' : 'none',
                     }}
-                    onMouseEnter={e => { if (!active) { e.currentTarget.style.background = 'var(--nav-hover)'; e.currentTarget.style.color = 'var(--txt)' } }}
-                    onMouseLeave={e => { if (!active) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--txt-2)' } }}>
-                    <span style={{ flexShrink:0, color: active ? 'var(--nav-active)' : 'var(--txt-3)', display:'flex' }}>
-                      <Icon d={item.d} size={16} />
+                    onMouseEnter={e => { if (!active) { e.currentTarget.style.background = 'rgba(56,189,248,0.06)'; e.currentTarget.style.color = '#e8f4ff' } }}
+                    onMouseLeave={e => { if (!active) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(126,168,201,0.8)' } }}>
+                    <span style={{ flexShrink:0, color: active ? '#ff7b84' : 'rgba(56,189,248,0.5)', display:'flex' }}>
+                      <Icon d={item.d} size={15} />
                     </span>
                     {!collapsed && <span style={{ flex:1 }}>{item.label}</span>}
                   </Link>
@@ -131,9 +135,9 @@ export function AdminSidebar({ isAdmin = false, isAdvertiser = false }: { isAdmi
       </nav>
 
       {/* View Site */}
-      <div style={{ padding:'10px', borderTop:'1px solid var(--border)', flexShrink:0 }}>
+      <div style={{ padding:'10px', borderTop:'1px solid rgba(56,189,248,0.08)', flexShrink:0 }}>
         <a href="/" target="_blank" rel="noopener noreferrer"
-          style={{ display:'flex', alignItems:'center', gap:10, padding: collapsed ? '9px' : '9px 12px', borderRadius:10, fontSize:12, fontWeight:500, color:'var(--txt-3)', textDecoration:'none', justifyContent: collapsed ? 'center' : 'flex-start' }}
+          style={{ display:'flex', alignItems:'center', gap:10, padding: collapsed ? '9px' : '9px 12px', borderRadius:10, fontSize:12, fontWeight:500, color:'rgba(56,189,248,0.4)', textDecoration:'none', justifyContent: collapsed ? 'center' : 'flex-start' }}
           onMouseEnter={e => { e.currentTarget.style.background = 'var(--nav-hover)'; e.currentTarget.style.color = 'var(--txt)' }}
           onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--txt-3)' }}>
           <Icon d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" size={14} />
@@ -150,10 +154,10 @@ export function AdminSidebar({ isAdmin = false, isAdvertiser = false }: { isAdmi
         <Icon d={mobileOpen ? 'M6 18L18 6M6 6l12 12' : 'M4 6h16M4 12h16M4 18h16'} size={16} />
       </button>
       {mobileOpen && <div className="lg:hidden fixed inset-0 z-40" style={{ background:'rgba(0,0,0,0.5)', backdropFilter:'blur(4px)' }} onClick={() => setMobileOpen(false)} />}
-      <aside className="lg:hidden fixed inset-y-0 left-0 z-50 w-64 shadow-2xl" style={{ transform: mobileOpen ? 'none' : 'translateX(-100%)', transition:'transform 0.2s', borderRight:'1px solid var(--border)' }}>
+      <aside className="lg:hidden fixed inset-y-0 left-0 z-50 w-64 shadow-2xl" style={{ transform: mobileOpen ? 'none' : 'translateX(-100%)', transition:'transform 0.2s', borderRight:'1px solid rgba(56,189,248,0.10)' }}>
         <Inner />
       </aside>
-      <aside className="hidden lg:flex flex-col flex-shrink-0" style={{ width: collapsed ? 58 : 228, transition:'width 0.2s', borderRight:'1px solid var(--border)' }}>
+      <aside className="hidden lg:flex flex-col flex-shrink-0" style={{ width: collapsed ? 58 : 228, transition:'width 0.2s', borderRight:'1px solid rgba(56,189,248,0.10)' }}>
         <Inner />
       </aside>
     </>
