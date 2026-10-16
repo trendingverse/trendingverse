@@ -904,15 +904,15 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
               <h3 className="font-semibold text-ink-900">Add Publisher</h3>
               <div className="grid grid-cols-2 gap-4">
                 {[
-                  { l: 'Publisher Name *', k: 'name', placeholder: 'DailyKannada News' },
-                  { l: 'Website', k: 'site_url', placeholder: 'kannadadunia.com' },
-                  { l: 'Category', k: 'category', placeholder: 'Regional News' },
-                  { l: 'Region', k: 'region', placeholder: 'Karnataka' },
-                  { l: 'Language', k: 'language', placeholder: 'Kannada, English' },
-                  { l: 'Monthly Audience', k: 'monthly_audience', placeholder: '500K/mo' },
-                  { l: 'Contact Email *', k: 'contact_email', placeholder: 'editor@site.com' },
-                  { l: 'Contact Phone', k: 'contact_phone', placeholder: '+91 98765 43210' },
-                  { l: 'Contact Name', k: 'contact_name', placeholder: 'Ravi Kumar' },
+                  { l: 'Publisher Name *', k: 'name', placeholder: 'e.g. The Hindu' },
+                  { l: 'Website', k: 'site_url', placeholder: 'e.g. thehindu.com' },
+                  { l: 'Category', k: 'category', placeholder: 'e.g. News, Lifestyle, Tech' },
+                  { l: 'Region', k: 'region', placeholder: 'e.g. Maharashtra, Pan-India' },
+                  { l: 'Language', k: 'language', placeholder: 'e.g. Hindi, English' },
+                  { l: 'Monthly Audience', k: 'monthly_audience', placeholder: 'e.g. 1M/mo' },
+                  { l: 'Contact Email *', k: 'contact_email', placeholder: 'e.g. ads@publisher.com' },
+                  { l: 'Contact Phone', k: 'contact_phone', placeholder: 'e.g. +91 98000 00000' },
+                  { l: 'Contact Name', k: 'contact_name', placeholder: 'e.g. Sales Head' },
                 ].map(f => (
                   <div key={f.k} className={f.k === 'name' || f.k === 'contact_email' ? 'col-span-2' : ''}>
                     <label className="label">{f.l}</label>
