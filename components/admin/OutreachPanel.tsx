@@ -18,6 +18,7 @@ interface Campaign {
 
 export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
   const [tab, setTab] = useState<'campaigns' | 'publishers'>('campaigns')
+  const [howItWorksOpen, setHowItWorksOpen] = useState(!isAdmin)
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [publishers, setPublishers] = useState<Publisher[]>([])
   const [loading, setLoading] = useState(true)
@@ -410,8 +411,88 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
 
   if (loading) return <div className="h-24 bg-ink-50 rounded-xl animate-pulse" />
 
+  const HOW_IT_WORKS = [
+    {
+      icon: '📋',
+      title: 'Create a campaign brief',
+      desc: 'Fill in your brand, target audience, geo, formats, budget, and KPIs. The more detail you provide, the better your publisher matches will be.',
+    },
+    {
+      icon: '🤖',
+      title: 'AI matches publishers',
+      desc: 'Our AI scans the TrendingVerse publisher network and ranks sites by audience fit, category alignment, and reach — giving each a fit score.',
+    },
+    {
+      icon: '💾',
+      title: 'Save the best matches',
+      desc: 'Review the ranked list of publishers. Save the ones you want to pursue — they\'ll be added to your Publisher DB for tracking.',
+    },
+    {
+      icon: '✉',
+      title: 'Draft outreach emails',
+      desc: 'Click "Draft Email" on any publisher. AI writes a personalised pitch referencing their site and your campaign. Edit it, then open Gmail to send.',
+    },
+    {
+      icon: '📊',
+      title: 'Track & follow up',
+      desc: 'Update each publisher\'s status (contacted → responded → onboarded). Export your list as CSV anytime to share with your team.',
+    },
+  ]
+
   return (
     <div className="space-y-5">
+
+      {/* How it works */}
+      <div className="card border border-ink-100 overflow-hidden">
+        <button
+          onClick={() => setHowItWorksOpen(o => !o)}
+          className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-ink-50 transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-base">💡</span>
+            <span className="text-sm font-semibold text-ink-900">How Publisher Outreach works</span>
+            {!howItWorksOpen && (
+              <span className="text-[10px] bg-accent/10 text-accent px-2 py-0.5 rounded-full font-medium">5 steps</span>
+            )}
+          </div>
+          <span className="text-ink-400 text-xs">{howItWorksOpen ? '▲ Hide' : '▼ Show'}</span>
+        </button>
+
+        {howItWorksOpen && (
+          <div className="px-4 pb-4">
+            <div className="grid grid-cols-1 sm:grid-cols-5 gap-3 mt-1">
+              {HOW_IT_WORKS.map((step, i) => (
+                <div key={i} className="relative">
+                  {/* connector line between steps */}
+                  {i < HOW_IT_WORKS.length - 1 && (
+                    <div className="hidden sm:block absolute top-5 left-full w-full h-px bg-ink-100 z-0" style={{ width: 'calc(100% - 2rem)', left: '50%' }} />
+                  )}
+                  <div className="relative z-10 flex flex-col items-center text-center gap-2">
+                    <div className="w-10 h-10 rounded-full bg-ink-50 border-2 border-ink-100 flex items-center justify-center text-lg shrink-0">
+                      {step.icon}
+                    </div>
+                    <div className="w-5 h-5 -mt-1 rounded-full bg-accent text-white text-[10px] font-bold flex items-center justify-center -translate-y-2">
+                      {i + 1}
+                    </div>
+                    <p className="text-xs font-semibold text-ink-900 leading-tight -mt-2">{step.title}</p>
+                    <p className="text-[11px] text-ink-500 leading-relaxed">{step.desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {!isAdmin && (
+              <div className="mt-4 pt-3 border-t border-ink-100 flex items-start gap-2.5 bg-blue-50 rounded-xl px-3 py-2.5">
+                <span className="text-base shrink-0">ℹ️</span>
+                <p className="text-xs text-blue-700 leading-relaxed">
+                  <strong>As an advertiser</strong>, you control the campaign brief and publisher targets. Our team reviews selected publishers and facilitates the deal — you'll be notified once a publisher confirms placement.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* Tabs */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex gap-1 p-1 bg-ink-100 rounded-xl">
