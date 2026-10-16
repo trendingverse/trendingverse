@@ -73,9 +73,9 @@ export function AdminSidebar({ isAdmin = false, isAdvertiser = false }: { isAdmi
   const on = (href: string) => href === '/admin' ? path === '/admin' : path.startsWith(href)
 
   const Inner = () => (
-    <div className="flex flex-col h-full" style={{ background: 'var(--nav-bg)', backgroundImage: 'linear-gradient(180deg, #040b16 0%, #060d1a 100%)' }}>
+    <div className="flex flex-col h-full" style={{ background: 'linear-gradient(180deg, #071020 0%, #0b1628 60%, #0e1e35 100%)' }}>
       {/* Logo */}
-      <div style={{ height:64, display:'flex', alignItems:'center', borderBottom:'1px solid rgba(56,189,248,0.08)', padding: collapsed ? '0 8px' : '0 20px', justifyContent: collapsed ? 'center' : 'space-between', flexShrink:0, gap:8 }}>
+      <div style={{ height:64, display:'flex', alignItems:'center', borderBottom:'1px solid rgba(255,255,255,0.08)', padding: collapsed ? '0 8px' : '0 20px', justifyContent: collapsed ? 'center' : 'space-between', flexShrink:0, gap:8 }}>
         {collapsed ? (
           /* When collapsed: click the logo to expand */
           <button onClick={() => setCollapsed(false)}
@@ -110,7 +110,7 @@ export function AdminSidebar({ isAdmin = false, isAdvertiser = false }: { isAdmi
         {nav.map(s => (
           <div key={s.group} style={{ marginBottom:24 }}>
             {!collapsed && (
-              <p style={{ fontSize:10, fontWeight:800, textTransform:'uppercase', letterSpacing:'0.16em', color:'rgba(56,189,248,0.35)', padding:'0 10px', marginBottom:6 }}>
+              <p style={{ fontSize:10, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.14em', color:'rgba(255,255,255,0.22)', padding:'0 10px', marginBottom:6 }}>
                 {s.group}
               </p>
             )}
@@ -122,7 +122,7 @@ export function AdminSidebar({ isAdmin = false, isAdvertiser = false }: { isAdmi
                     style={{
                       display:'flex', alignItems:'center', gap:10, padding: collapsed ? '10px' : '8px 12px',
                       borderRadius:10, fontSize:13, fontWeight: active ? 600 : 400,
-                      color: active ? '#ff7b84' : 'rgba(126,168,201,0.8)',
+                      color: active ? '#ff8a8a' : 'rgba(148,184,212,0.9)',
                       background: active ? 'rgba(230,57,70,0.12)' : 'transparent',
                       textDecoration:'none', transition:'all 0.12s',
                       justifyContent: collapsed ? 'center' : 'flex-start',
@@ -130,9 +130,9 @@ export function AdminSidebar({ isAdmin = false, isAdvertiser = false }: { isAdmi
                       paddingLeft: active && !collapsed ? '10px' : collapsed ? '10px' : '12px',
                       boxShadow: active ? 'inset 0 0 20px rgba(230,57,70,0.05)' : 'none',
                     }}
-                    onMouseEnter={e => { if (!active) { e.currentTarget.style.background = 'rgba(56,189,248,0.06)'; e.currentTarget.style.color = '#e8f4ff' } }}
-                    onMouseLeave={e => { if (!active) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(126,168,201,0.8)' } }}>
-                    <span style={{ flexShrink:0, color: active ? '#ff7b84' : 'rgba(56,189,248,0.5)', display:'flex' }}>
+                    onMouseEnter={e => { if (!active) { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; e.currentTarget.style.color = '#f0f8ff' } }}
+                    onMouseLeave={e => { if (!active) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(148,184,212,0.9)' } }}>
+                    <span style={{ flexShrink:0, color: active ? '#ff8a8a' : 'rgba(148,184,212,0.55)', display:'flex' }}>
                       <Icon d={item.d} size={15} />
                     </span>
                     {!collapsed && <span style={{ flex:1 }}>{item.label}</span>}
@@ -147,7 +147,7 @@ export function AdminSidebar({ isAdmin = false, isAdvertiser = false }: { isAdmi
       {/* View Site */}
       <div style={{ padding:'10px', borderTop:'1px solid rgba(56,189,248,0.08)', flexShrink:0 }}>
         <a href="/" target="_blank" rel="noopener noreferrer"
-          style={{ display:'flex', alignItems:'center', gap:10, padding: collapsed ? '9px' : '9px 12px', borderRadius:10, fontSize:12, fontWeight:500, color:'rgba(56,189,248,0.4)', textDecoration:'none', justifyContent: collapsed ? 'center' : 'flex-start' }}
+          style={{ display:'flex', alignItems:'center', gap:10, padding: collapsed ? '9px' : '9px 12px', borderRadius:10, fontSize:12, fontWeight:500, color:'rgba(148,184,212,0.45)', textDecoration:'none', justifyContent: collapsed ? 'center' : 'flex-start' }}
           onMouseEnter={e => { e.currentTarget.style.background = 'var(--nav-hover)'; e.currentTarget.style.color = 'var(--txt)' }}
           onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--txt-3)' }}>
           <Icon d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" size={14} />

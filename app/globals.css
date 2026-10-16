@@ -21,47 +21,57 @@
   --shadow:    0 1px 4px rgba(13,27,46,0.08), 0 4px 16px rgba(13,27,46,0.04);
   --radius:    14px;
   --glow:      none;
-  --dot-color: rgba(13,27,46,0.06);
+  --dot-color: rgba(13,27,46,0.05);
+  --glass-bg:  rgba(255,255,255,0.70);
 }
 
 .dark {
-  --bg:        #060d1a;
-  --bg-card:   #091526;
-  --bg-subtle: #0e1d2f;
-  --border:    rgba(56,189,248,0.10);
-  --border-dim:rgba(56,189,248,0.05);
-  --txt:       #e8f4ff;
-  --txt-2:     #7ea8c9;
-  --txt-3:     #3d6480;
+  --bg:        #0b1628;
+  --bg-card:   rgba(255,255,255,0.04);
+  --bg-subtle: rgba(255,255,255,0.06);
+  --border:    rgba(255,255,255,0.10);
+  --border-dim:rgba(255,255,255,0.06);
+  --txt:       #f0f8ff;
+  --txt-2:     #94b8d4;
+  --txt-3:     #4e7a9e;
   --accent:    #e63946;
-  --accent-bg: rgba(230,57,70,0.14);
-  --nav-bg:    #040b16;
-  --nav-hover: rgba(56,189,248,0.06);
+  --accent-bg: rgba(230,57,70,0.15);
+  --nav-bg:    #071020;
+  --nav-hover: rgba(255,255,255,0.06);
   --nav-active-bg: rgba(230,57,70,0.14);
-  --nav-active: #ff6b6b;
-  --shadow:    0 2px 8px rgba(0,0,0,0.6), 0 8px 32px rgba(0,0,0,0.4);
+  --nav-active: #ff7b84;
+  --shadow:    0 4px 24px rgba(0,0,0,0.5), 0 1px 4px rgba(0,0,0,0.3);
   --radius:    14px;
-  --glow:      0 0 0 1px rgba(56,189,248,0.08), 0 0 24px rgba(56,189,248,0.04);
-  --dot-color: rgba(56,189,248,0.07);
+  --glow:      0 0 0 1px rgba(56,189,248,0.10), 0 0 32px rgba(56,189,248,0.05);
+  --dot-color: rgba(255,255,255,0.03);
+  --glass-bg:  rgba(255,255,255,0.04);
 }
 
 /* ── Base ── */
 @layer base {
-  html { -webkit-font-smoothing: antialiased; }
-  body { background: var(--bg); color: var(--txt); font-family: system-ui, sans-serif; }
+  html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+  body {
+    background: var(--bg);
+    color: var(--txt);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  }
 }
 
-/* Dark mode: dot-grid background on the main area */
+/* Dark: dot-grid + rich navy gradient on main bg */
 .dark body,
 .dark [data-main-bg] {
-  background-color: var(--bg);
-  background-image: radial-gradient(var(--dot-color) 1px, transparent 1px);
-  background-size: 24px 24px;
+  background: linear-gradient(135deg, #0b1628 0%, #0e1e35 50%, #091422 100%);
+  background-attachment: fixed;
+  background-image:
+    radial-gradient(var(--dot-color) 1px, transparent 1px),
+    linear-gradient(135deg, #0b1628 0%, #0e1e35 50%, #091422 100%);
+  background-size: 28px 28px, 100% 100%;
 }
 
 /* ── Components ── */
 @layer components {
 
+  /* Glassmorphism card */
   .card {
     background: var(--bg-card);
     border: 1px solid var(--border);
@@ -70,9 +80,25 @@
   }
 
   .dark .card {
-    background: linear-gradient(145deg, #0c1829 0%, #091526 50%, #0a1422 100%);
-    border-top: 1px solid rgba(56,189,248,0.12);
-    box-shadow: var(--shadow), var(--glow);
+    background: rgba(255,255,255,0.04);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(255,255,255,0.10);
+    border-top: 1px solid rgba(255,255,255,0.14);
+    box-shadow:
+      0 4px 24px rgba(0,0,0,0.40),
+      0 1px 0 rgba(255,255,255,0.06) inset,
+      var(--glow);
+  }
+
+  /* Glossy stat card variant */
+  .dark .card-stat {
+    background: linear-gradient(145deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.03) 100%);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-top: 1px solid rgba(255,255,255,0.18);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.40), 0 1px 0 rgba(255,255,255,0.08) inset;
   }
 
   .badge { @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold; }
@@ -109,8 +135,9 @@
   .input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(230,57,70,0.12); }
 
   .dark .input {
-    background: rgba(56,189,248,0.03);
-    border-color: rgba(56,189,248,0.10);
+    background: rgba(255,255,255,0.05);
+    border-color: rgba(255,255,255,0.10);
+    color: var(--txt);
   }
   .dark .input:focus {
     border-color: rgba(230,57,70,0.7);
@@ -155,7 +182,7 @@
 ::-webkit-scrollbar { width:5px; height:5px; }
 ::-webkit-scrollbar-track { background:transparent; }
 ::-webkit-scrollbar-thumb { background:var(--border); border-radius:10px; }
-.dark ::-webkit-scrollbar-thumb { background: rgba(56,189,248,0.18); }
+.dark ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius:10px; }
 
 .ProseMirror { outline:none; min-height:400px; }
 .ProseMirror p.is-editor-empty:first-child::before {
