@@ -199,7 +199,16 @@ export async function POST(req: NextRequest) {
   const admin = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
   const { data: site } = await admin.from('sites').select('id').eq('user_id', user.id).eq('site_url', base).single()
 
+  // Strip cover image from content — WP theme displays it as featured image already
   let articleContent = article.content || ''
+  if (article.cover_image_url) {
+    // Remove any <img> tag whose src matches the cover image URL
+    const escapedUrl = article.cover_image_url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    articleContent = articleContent
+      .replace(new RegExp(`<figure[^>]*>\\s*<img[^>]*src=["']${escapedUrl}["'][^>]*>.*?</figure>`, 'gis'), '')
+      .replace(new RegExp(`<img[^>]*src=["']${escapedUrl}["'][^>]*/?>`, 'gi'), '')
+      .trim()
+  }
   if (site?.id) {
     const { data: publisherAds } = await admin.from('publisher_ads').select('*, ad_units(*)').eq('publisher_id', user.id).eq('site_id', site.id).eq('is_enabled', true)
     if (publisherAds?.length) articleContent = wrapWithAds(articleContent, publisherAds as PublisherAd[])
