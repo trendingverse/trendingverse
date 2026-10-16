@@ -151,6 +151,33 @@ Return ONLY the category name, nothing else — no punctuation, no explanation.`
   }
 }
 
+async function uploadImageToWP(base: string, auth: string, imageUrl: string, title: string): Promise<number | null> {
+  try {
+    // Fetch the image
+    const imgRes = await fetch(imageUrl, { signal: AbortSignal.timeout(8000) })
+    if (!imgRes.ok) return null
+    const buffer = await imgRes.arrayBuffer()
+    const contentType = imgRes.headers.get('content-type') || 'image/jpeg'
+    const ext = contentType.includes('png') ? 'png' : contentType.includes('webp') ? 'webp' : 'jpg'
+    const filename = `${title.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 60)}.${ext}`
+
+    const uploadRes = await fetch(`${base}/wp-json/wp/v2/media`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Basic ${auth}`,
+        'Content-Disposition': `attachment; filename="${filename}"`,
+        'Content-Type': contentType,
+      },
+      body: buffer,
+    })
+    if (!uploadRes.ok) return null
+    const data = await uploadRes.json()
+    return data?.id || null
+  } catch {
+    return null
+  }
+}
+
 export async function POST(req: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -227,6 +254,12 @@ export async function POST(req: NextRequest) {
       tagIds.push(...resolvedIds.filter((id): id is number => id !== null))
     }
 
+    // Upload cover image to WP media library and set as featured image
+    let featuredMediaId = featured_media || null
+    if (!featuredMediaId && article.cover_image_url) {
+      featuredMediaId = await uploadImageToWP(base, auth, article.cover_image_url, article.title)
+    }
+
     // Publish
     const wpRes = await wpFetch(`${base}/wp-json/wp/v2/posts`, auth, {
       method: 'POST',
@@ -238,7 +271,7 @@ export async function POST(req: NextRequest) {
         slug: article.slug,
         categories: categoryIds,
         tags: tagIds,
-        ...(featured_media ? { featured_media } : {}),
+        ...(featuredMediaId ? { featured_media: featuredMediaId } : {}),
         meta: {
           _yoast_wpseo_title: article.seo_title || article.title,
           _yoast_wpseo_metadesc: article.meta_description || '',
