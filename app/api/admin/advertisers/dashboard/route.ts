@@ -29,7 +29,7 @@ export async function GET() {
   // Their campaigns only — scoped by advertiser_user_id
   const { data: campaigns } = await admin
     .from('direct_ads')
-    .select('id, campaign_name, status, approval_status, ad_type, headline, start_date, end_date, impressions, viewable_impressions, clicks, cpm_rate_inr, total_budget_inr, spend_inr, target_impressions, impressions_cap')
+    .select('id, campaign_name, status, approval_status, ad_type, headline, start_date, end_date, impressions, viewable_impressions, clicks, cpm_rate_inr, total_budget_inr, spend_inr, target_impressions, impressions_cap, conversions, pixel_token')
     .eq('advertiser_user_id', user.id)
     .order('created_at', { ascending: false })
 
@@ -41,8 +41,9 @@ export async function GET() {
     acc.viewable += c.viewable_impressions || 0
     acc.clicks += c.clicks || 0
     acc.spend += c.spend_inr || 0
+    acc.conversions += c.conversions || 0
     return acc
-  }, { impressions: 0, viewable: 0, clicks: 0, spend: 0 })
+  }, { impressions: 0, viewable: 0, clicks: 0, spend: 0, conversions: 0 })
 
   const summary = {
     company_name: profile.company_name || '',
@@ -54,6 +55,8 @@ export async function GET() {
     clicks: totals.clicks,
     ctr: totals.impressions > 0 ? Math.round((totals.clicks / totals.impressions) * 10000) / 100 : 0,
     spend_inr: Math.round(totals.spend),
+    conversions: totals.conversions,
+    conversion_rate: totals.clicks > 0 ? Math.round((totals.conversions / totals.clicks) * 10000) / 100 : 0,
   }
 
   // Per-campaign rows with derived metrics
@@ -73,6 +76,9 @@ export async function GET() {
     delivered_pct: (c.target_impressions || c.impressions_cap)
       ? Math.min(100, Math.round(((c.impressions || 0) / (c.target_impressions || c.impressions_cap)) * 100))
       : null,
+    conversions: c.conversions || 0,
+    conversion_rate: (c.clicks || 0) > 0 ? Math.round(((c.conversions || 0) / c.clicks) * 10000) / 100 : 0,
+    pixel_token: c.pixel_token || null,
   }))
 
   return NextResponse.json({ summary, campaigns: rows })

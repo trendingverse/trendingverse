@@ -25,6 +25,7 @@ interface DirectAd {
   target_site_urls?: string[]; target_countries?: string[]; target_states?: string[]
   target_cities?: string[]; target_gender?: string
   priority_tier?: number; approval_status?: string; advertiser_user_id?: string
+  conversions?: number; pixel_token?: string
 }
 interface UnitPerf {
   ad_unit_id: string; network_name: string; date: string
@@ -1081,6 +1082,7 @@ async function fetchAdvertisers() {
                   <th className="text-center px-3 py-2.5 text-xs font-medium text-ink-500">Schedule</th>
                   <th className="text-right px-3 py-2.5 text-xs font-medium text-ink-500">Impr.</th>
                   <th className="text-right px-3 py-2.5 text-xs font-medium text-ink-500">CTR</th>
+                  <th className="text-right px-3 py-2.5 text-xs font-medium text-ink-500">Conv.</th>
                   <th className="text-right px-3 py-2.5 text-xs font-medium text-ink-500">Earned</th>
                   <th className="text-center px-3 py-2.5 text-xs font-medium text-ink-500">Pacing</th>
                   <th className="text-center px-3 py-2.5 text-xs font-medium text-ink-500">Actions</th>
@@ -1112,7 +1114,8 @@ async function fetchAdvertisers() {
                         <td className="px-3 py-3 text-center text-xs text-ink-500">{ad.start_date || '—'}{ad.end_date ? ` → ${ad.end_date}` : ''}</td>
                         <td className="px-3 py-3 text-right text-xs">{(ad.impressions || 0).toLocaleString()}</td>
                         <td className="px-3 py-3 text-right text-xs font-medium text-green-600">{ctr}%</td>
-                       <td className="px-3 py-3 text-right text-xs font-medium text-amber-600">{ad.cpm_rate_inr > 0 ? `₹${earned.toLocaleString()}` : '—'}</td>
+                        <td className="px-3 py-3 text-right text-xs font-medium text-purple-600">{((ad as any).conversions || 0).toLocaleString()}</td>
+                        <td className="px-3 py-3 text-right text-xs font-medium text-amber-600">{ad.cpm_rate_inr > 0 ? `₹${earned.toLocaleString()}` : '—'}</td>
                         <td className="px-3 py-3 text-center">
                           {(() => {
                             const p = computePacing(ad as any)
@@ -1130,6 +1133,16 @@ async function fetchAdvertisers() {
                         <td className="px-3 py-3 text-center">
                           <div className="flex items-center justify-center gap-1">
                             <button onClick={() => openReport(ad)} className="text-xs px-2 py-1 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100" title="View Report">📊</button>
+                            {(ad as any).pixel_token && (
+                              <button
+                                title="Copy conversion pixel"
+                                onClick={() => {
+                                  const snippet = `<img src="${window.location.origin}/api/track/pixel?t=${(ad as any).pixel_token}" width="1" height="1" style="display:none" alt="" />`
+                                  navigator.clipboard.writeText(snippet).then(() => toast.success('Pixel snippet copied!'))
+                                }}
+                                className="text-xs px-2 py-1 rounded-lg bg-purple-50 text-purple-600 hover:bg-purple-100"
+                              >🎯</button>
+                            )}
                             <button onClick={() => openEdit(ad)} className="text-xs px-2 py-1 rounded-lg bg-ink-100 text-ink-600 hover:bg-ink-200">✏</button>
                             <button onClick={() => toggleAd(ad.id, ad.is_active)}
                               className={`text-xs px-2 py-1 rounded-lg ${ad.is_active ? 'bg-amber-50 text-amber-600' : 'bg-green-50 text-green-600'}`}>

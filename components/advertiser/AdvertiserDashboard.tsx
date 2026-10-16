@@ -1,16 +1,19 @@
 'use client'
 import { useState, useEffect } from 'react'
+import toast from 'react-hot-toast'
 
 interface Row {
   id: string; campaign_name: string; status: string; approval_status: string
   start_date: string; end_date: string
   impressions: number; viewable_impressions: number; viewability_rate: number
   clicks: number; ctr: number; goal: number | null; delivered_pct: number | null
+  conversions: number; conversion_rate: number; pixel_token: string | null
 }
 interface Summary {
   company_name: string; campaigns: number; active: number
   impressions: number; viewable_impressions: number; viewability_rate: number
   clicks: number; ctr: number; spend_inr: number
+  conversions: number; conversion_rate: number
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -26,7 +29,7 @@ export function AdvertiserDashboard() {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    fetch('/api/advertiser/dashboard')
+    fetch('/api/admin/advertisers/dashboard')
       .then(r => r.json())
       .then(d => {
         if (d.error) { setError(d.error); return }
@@ -50,11 +53,12 @@ export function AdvertiserDashboard() {
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         {[
           { l: 'Impressions', v: summary.impressions.toLocaleString(), c: 'text-ink-900' },
           { l: 'Viewability', v: summary.viewability_rate + '%', c: 'text-green-600', sub: `${summary.viewable_impressions.toLocaleString()} viewable` },
           { l: 'Clicks', v: summary.clicks.toLocaleString(), c: 'text-ink-900', sub: summary.ctr + '% CTR' },
+          { l: 'Conversions', v: (summary.conversions || 0).toLocaleString(), c: 'text-purple-600', sub: (summary.conversion_rate || 0) + '% conv. rate' },
           { l: 'Spend', v: '₹' + summary.spend_inr.toLocaleString(), c: 'text-amber-600' },
         ].map(s => (
           <div key={s.l} className="card p-4 text-center">
@@ -83,7 +87,9 @@ export function AdvertiserDashboard() {
               <th className="text-right px-3 py-2.5 text-xs font-medium text-ink-500">Viewability</th>
               <th className="text-right px-3 py-2.5 text-xs font-medium text-ink-500">Clicks</th>
               <th className="text-right px-3 py-2.5 text-xs font-medium text-ink-500">CTR</th>
+              <th className="text-right px-3 py-2.5 text-xs font-medium text-ink-500">Conv.</th>
               <th className="text-right px-3 py-2.5 text-xs font-medium text-ink-500">Delivery</th>
+              <th className="text-center px-3 py-2.5 text-xs font-medium text-ink-500">Pixel</th>
             </tr></thead>
             <tbody>
               {rows.map(r => (
@@ -103,6 +109,10 @@ export function AdvertiserDashboard() {
                   <td className="px-3 py-3 text-right text-xs">{r.clicks.toLocaleString()}</td>
                   <td className="px-3 py-3 text-right text-xs text-green-600 font-medium">{r.ctr}%</td>
                   <td className="px-3 py-3 text-right text-xs">
+                    <span className="font-medium text-purple-600">{(r.conversions || 0).toLocaleString()}</span>
+                    {r.clicks > 0 && <span className="text-[10px] text-ink-400 block">{r.conversion_rate}% CVR</span>}
+                  </td>
+                  <td className="px-3 py-3 text-right text-xs">
                     {r.delivered_pct !== null ? (
                       <div>
                         <span className="font-medium text-ink-700">{r.delivered_pct}%</span>
@@ -111,6 +121,20 @@ export function AdvertiserDashboard() {
                         </div>
                       </div>
                     ) : <span className="text-ink-400">—</span>}
+                  </td>
+                  <td className="px-3 py-3 text-center">
+                    {r.pixel_token ? (
+                      <button
+                        onClick={() => {
+                          const snippet = `<img src="${window.location.origin}/api/track/pixel?t=${r.pixel_token}" width="1" height="1" style="display:none" alt="" />`
+                          navigator.clipboard.writeText(snippet).then(() => toast.success('Pixel copied! Paste on your thank-you page.'))
+                        }}
+                        className="text-[10px] px-2 py-1 rounded-lg bg-purple-50 text-purple-600 hover:bg-purple-100 font-medium"
+                        title="Copy conversion pixel snippet"
+                      >
+                        Copy pixel
+                      </button>
+                    ) : <span className="text-[10px] text-ink-400">—</span>}
                   </td>
                 </tr>
               ))}
