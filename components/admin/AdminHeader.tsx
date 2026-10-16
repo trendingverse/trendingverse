@@ -44,9 +44,33 @@ export function AdminHeader({ email, isAdmin = false, isAdvertiser = false }: { 
   const showCrumbs = isAdmin && path !== '/admin'
 
   const S = { // style shorthand using CSS vars
-    header:   { height:64, display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 24px', flexShrink:0, background:'#ffffff', borderBottom:'1px solid rgba(15,23,42,0.08)', boxShadow:'0 1px 4px rgba(15,23,42,0.06)' } as const,
-    btn:      { display:'flex', alignItems:'center', gap:6, padding:'7px 14px', borderRadius:10, fontSize:13, fontWeight:600, cursor:'pointer', border:'none', transition:'all 0.12s' } as const,
-    iconBtn:  { width:36, height:36, borderRadius:10, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', border:'1px solid var(--border)', background:'transparent', color:'var(--txt-2)', transition:'all 0.12s' } as const,
+    header:  {
+      height:64, display:'flex', alignItems:'center', justifyContent:'space-between',
+      padding:'0 24px', flexShrink:0,
+      background:'linear-gradient(180deg, #ffffff 0%, #fafcff 100%)',
+      borderBottom:'1px solid rgba(15,23,42,0.08)',
+      boxShadow:'0 1px 0 rgba(15,23,42,0.04), 0 2px 8px rgba(15,23,42,0.06)',
+    } as const,
+    btn: {
+      display:'flex', alignItems:'center', gap:6, padding:'7px 16px',
+      borderRadius:10, fontSize:13, fontWeight:600, cursor:'pointer',
+      background:'linear-gradient(160deg, #f04551 0%, #e63946 40%, #c1121f 100%)',
+      color:'#ffffff',
+      border:'1px solid rgba(193,18,31,0.6)',
+      boxShadow:'inset 0 1px 0 rgba(255,255,255,0.20), 0 2px 8px rgba(193,18,31,0.22), 0 4px 16px rgba(193,18,31,0.14)',
+      textShadow:'0 1px 2px rgba(0,0,0,0.15)',
+      transition:'all 0.15s',
+      textDecoration:'none',
+    } as const,
+    iconBtn: {
+      width:36, height:36, borderRadius:10, display:'flex', alignItems:'center', justifyContent:'center',
+      cursor:'pointer',
+      border:'1px solid rgba(15,23,42,0.10)',
+      background:'linear-gradient(180deg, #ffffff 0%, #f4f7fc 100%)',
+      color:'var(--txt-2)',
+      boxShadow:'inset 0 1px 0 rgba(255,255,255,1), 0 1px 3px rgba(15,23,42,0.07)',
+      transition:'all 0.12s',
+    } as const,
   }
 
   async function logout() { await createClient().auth.signOut(); router.push('/login') }
@@ -82,16 +106,16 @@ export function AdminHeader({ email, isAdmin = false, isAdvertiser = false }: { 
       <div style={{ display:'flex', alignItems:'center', gap:8 }}>
         {isAdmin && (
           <Link href="/admin/articles/new"
-            style={{ ...S.btn, background:'var(--accent)', color:'#fff' }}
-            onMouseEnter={e => (e.currentTarget.style.opacity = '0.9')}
-            onMouseLeave={e => (e.currentTarget.style.opacity = '1')}>
+            style={S.btn}
+            onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = 'inset 0 1px 0 rgba(255,255,255,0.25), 0 4px 14px rgba(193,18,31,0.30), 0 6px 20px rgba(193,18,31,0.18)' }}
+            onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'inset 0 1px 0 rgba(255,255,255,0.20), 0 2px 8px rgba(193,18,31,0.22), 0 4px 16px rgba(193,18,31,0.14)' }}>
             <Icon d="M12 4v16m8-8H4" size={13} /> New Article
           </Link>
         )}
 
         <button onClick={toggle} style={S.iconBtn} title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
-          onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-subtle)'; e.currentTarget.style.color = 'var(--txt)' }}
-          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--txt-2)' }}>
+          onMouseEnter={e => { e.currentTarget.style.background = 'linear-gradient(180deg, #f0f4fb 0%, #e8eef8 100%)'; e.currentTarget.style.color = 'var(--txt)'; e.currentTarget.style.borderColor = 'rgba(15,23,42,0.16)' }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'linear-gradient(180deg, #ffffff 0%, #f4f7fc 100%)'; e.currentTarget.style.color = 'var(--txt-2)'; e.currentTarget.style.borderColor = 'rgba(15,23,42,0.10)' }}>
           {theme === 'dark'
             ? <Icon d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
             : <Icon d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />}
@@ -100,23 +124,32 @@ export function AdminHeader({ email, isAdmin = false, isAdvertiser = false }: { 
         {/* User menu */}
         <div style={{ position:'relative' }}>
           <button onClick={() => setMenu(!menu)}
-            style={{ display:'flex', alignItems:'center', gap:8, padding:'6px 8px', borderRadius:10, background:'transparent', border:'none', cursor:'pointer', transition:'background 0.1s' }}
-            onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-subtle)')}
-            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-            <div style={{ width:32, height:32, borderRadius:10, background:'var(--accent)', display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontSize:12, fontWeight:900 }}>
+            style={{
+              display:'flex', alignItems:'center', gap:9, padding:'5px 10px 5px 6px',
+              borderRadius:12,
+              background:'linear-gradient(180deg, #ffffff 0%, #f4f8ff 100%)',
+              border:'1px solid rgba(15,23,42,0.10)',
+              boxShadow:'inset 0 1px 0 rgba(255,255,255,1), 0 1px 3px rgba(15,23,42,0.07)',
+              cursor:'pointer', transition:'all 0.15s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'linear-gradient(180deg, #f0f5ff 0%, #e8eef8 100%)'; e.currentTarget.style.borderColor = 'rgba(15,23,42,0.16)'; e.currentTarget.style.boxShadow = 'inset 0 1px 0 rgba(255,255,255,0.9), 0 2px 6px rgba(15,23,42,0.10)' }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'linear-gradient(180deg, #ffffff 0%, #f4f8ff 100%)'; e.currentTarget.style.borderColor = 'rgba(15,23,42,0.10)'; e.currentTarget.style.boxShadow = 'inset 0 1px 0 rgba(255,255,255,1), 0 1px 3px rgba(15,23,42,0.07)' }}>
+            <div style={{ width:32, height:32, borderRadius:9, background:'linear-gradient(135deg, #e63946, #c1121f)', display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontSize:13, fontWeight:800, flexShrink:0, boxShadow:'0 2px 6px rgba(193,18,31,0.35)' }}>
               {initial}
             </div>
             <div style={{ textAlign:'left' }} className="hidden sm:block">
-              <p style={{ fontSize:13, fontWeight:600, color:'var(--txt)', lineHeight:1.2 }}>{name}</p>
-              <p style={{ fontSize:10, color:'var(--txt-3)', lineHeight:1.2 }}>{isAdvertiser ? 'Advertiser' : isAdmin ? 'Admin' : 'Publisher'}</p>
+              <p style={{ fontSize:13, fontWeight:700, color:'#0f172a', lineHeight:1.3, letterSpacing:'-0.01em' }}>{name}</p>
+              <p style={{ fontSize:11, color:'#475569', lineHeight:1.2, fontWeight:500 }}>{isAdvertiser ? 'Advertiser' : isAdmin ? 'Admin' : 'Publisher'}</p>
             </div>
-            <span style={{ color:'var(--txt-3)', fontSize:10 }}>▾</span>
+            <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink:0 }}>
+              <path d="M6 9l6 6 6-6"/>
+            </svg>
           </button>
 
           {menu && (
             <>
               <div className="fixed inset-0 z-10" onClick={() => setMenu(false)} />
-              <div style={{ position:'absolute', right:0, top:50, width:240, borderRadius:14, border:'1px solid var(--border)', background:'var(--bg-card)', boxShadow:'0 8px 32px rgba(0,0,0,0.2)', zIndex:20, overflow:'hidden' }}>
+              <div style={{ position:'absolute', right:0, top:54, width:248, borderRadius:16, border:'1px solid rgba(15,23,42,0.08)', borderTop:'1px solid rgba(255,255,255,0.9)', background:'linear-gradient(180deg, #ffffff 0%, #fafcff 100%)', boxShadow:'0 0 0 1px rgba(15,23,42,0.04), 0 4px 12px rgba(15,23,42,0.08), 0 20px 48px rgba(15,23,42,0.14)', zIndex:20, overflow:'hidden' }}>
                 <div style={{ padding:'12px 16px', borderBottom:'1px solid var(--border-dim)', background:'var(--bg-subtle)' }}>
                   <p style={{ fontSize:10, fontWeight:800, textTransform:'uppercase', letterSpacing:'0.12em', color:'var(--txt-3)', marginBottom:2 }}>Account</p>
                   <p style={{ fontSize:13, fontWeight:600, color:'var(--txt)' }}>{email}</p>

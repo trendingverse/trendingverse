@@ -77,7 +77,7 @@ export function AdminSidebar({ isAdmin = false, isAdvertiser = false }: { isAdmi
   const sidebarContent = (
     <div className="flex flex-col h-full" style={{ background: 'linear-gradient(180deg, #1a2235 0%, #1e2a40 100%)' }}>
       {/* Logo / collapse header */}
-      <div style={{ height:64, display:'flex', alignItems:'center', borderBottom:'1px solid rgba(255,255,255,0.07)', padding: collapsed ? '0 8px' : '0 20px', justifyContent: collapsed ? 'center' : 'space-between', flexShrink:0, gap:8 }}>
+      <div style={{ height:64, display:'flex', alignItems:'center', borderBottom:'1px solid rgba(255,255,255,0.07)', padding: collapsed ? '0 8px' : '0 16px', justifyContent: collapsed ? 'center' : 'space-between', flexShrink:0, gap:8 }}>
         {collapsed ? (
           <button onClick={() => setCollapsed(false)}
             style={{ width:34, height:34, borderRadius:10, background:'linear-gradient(135deg,#e63946,#c1121f)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, boxShadow:'0 0 14px rgba(230,57,70,0.45)', border:'none', cursor:'pointer' }}
@@ -85,25 +85,37 @@ export function AdminSidebar({ isAdmin = false, isAdvertiser = false }: { isAdmi
             <span style={{ color:'#fff', fontSize:11, fontWeight:900, pointerEvents:'none' }}>TV</span>
           </button>
         ) : (
-          <Link href="/" style={{ display:'flex', alignItems:'center', gap:10, textDecoration:'none' }}>
+          <Link href="/" style={{ display:'flex', alignItems:'center', gap:10, textDecoration:'none', flex:1, minWidth:0 }}>
             <div style={{ width:32, height:32, borderRadius:10, background:'linear-gradient(135deg,#e63946,#c1121f)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, boxShadow:'0 0 14px rgba(230,57,70,0.45)' }}>
               <span style={{ color:'#fff', fontSize:11, fontWeight:900 }}>TV</span>
             </div>
-            <div>
-              <span style={{ fontWeight:800, fontSize:14, color:'#f0f8ff', letterSpacing:'-0.3px', display:'block' }}>TrendingVerse</span>
-              <span style={{ fontSize:9, fontWeight:600, color:'rgba(148,184,212,0.55)', letterSpacing:'0.15em', textTransform:'uppercase' }}>CMS Studio</span>
+            <div style={{ overflow:'hidden' }}>
+              <span style={{ fontWeight:800, fontSize:14, color:'#f0f8ff', letterSpacing:'-0.3px', display:'block', whiteSpace:'nowrap' }}>TrendingVerse</span>
+              <span style={{ fontSize:9, fontWeight:600, color:'rgba(148,184,212,0.50)', letterSpacing:'0.12em', textTransform:'uppercase' }}>CMS Studio</span>
             </div>
           </Link>
         )}
         {!collapsed && (
-          <button onClick={() => setCollapsed(true)}
-            className="hidden lg:flex"
-            style={{ width:28, height:28, borderRadius:8, alignItems:'center', justifyContent:'center', color:'rgba(255,255,255,0.35)', cursor:'pointer', border:'1px solid rgba(255,255,255,0.08)', background:'rgba(255,255,255,0.05)', flexShrink:0 }}
-            title="Collapse sidebar"
-            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.12)'; e.currentTarget.style.color = '#ffffff' }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = 'rgba(255,255,255,0.35)' }}>
-            <Icon d="M15 19l-7-7 7-7" size={14} />
-          </button>
+          <div style={{ display:'flex', alignItems:'center', gap:4, flexShrink:0 }}>
+            {/* Mobile close button — inside sidebar so it doesn't overlap logo */}
+            <button onClick={() => setMobileOpen(false)}
+              className="lg:hidden"
+              style={{ width:28, height:28, borderRadius:8, display:'flex', alignItems:'center', justifyContent:'center', color:'rgba(255,255,255,0.50)', cursor:'pointer', border:'1px solid rgba(255,255,255,0.08)', background:'rgba(255,255,255,0.05)', flexShrink:0 }}
+              title="Close menu"
+              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.12)'; e.currentTarget.style.color = '#ffffff' }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = 'rgba(255,255,255,0.50)' }}>
+              <Icon d="M6 18L18 6M6 6l12 12" size={14} />
+            </button>
+            {/* Desktop collapse button */}
+            <button onClick={() => setCollapsed(true)}
+              className="hidden lg:flex"
+              style={{ width:28, height:28, borderRadius:8, alignItems:'center', justifyContent:'center', color:'rgba(255,255,255,0.35)', cursor:'pointer', border:'1px solid rgba(255,255,255,0.08)', background:'rgba(255,255,255,0.05)', flexShrink:0 }}
+              title="Collapse sidebar"
+              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.12)'; e.currentTarget.style.color = '#ffffff' }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = 'rgba(255,255,255,0.35)' }}>
+              <Icon d="M15 19l-7-7 7-7" size={14} />
+            </button>
+          </div>
         )}
       </div>
 
@@ -162,11 +174,13 @@ export function AdminSidebar({ isAdmin = false, isAdvertiser = false }: { isAdmi
 
   return (
     <>
-      {/* Mobile hamburger — only rendered on small screens */}
-      <button onClick={() => setMobileOpen(v => !v)} className="lg:hidden"
-        style={{ position:'fixed', top:14, left:14, zIndex:60, width:36, height:36, borderRadius:10, background:'#1a2235', border:'1px solid rgba(255,255,255,0.10)', display:'flex', alignItems:'center', justifyContent:'center', color:'#ffffff', cursor:'pointer', boxShadow:'0 2px 12px rgba(15,23,42,0.20)' }}>
-        <Icon d={mobileOpen ? 'M6 18L18 6M6 6l12 12' : 'M4 6h16M4 12h16M4 18h16'} size={16} />
-      </button>
+      {/* Mobile hamburger — only when sidebar is closed; close is inside the sidebar itself */}
+      {!mobileOpen && (
+        <button onClick={() => setMobileOpen(true)} className="lg:hidden"
+          style={{ position:'fixed', top:14, left:14, zIndex:55, width:36, height:36, borderRadius:10, background:'linear-gradient(135deg, #1e2a40, #1a2235)', border:'1px solid rgba(255,255,255,0.12)', display:'flex', alignItems:'center', justifyContent:'center', color:'rgba(255,255,255,0.85)', cursor:'pointer', boxShadow:'0 2px 8px rgba(15,23,42,0.25), 0 4px 16px rgba(15,23,42,0.15)' }}>
+          <Icon d="M4 6h16M4 12h16M4 18h16" size={16} />
+        </button>
+      )}
 
       {/* Mobile overlay */}
       {mobileOpen && (
