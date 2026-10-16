@@ -69,29 +69,31 @@ export function ArticleManager({ articles: init, categories }: { articles: Artic
       <div className="card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-surface-2 border-b border-ink-100">
+            <thead style={{ background:'var(--bg-subtle)', borderBottom:'1px solid var(--border)' }}>
               <tr>
                 {['Title','Status','Category','SEO','Views','Date',''].map(h => (
-                  <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-ink-400 uppercase tracking-wide whitespace-nowrap">{h}</th>
+                  <th key={h} className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap" style={{ color:'var(--txt-3)' }}>{h}</th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-ink-50">
+            <tbody style={{ '--divide-color':'var(--border)' } as React.CSSProperties}>
               {filtered.map(a => (
-                <tr key={a.id} className="group hover:bg-surface-2 transition-colors">
+                <tr key={a.id} className="group transition-colors" style={{ borderBottom:'1px solid var(--border-dim)' }}
+                  onMouseEnter={e=>(e.currentTarget.style.background='var(--bg-subtle)')}
+                  onMouseLeave={e=>(e.currentTarget.style.background='transparent')}>
                   <td className="px-4 py-3 max-w-xs">
-                    <p className="font-medium text-ink-900 truncate">{a.title}</p>
-                    <p className="text-xs text-ink-400 font-mono truncate mt-0.5">/article/{a.slug}</p>
+                    <p className="font-medium truncate" style={{ color:'var(--txt)' }}>{a.title}</p>
+                    <p className="text-xs font-mono truncate mt-0.5" style={{ color:'var(--txt-3)' }}>/article/{a.slug}</p>
                     <div className="flex gap-1 mt-1">
                       {a.is_featured && <span className="badge badge-featured">Featured</span>}
                       {a.is_sponsored && <span className="badge badge-sponsored">Sponsored</span>}
                     </div>
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap"><span className={`badge ${sBadge(a.status)}`}>{a.status}</span></td>
-                  <td className="px-4 py-3 whitespace-nowrap text-ink-600 text-xs">{a.category_name || '—'}</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-xs" style={{ color:'var(--txt-2)' }}>{a.category_name || '—'}</td>
                   <td className="px-4 py-3 whitespace-nowrap"><span className={`font-bold text-sm ${seoCol(a.seo_score)}`}>{a.seo_score}</span></td>
-                  <td className="px-4 py-3 whitespace-nowrap text-ink-600">{a.view_count.toLocaleString()}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-ink-400 text-xs">{formatDate(a.published_at || a.created_at)}</td>
+                  <td className="px-4 py-3 whitespace-nowrap" style={{ color:'var(--txt-2)' }}>{a.view_count.toLocaleString()}</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-xs" style={{ color:'var(--txt-3)' }}>{formatDate(a.published_at || a.created_at)}</td>
                   <td className="px-4 py-3 whitespace-nowrap">
                     <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
                       <Link href={`/admin/articles/${a.id}/edit`} className="btn-secondary btn-sm">Edit</Link>
@@ -102,11 +104,11 @@ export function ArticleManager({ articles: init, categories }: { articles: Artic
                   </td>
                 </tr>
               ))}
-              {filtered.length === 0 && <tr><td colSpan={7} className="py-16 text-center text-ink-300">No articles found.</td></tr>}
+              {filtered.length === 0 && <tr><td colSpan={7} className="py-16 text-center" style={{ color:'var(--txt-3)' }}>No articles found.</td></tr>}
             </tbody>
           </table>
         </div>
-        <div className="px-4 py-2.5 border-t border-ink-50 text-xs text-ink-400">{filtered.length} of {articles.length} articles</div>
+        <div className="px-4 py-2.5 text-xs" style={{ borderTop:'1px solid var(--border-dim)', color:'var(--txt-3)' }}>{filtered.length} of {articles.length} articles</div>
       </div>
     </div>
   )

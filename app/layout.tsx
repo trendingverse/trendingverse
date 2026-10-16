@@ -10,11 +10,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <head>
+        {/* Inline script: apply dark class before first paint to avoid flash */}
+        <script dangerouslySetInnerHTML={{ __html: `(function(){try{var t=localStorage.getItem('tv-theme');if(t==='dark'||(!t&&window.location.pathname.startsWith('/admin'))){document.documentElement.classList.add('dark')}}catch(e){}})()` }} />
         {process.env.NEXT_PUBLIC_ADSENSE_CLIENT && (
           <script async src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${process.env.NEXT_PUBLIC_ADSENSE_CLIENT}`} crossOrigin="anonymous" />
         )}
       </head>
-      <body className="bg-white text-ink-950 antialiased">
+      <body className="antialiased">
         {children}
         <Toaster position="top-right" toastOptions={{ style: { fontSize: 13, background: '#111', color: '#f0f0ee', border: '1px solid #333' } }} />
       </body>

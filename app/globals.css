@@ -2,42 +2,45 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ── Hardcoded CSS variables — no class dependency, always correct ── */
+/* ── CSS Design Tokens ── */
 :root {
-  --bg:        #f8fafc;
+  --bg:        #f0f4f8;
   --bg-card:   #ffffff;
-  --bg-subtle: #f1f5f9;
-  --border:    #e2e8f0;
-  --border-dim:#f1f5f9;
-  --txt:       #0f172a;
-  --txt-2:     #475569;
-  --txt-3:     #94a3b8;
+  --bg-subtle: #e8eef4;
+  --border:    #d1dce8;
+  --border-dim:#e2eaf2;
+  --txt:       #0d1b2e;
+  --txt-2:     #3d5a7a;
+  --txt-3:     #7a9ab8;
   --accent:    #e63946;
   --accent-bg: rgba(230,57,70,0.08);
   --nav-bg:    #ffffff;
-  --nav-hover: #f1f5f9;
+  --nav-hover: #eef3f8;
   --nav-active-bg: rgba(230,57,70,0.08);
   --nav-active: #e63946;
-  --shadow:    0 1px 3px rgba(0,0,0,0.08);
+  --shadow:    0 1px 4px rgba(13,27,46,0.08), 0 4px 16px rgba(13,27,46,0.04);
   --radius:    14px;
+  --glow:      none;
 }
 
 .dark {
-  --bg:        #0b1628;
-  --bg-card:   #0f1d2e;
-  --bg-subtle: #132030;
-  --border:    #1a2d42;
-  --border-dim:#162538;
-  --txt:       #e8f0fe;
-  --txt-2:     #8bacc8;
-  --txt-3:     #4a6880;
-  --accent:    #ef4444;
-  --accent-bg: rgba(239,68,68,0.10);
-  --nav-bg:    #0b1628;
-  --nav-hover: #132030;
-  --nav-active-bg: rgba(239,68,68,0.10);
-  --nav-active: #f87171;
-  --shadow:    0 1px 4px rgba(0,0,0,0.4);
+  --bg:        #060d1a;
+  --bg-card:   #0b1628;
+  --bg-subtle: #0f1e30;
+  --border:    rgba(99,179,237,0.10);
+  --border-dim:rgba(99,179,237,0.06);
+  --txt:       #e8f4ff;
+  --txt-2:     #7ea8c9;
+  --txt-3:     #3d6480;
+  --accent:    #e63946;
+  --accent-bg: rgba(230,57,70,0.12);
+  --nav-bg:    #07111f;
+  --nav-hover: rgba(99,179,237,0.06);
+  --nav-active-bg: rgba(230,57,70,0.12);
+  --nav-active: #ff6b6b;
+  --shadow:    0 1px 4px rgba(0,0,0,0.5), 0 8px 24px rgba(0,0,0,0.3);
+  --radius:    14px;
+  --glow:      0 0 20px rgba(99,179,237,0.06);
 }
 
 /* ── Base ── */
@@ -46,7 +49,7 @@
   body { background: var(--bg); color: var(--txt); font-family: system-ui, sans-serif; }
 }
 
-/* ── Component classes using CSS vars — never broken ── */
+/* ── Components ── */
 @layer components {
 
   .card {
@@ -54,6 +57,11 @@
     border: 1px solid var(--border);
     border-radius: var(--radius);
     box-shadow: var(--shadow);
+  }
+
+  .dark .card {
+    background: linear-gradient(135deg, #0b1628 0%, #0d1c2e 100%);
+    box-shadow: var(--shadow), var(--glow);
   }
 
   .badge { @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold; }
@@ -73,7 +81,7 @@
     background: var(--bg-subtle); color: var(--txt-2); border: 1px solid var(--border);
     @apply rounded-xl px-4 py-2 text-sm font-semibold transition-all;
   }
-  .btn-secondary:hover { background: var(--border); }
+  .btn-secondary:hover { background: var(--border); color: var(--txt); }
   .btn-ghost { color:var(--txt-2); @apply px-4 py-2 rounded-xl text-sm font-semibold transition-all; }
   .btn-ghost:hover { background: var(--bg-subtle); color: var(--txt); }
   .btn-danger { @apply bg-red-50 text-red-700 px-4 py-2 rounded-xl text-sm font-semibold border border-red-100 dark:bg-red-900/20 dark:text-red-300 dark:border-red-900/40; }
@@ -89,9 +97,18 @@
   .input::placeholder { color: var(--txt-3); }
   .input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(230,57,70,0.12); }
 
+  .dark .input {
+    background: rgba(99,179,237,0.04);
+    border-color: rgba(99,179,237,0.12);
+  }
+  .dark .input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(230,57,70,0.15), 0 0 12px rgba(230,57,70,0.08);
+  }
+
   .label {
     display:block; font-size:11px; font-weight:700;
-    text-transform:uppercase; letter-spacing:0.1em;
+    text-transform:uppercase; letter-spacing:0.12em;
     color: var(--txt-3); margin-bottom:6px;
   }
 
@@ -99,7 +116,7 @@
     display:flex; align-items:center; gap:12px; padding:10px 12px;
     border-radius:12px; font-size:14px; font-weight:500;
     color: var(--txt-2); width:100%; text-align:left;
-    transition: background 0.1s, color 0.1s;
+    transition: background 0.12s, color 0.12s;
   }
   .admin-nav-item:hover { background:var(--nav-hover); color:var(--txt); }
   .admin-nav-item.active {
@@ -127,6 +144,7 @@
 ::-webkit-scrollbar { width:5px; height:5px; }
 ::-webkit-scrollbar-track { background:transparent; }
 ::-webkit-scrollbar-thumb { background:var(--border); border-radius:10px; }
+.dark ::-webkit-scrollbar-thumb { background: rgba(99,179,237,0.15); }
 
 .ProseMirror { outline:none; min-height:400px; }
 .ProseMirror p.is-editor-empty:first-child::before {

@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
@@ -30,6 +30,12 @@ export function AdminHeader({ email, isAdmin = false, isAdvertiser = false }: { 
   const router = useRouter()
   const path   = usePathname()
   const [theme, setTheme] = useState<'light'|'dark'>('dark')
+  useEffect(() => {
+    const saved = localStorage.getItem('tv-theme') as 'light'|'dark'|null
+    const t = saved ?? 'dark'
+    setTheme(t)
+    document.documentElement.classList.toggle('dark', t === 'dark')
+  }, [])
   const toggle = () => { const n = theme==='dark'?'light':'dark'; setTheme(n); document.documentElement.classList.toggle('dark',n==='dark'); localStorage.setItem('tv-theme',n) }
   const title   = TITLES[path] ?? 'Admin'
   const initial = email[0]?.toUpperCase() ?? 'A'
