@@ -55,9 +55,16 @@ function injectAdsIntoContent(content: string, publisherAds: PublisherAd[]): str
 }
 
 function wrapWithAds(content: string, publisherAds: PublisherAd[]): string {
-  const headerAds = publisherAds.filter(a => a.is_enabled && a.ad_units?.position === 'header').map(a => buildAdHtml(a.ad_units)).join('')
-  const footerAds = publisherAds.filter(a => a.is_enabled && a.ad_units?.position === 'footer').map(a => buildAdHtml(a.ad_units)).join('')
-  return `${headerAds}${injectAdsIntoContent(content, publisherAds)}${footerAds}`
+  // Deduplicate by ad unit ID — same unit can appear in multiple publisher_ads rows
+  const seen = new Set<string>()
+  const unique = publisherAds.filter(a => {
+    if (!a.ad_units?.id || seen.has(a.ad_units.id)) return false
+    seen.add(a.ad_units.id)
+    return true
+  })
+  const headerAds = unique.filter(a => a.is_enabled && a.ad_units?.position === 'header').map(a => buildAdHtml(a.ad_units)).join('')
+  const footerAds = unique.filter(a => a.is_enabled && a.ad_units?.position === 'footer').map(a => buildAdHtml(a.ad_units)).join('')
+  return `${headerAds}${injectAdsIntoContent(content, unique)}${footerAds}`
 }
 
 async function wpFetch(url: string, auth: string, options: RequestInit = {}) {
