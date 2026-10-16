@@ -30,6 +30,30 @@ export async function PATCH(req: NextRequest) {
   const { id, ...updates } = await req.json()
   await admin.from('direct_ads').update({ ...updates, updated_at: new Date().toISOString() }).eq('id', id)
 
+  // Auto-log event when approval_status changes
+  if (updates.approval_status) {
+    const statusMeta: Record<string, { type: string; desc: string }> = {
+      approved:  { type: 'approved',  desc: 'Campaign approved and marked active.' },
+      rejected:  { type: 'rejected',  desc: 'Campaign rejected.' },
+      paused:    { type: 'paused',    desc: 'Campaign paused by admin.' },
+      activated: { type: 'activated', desc: 'Campaign reactivated.' },
+      pending:   { type: 'note',      desc: 'Campaign reset to pending review.' },
+    }
+    const meta = statusMeta[updates.approval_status]
+    if (meta) {
+      const description = updates.approval_note
+        ? `${meta.desc} Note: ${updates.approval_note}`
+        : meta.desc
+      await admin.from('direct_ad_events').insert({
+        ad_id: id,
+        event_type: meta.type,
+        description,
+        metadata: updates.approval_note ? { approval_note: updates.approval_note } : null,
+        created_by: user.email,
+      }).catch(() => {/* never block response */})
+    }
+  }
+
   // Send email notification when approval status changes
   if (updates.approval_status === 'approved' || updates.approval_status === 'rejected') {
     try {

@@ -195,6 +195,75 @@ const generic: Adapter = async (config, startIso, endIso) => {
   }
 }
 
+// ── HILLTOPADS ────────────────────────────────────────────────────
+// Publisher statistics API. No URL config needed — key only.
+// Docs: https://partner.hilltopads.com/docs (Bearer token, /publisher/statistics)
+const hilltopads: Adapter = async (config, start, end) => {
+  const key = config?.api_key
+  if (!key) return { ok: false, rows: [], error: 'Missing HilltopAds api_key' }
+  try {
+    const url = `https://partner.hilltopads.com/publisher/statistics?dateFrom=${start}&dateTo=${end}`
+    const res = await fetch(url, { headers: { Accept: 'application/json', Authorization: `Bearer ${key}` } })
+    if (!res.ok) { const t = await res.text(); return { ok: false, rows: [], error: `HilltopAds API ${res.status}: ${t.slice(0, 200)}` } }
+    const json = await res.json()
+    const st = String(json?.status ?? '').toLowerCase()
+    if (['error', 'fail', 'failed'].includes(st)) return { ok: false, rows: [], error: `HilltopAds error: ${preview(json)}` }
+    const arr = json?.result ?? json?.data ?? json?.items ?? (Array.isArray(json) ? json : null)
+    if (!Array.isArray(arr)) return { ok: false, rows: [], error: `HilltopAds: unexpected response shape: ${preview(json)}` }
+    if (arr.length === 0) return { ok: true, rows: [] }
+    const rows: NormalizedRow[] = arr
+      .filter((r: any) => r && typeof r === 'object')
+      .map((r: any) => ({
+        date: normDate(r.date ?? r.day ?? r.stat_date ?? ''),
+        site: normSite(r.domain ?? r.site ?? r.website ?? config.site_fallback ?? '(all)'),
+        impressions: num(r.impressions ?? r.impression ?? r.views ?? 0),
+        clicks: num(r.clicks ?? r.click ?? 0),
+        revenue: num(r.revenue ?? r.earning ?? r.income ?? 0),
+        currency: config.currency || 'USD',
+        raw: r,
+      }))
+      .filter((r: NormalizedRow) => r.date)
+    return { ok: true, rows }
+  } catch (e) {
+    return { ok: false, rows: [], error: `HilltopAds fetch failed: ${(e as Error).message}` }
+  }
+}
+
+// ── MONETAG ───────────────────────────────────────────────────────
+// Publisher statistics API. No URL config needed — key only.
+// Docs: https://monetag.com/help (Bearer token, /api/publisher/statistics)
+const monetag: Adapter = async (config, start, end) => {
+  const key = config?.api_key
+  if (!key) return { ok: false, rows: [], error: 'Missing Monetag api_key' }
+  try {
+    const url = `https://monetag.com/api/publisher/statistics?date_from=${start}&date_to=${end}&group_by=date,domain`
+    const res = await fetch(url, { headers: { Accept: 'application/json', Authorization: `Bearer ${key}` } })
+    if (!res.ok) { const t = await res.text(); return { ok: false, rows: [], error: `Monetag API ${res.status}: ${t.slice(0, 200)}` } }
+    const json = await res.json()
+    const st = String(json?.status ?? json?.success ?? '').toLowerCase()
+    if (['error', 'fail', 'false', '0'].includes(st)) return { ok: false, rows: [], error: `Monetag error: ${preview(json)}` }
+    // Monetag wraps in data.items, data, or top-level array
+    const arr = json?.data?.items ?? json?.data ?? json?.items ?? (Array.isArray(json) ? json : null)
+    if (!Array.isArray(arr)) return { ok: false, rows: [], error: `Monetag: unexpected response shape: ${preview(json)}` }
+    if (arr.length === 0) return { ok: true, rows: [] }
+    const rows: NormalizedRow[] = arr
+      .filter((r: any) => r && typeof r === 'object')
+      .map((r: any) => ({
+        date: normDate(r.date ?? r.day ?? r.report_date ?? ''),
+        site: normSite(r.domain ?? r.site ?? r.zone ?? config.site_fallback ?? '(all)'),
+        impressions: num(r.impressions ?? r.shows ?? r.views ?? 0),
+        clicks: num(r.clicks ?? r.click ?? 0),
+        revenue: num(r.revenue ?? r.profit ?? r.earning ?? 0),
+        currency: config.currency || 'USD',
+        raw: r,
+      }))
+      .filter((r: NormalizedRow) => r.date)
+    return { ok: true, rows }
+  } catch (e) {
+    return { ok: false, rows: [], error: `Monetag fetch failed: ${(e as Error).message}` }
+  }
+}
+
 // ── CUSTOM: ADSTERRA (unchanged) ──────────────────────────────────
 const adsterra: Adapter = async (config, start, end) => {
   const key = config?.api_key
@@ -233,5 +302,5 @@ const adsterra: Adapter = async (config, start, end) => {
   }
 }
 
-export const ADAPTERS: Record<string, Adapter> = { generic, adsterra }
+export const ADAPTERS: Record<string, Adapter> = { generic, adsterra, hilltopads, monetag }
 export function getAdapter(name: string): Adapter | null { return ADAPTERS[name] || null }
