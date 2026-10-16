@@ -44,7 +44,7 @@ export function AdminHeader({ email, isAdmin = false, isAdvertiser = false }: { 
   const showCrumbs = isAdmin && path !== '/admin'
 
   const S = { // style shorthand using CSS vars
-    header:   { height:64, display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 24px', flexShrink:0, background:'linear-gradient(90deg, #0b1628 0%, #0e1e35 100%)', borderBottom:'1px solid rgba(255,255,255,0.08)', backdropFilter:'blur(12px)', WebkitBackdropFilter:'blur(12px)' } as const,
+    header:   { height:64, display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 24px', flexShrink:0, background:'#ffffff', borderBottom:'1px solid rgba(15,23,42,0.08)', boxShadow:'0 1px 4px rgba(15,23,42,0.06)' } as const,
     btn:      { display:'flex', alignItems:'center', gap:6, padding:'7px 14px', borderRadius:10, fontSize:13, fontWeight:600, cursor:'pointer', border:'none', transition:'all 0.12s' } as const,
     iconBtn:  { width:36, height:36, borderRadius:10, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', border:'1px solid var(--border)', background:'transparent', color:'var(--txt-2)', transition:'all 0.12s' } as const,
   }

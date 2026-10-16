@@ -75,9 +75,9 @@ export function AdminSidebar({ isAdmin = false, isAdvertiser = false }: { isAdmi
   // Plain JSX variable — NOT a component — so React reconciles the DOM
   // instead of unmounting/remounting on every collapsed state change.
   const sidebarContent = (
-    <div className="flex flex-col h-full" style={{ background: 'linear-gradient(180deg, #071020 0%, #0b1628 60%, #0e1e35 100%)' }}>
+    <div className="flex flex-col h-full" style={{ background: 'linear-gradient(180deg, #1a2235 0%, #1e2a40 100%)' }}>
       {/* Logo / collapse header */}
-      <div style={{ height:64, display:'flex', alignItems:'center', borderBottom:'1px solid rgba(255,255,255,0.08)', padding: collapsed ? '0 8px' : '0 20px', justifyContent: collapsed ? 'center' : 'space-between', flexShrink:0, gap:8 }}>
+      <div style={{ height:64, display:'flex', alignItems:'center', borderBottom:'1px solid rgba(255,255,255,0.07)', padding: collapsed ? '0 8px' : '0 20px', justifyContent: collapsed ? 'center' : 'space-between', flexShrink:0, gap:8 }}>
         {collapsed ? (
           <button onClick={() => setCollapsed(false)}
             style={{ width:34, height:34, borderRadius:10, background:'linear-gradient(135deg,#e63946,#c1121f)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, boxShadow:'0 0 14px rgba(230,57,70,0.45)', border:'none', cursor:'pointer' }}
@@ -98,10 +98,10 @@ export function AdminSidebar({ isAdmin = false, isAdvertiser = false }: { isAdmi
         {!collapsed && (
           <button onClick={() => setCollapsed(true)}
             className="hidden lg:flex"
-            style={{ width:28, height:28, borderRadius:8, alignItems:'center', justifyContent:'center', color:'rgba(148,184,212,0.6)', cursor:'pointer', border:'1px solid rgba(255,255,255,0.10)', background:'rgba(255,255,255,0.04)', flexShrink:0 }}
+            style={{ width:28, height:28, borderRadius:8, alignItems:'center', justifyContent:'center', color:'rgba(255,255,255,0.35)', cursor:'pointer', border:'1px solid rgba(255,255,255,0.08)', background:'rgba(255,255,255,0.05)', flexShrink:0 }}
             title="Collapse sidebar"
-            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.10)'; e.currentTarget.style.color = '#f0f8ff' }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; e.currentTarget.style.color = 'rgba(148,184,212,0.6)' }}>
+            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.12)'; e.currentTarget.style.color = '#ffffff' }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = 'rgba(255,255,255,0.35)' }}>
             <Icon d="M15 19l-7-7 7-7" size={14} />
           </button>
         )}
@@ -112,7 +112,7 @@ export function AdminSidebar({ isAdmin = false, isAdvertiser = false }: { isAdmi
         {nav.map(s => (
           <div key={s.group} style={{ marginBottom:24 }}>
             {!collapsed && (
-              <p style={{ fontSize:10, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.14em', color:'rgba(255,255,255,0.22)', padding:'0 10px', marginBottom:6 }}>
+              <p style={{ fontSize:10, fontWeight:600, textTransform:'uppercase', letterSpacing:'0.12em', color:'rgba(255,255,255,0.25)', padding:'0 10px', marginBottom:4 }}>
                 {s.group}
               </p>
             )}
@@ -125,17 +125,17 @@ export function AdminSidebar({ isAdmin = false, isAdvertiser = false }: { isAdmi
                       display:'flex', alignItems:'center', gap:10,
                       padding: collapsed ? '10px' : '8px 12px',
                       borderRadius:10, fontSize:13, fontWeight: active ? 600 : 400,
-                      color: active ? '#ff8a8a' : 'rgba(148,184,212,0.9)',
-                      background: active ? 'rgba(230,57,70,0.12)' : 'transparent',
+                      color: active ? '#ffffff' : 'rgba(255,255,255,0.60)',
+                      background: active ? 'rgba(230,57,70,0.22)' : 'transparent',
                       textDecoration:'none', transition:'all 0.12s',
                       justifyContent: collapsed ? 'center' : 'flex-start',
                       borderLeft: active && !collapsed ? '2px solid #e63946' : '2px solid transparent',
                       paddingLeft: active && !collapsed ? '10px' : collapsed ? '10px' : '12px',
                       boxShadow: active ? 'inset 0 0 20px rgba(230,57,70,0.05)' : 'none',
                     }}
-                    onMouseEnter={e => { if (!active) { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; e.currentTarget.style.color = '#f0f8ff' } }}
-                    onMouseLeave={e => { if (!active) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(148,184,212,0.9)' } }}>
-                    <span style={{ flexShrink:0, color: active ? '#ff8a8a' : 'rgba(148,184,212,0.50)', display:'flex' }}>
+                    onMouseEnter={e => { if (!active) { e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; e.currentTarget.style.color = '#ffffff' } }}
+                    onMouseLeave={e => { if (!active) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(255,255,255,0.60)' } }}>
+                    <span style={{ flexShrink:0, color: active ? '#ffffff' : 'rgba(255,255,255,0.40)', display:'flex' }}>
                       <Icon d={item.d} size={15} />
                     </span>
                     {!collapsed && <span style={{ flex:1 }}>{item.label}</span>}
@@ -148,11 +148,11 @@ export function AdminSidebar({ isAdmin = false, isAdvertiser = false }: { isAdmi
       </nav>
 
       {/* View Site */}
-      <div style={{ padding:'10px', borderTop:'1px solid rgba(255,255,255,0.08)', flexShrink:0 }}>
+      <div style={{ padding:'10px', borderTop:'1px solid rgba(255,255,255,0.07)', flexShrink:0 }}>
         <a href="/" target="_blank" rel="noopener noreferrer"
-          style={{ display:'flex', alignItems:'center', gap:10, padding: collapsed ? '9px' : '9px 12px', borderRadius:10, fontSize:12, fontWeight:500, color:'rgba(148,184,212,0.40)', textDecoration:'none', justifyContent: collapsed ? 'center' : 'flex-start' }}
-          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; e.currentTarget.style.color = '#f0f8ff' }}
-          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(148,184,212,0.40)' }}>
+          style={{ display:'flex', alignItems:'center', gap:10, padding: collapsed ? '9px' : '9px 12px', borderRadius:10, fontSize:12, fontWeight:500, color:'rgba(255,255,255,0.30)', textDecoration:'none', justifyContent: collapsed ? 'center' : 'flex-start' }}
+          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; e.currentTarget.style.color = '#ffffff' }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(255,255,255,0.30)' }}>
           <Icon d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" size={14} />
           {!collapsed && <span>View Site</span>}
         </a>
@@ -164,7 +164,7 @@ export function AdminSidebar({ isAdmin = false, isAdvertiser = false }: { isAdmi
     <>
       {/* Mobile hamburger — only rendered on small screens */}
       <button onClick={() => setMobileOpen(v => !v)} className="lg:hidden"
-        style={{ position:'fixed', top:14, left:14, zIndex:60, width:36, height:36, borderRadius:10, background:'#0b1628', border:'1px solid rgba(255,255,255,0.12)', display:'flex', alignItems:'center', justifyContent:'center', color:'#f0f8ff', cursor:'pointer', boxShadow:'0 2px 12px rgba(0,0,0,0.4)' }}>
+        style={{ position:'fixed', top:14, left:14, zIndex:60, width:36, height:36, borderRadius:10, background:'#1a2235', border:'1px solid rgba(255,255,255,0.10)', display:'flex', alignItems:'center', justifyContent:'center', color:'#ffffff', cursor:'pointer', boxShadow:'0 2px 12px rgba(15,23,42,0.20)' }}>
         <Icon d={mobileOpen ? 'M6 18L18 6M6 6l12 12' : 'M4 6h16M4 12h16M4 18h16'} size={16} />
       </button>
 
