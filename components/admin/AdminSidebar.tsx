@@ -1,5 +1,7 @@
 'use client'
-// components/admin/AdminSidebar.tsx — v3
+// components/admin/AdminSidebar.tsx — v4
+// v4: Sub-menu support via a separate SUBMENU map (NAV/role logic untouched).
+//     /admin/monetization now expands to show Payout Engine as a child.
 // v3: Analytics added to the publisher menu (Pro-only content, upsell for others).
 // v2: publishers get their own menu (content tools, AI & SEO, My Earnings) —
 //     admin-only sections are no longer shown to them.
@@ -63,6 +65,20 @@ const PUB_NAV = NAV
       .map(i => (i.href === '/admin/revenue' ? { ...i, label: 'My Earnings' } : i)),
   }))
   .filter(g => g.items.length > 0)
+
+// ── Sub-menu children ─────────────────────────────────────────────
+// Completely separate from NAV/ADMIN_G — maps a parent href to its child links.
+// Children appear indented under the parent whenever path is within that parent.
+// Add new sub-pages here without touching any nav/role arrays.
+const SUBMENU: Record<string, { label: string; href: string; d: string }[]> = {
+  '/admin/monetization': [
+    {
+      label: 'Payout Engine',
+      href: '/admin/monetization/payouts',
+      d: 'M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z',
+    },
+  ],
+}
 
 export function AdminSidebar({ isAdmin = false, isAdvertiser = false }: { isAdmin?: boolean; isAdvertiser?: boolean }) {
   const path = usePathname()
@@ -131,27 +147,68 @@ export function AdminSidebar({ isAdmin = false, isAdvertiser = false }: { isAdmi
             <div style={{ display:'flex', flexDirection:'column', gap:1 }}>
               {s.items.map(item => {
                 const active = on(item.href)
+                const children = SUBMENU[item.href]
+                // Show sub-items when path is inside this parent (or sidebar is expanded)
+                const expanded = !!children && on(item.href)
                 return (
-                  <Link key={item.href} href={item.href} title={collapsed ? item.label : undefined}
-                    style={{
-                      display:'flex', alignItems:'center', gap:10,
-                      padding: collapsed ? '10px' : '8px 12px',
-                      borderRadius:10, fontSize:13, fontWeight: active ? 600 : 400,
-                      color: active ? '#ffffff' : 'rgba(255,255,255,0.60)',
-                      background: active ? 'rgba(230,57,70,0.22)' : 'transparent',
-                      textDecoration:'none', transition:'all 0.12s',
-                      justifyContent: collapsed ? 'center' : 'flex-start',
-                      borderLeft: active && !collapsed ? '2px solid #e63946' : '2px solid transparent',
-                      paddingLeft: active && !collapsed ? '10px' : collapsed ? '10px' : '12px',
-                      boxShadow: active ? 'inset 0 0 20px rgba(230,57,70,0.05)' : 'none',
-                    }}
-                    onMouseEnter={e => { if (!active) { e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; e.currentTarget.style.color = '#ffffff' } }}
-                    onMouseLeave={e => { if (!active) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(255,255,255,0.60)' } }}>
-                    <span style={{ flexShrink:0, color: active ? '#ffffff' : 'rgba(255,255,255,0.40)', display:'flex' }}>
-                      <Icon d={item.d} size={15} />
-                    </span>
-                    {!collapsed && <span style={{ flex:1 }}>{item.label}</span>}
-                  </Link>
+                  <div key={item.href}>
+                    <Link href={item.href} title={collapsed ? item.label : undefined}
+                      style={{
+                        display:'flex', alignItems:'center', gap:10,
+                        padding: collapsed ? '10px' : '8px 12px',
+                        borderRadius:10, fontSize:13, fontWeight: active ? 600 : 400,
+                        color: active ? '#ffffff' : 'rgba(255,255,255,0.60)',
+                        background: active ? 'rgba(230,57,70,0.22)' : 'transparent',
+                        textDecoration:'none', transition:'all 0.12s',
+                        justifyContent: collapsed ? 'center' : 'flex-start',
+                        borderLeft: active && !collapsed ? '2px solid #e63946' : '2px solid transparent',
+                        paddingLeft: active && !collapsed ? '10px' : collapsed ? '10px' : '12px',
+                        boxShadow: active ? 'inset 0 0 20px rgba(230,57,70,0.05)' : 'none',
+                      }}
+                      onMouseEnter={e => { if (!active) { e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; e.currentTarget.style.color = '#ffffff' } }}
+                      onMouseLeave={e => { if (!active) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(255,255,255,0.60)' } }}>
+                      <span style={{ flexShrink:0, color: active ? '#ffffff' : 'rgba(255,255,255,0.40)', display:'flex' }}>
+                        <Icon d={item.d} size={15} />
+                      </span>
+                      {!collapsed && <span style={{ flex:1 }}>{item.label}</span>}
+                      {/* Chevron hint when children exist */}
+                      {!collapsed && children && (
+                        <span style={{ color:'rgba(255,255,255,0.25)', display:'flex', transition:'transform 0.15s', transform: expanded ? 'rotate(90deg)' : 'none' }}>
+                          <Icon d="M9 5l7 7-7 7" size={11} />
+                        </span>
+                      )}
+                    </Link>
+
+                    {/* Sub-menu items — shown when parent path is active */}
+                    {expanded && !collapsed && children && (
+                      <div style={{ marginTop:1, marginLeft:10, paddingLeft:12, borderLeft:'1px solid rgba(255,255,255,0.08)' }}>
+                        {children.map(child => {
+                          const childActive = path === child.href || path.startsWith(child.href + '/')
+                          return (
+                            <Link key={child.href} href={child.href}
+                              style={{
+                                display:'flex', alignItems:'center', gap:8,
+                                padding:'7px 10px',
+                                borderRadius:8, fontSize:12, fontWeight: childActive ? 600 : 400,
+                                color: childActive ? '#ffffff' : 'rgba(255,255,255,0.50)',
+                                background: childActive ? 'rgba(230,57,70,0.18)' : 'transparent',
+                                textDecoration:'none', transition:'all 0.12s',
+                                borderLeft: childActive ? '2px solid rgba(230,57,70,0.6)' : '2px solid transparent',
+                                paddingLeft: childActive ? '8px' : '10px',
+                                marginBottom:1,
+                              }}
+                              onMouseEnter={e => { if (!childActive) { e.currentTarget.style.background = 'rgba(255,255,255,0.07)'; e.currentTarget.style.color = '#ffffff' } }}
+                              onMouseLeave={e => { if (!childActive) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(255,255,255,0.50)' } }}>
+                              <span style={{ flexShrink:0, color: childActive ? '#e63946' : 'rgba(255,255,255,0.30)', display:'flex' }}>
+                                <Icon d={child.d} size={13} />
+                              </span>
+                              <span>{child.label}</span>
+                            </Link>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
                 )
               })}
             </div>
