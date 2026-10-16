@@ -44,13 +44,15 @@ export async function PATCH(req: NextRequest) {
       const description = updates.approval_note
         ? `${meta.desc} Note: ${updates.approval_note}`
         : meta.desc
-      await admin.from('direct_ad_events').insert({
-        ad_id: id,
-        event_type: meta.type,
-        description,
-        metadata: updates.approval_note ? { approval_note: updates.approval_note } : null,
-        created_by: user.email,
-      }).catch(() => {/* never block response */})
+      void (async () => {
+        await admin.from('direct_ad_events').insert({
+          ad_id: id,
+          event_type: meta.type,
+          description,
+          metadata: updates.approval_note ? { approval_note: updates.approval_note } : null,
+          created_by: user.email,
+        })
+      })().catch(() => {/* never block response */})
     }
   }
 
