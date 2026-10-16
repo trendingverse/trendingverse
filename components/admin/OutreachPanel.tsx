@@ -45,6 +45,7 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
   const [savingCampaign, setSavingCampaign] = useState(false)
   const [selectedCampaignId, setSelectedCampaignId] = useState<string>('')
   const [selectedCountries, setSelectedCountries] = useState<string[]>([])
+  const [selectedPubs, setSelectedPubs] = useState<Set<string>>(new Set())
   const [campaignForm, setCampaignForm] = useState({
     brand: '',
     vertical: '',
@@ -409,6 +410,17 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
 
   const fitColor = (score = 75) => score >= 90 ? 'text-green-600' : score >= 75 ? 'text-amber-600' : 'text-red-500'
   const alreadySaved = (pub: Publisher) => publishers.some(p => p.name === pub.name || (p.site_url || p.site) === (pub.site || pub.site_url))
+  const isOverdue = (pub: Publisher) =>
+    pub.status === 'contacted' && !!pub.contacted_at &&
+    (Date.now() - new Date(pub.contacted_at).getTime()) > 7 * 24 * 60 * 60 * 1000
+  function togglePub(id: string) {
+    setSelectedPubs(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next })
+  }
+  async function bulkUpdateStatus(status: string) {
+    await Promise.all([...selectedPubs].map(id => updateStatus(id, status)))
+    setSelectedPubs(new Set())
+    toast.success(`Marked ${selectedPubs.size} publishers as ${status}`)
+  }
 
   if (loading) return <div className="h-24 bg-ink-50 rounded-xl animate-pulse" />
 
@@ -953,6 +965,29 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
             </div>
           )}
 
+          {/* Bulk action bar */}
+          {selectedPubs.size > 0 && (
+            <div className="card p-3 flex items-center gap-3 bg-accent/5 border border-accent/20">
+              <span className="text-xs font-semibold text-ink-800">{selectedPubs.size} selected</span>
+              <button
+                onClick={() => downloadCSV(publishers.filter(p => selectedPubs.has(p.id!)))}
+                className="text-xs px-3 py-1.5 bg-ink-100 text-ink-700 rounded-lg hover:bg-ink-200 font-medium">
+                ⬇ Export Selected
+              </button>
+              <select
+                defaultValue=""
+                onChange={e => { if (e.target.value) { bulkUpdateStatus(e.target.value); e.target.value = '' } }}
+                className="text-xs border border-ink-200 rounded-lg px-2 py-1.5 bg-white text-ink-700">
+                <option value="">Mark all as…</option>
+                {['prospect','contacted','responded','onboarded','rejected'].map(s => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+              <button onClick={() => setSelectedPubs(new Set())}
+                className="ml-auto text-xs text-ink-400 hover:text-ink-600">✕ Clear</button>
+            </div>
+          )}
+
           {publishers.length === 0 && !showPubForm ? (
             <div className="card p-8 text-center">
               <p className="text-2xl mb-2">🏢</p>
@@ -962,17 +997,28 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
             <div className="card overflow-hidden">
               <table className="w-full text-sm">
                 <thead><tr className="bg-ink-50 border-b border-ink-100">
+                  <th className="px-3 py-2.5">
+                    <input type="checkbox"
+                      checked={selectedPubs.size === publishers.filter(p => p.id).length && publishers.length > 0}
+                      onChange={e => setSelectedPubs(e.target.checked ? new Set(publishers.map(p => p.id!).filter(Boolean)) : new Set())}
+                      className="rounded" />
+                  </th>
                   <th className="text-left px-4 py-2.5 text-xs font-medium text-ink-500">Publisher</th>
                   <th className="text-left px-3 py-2.5 text-xs font-medium text-ink-500">Contact</th>
                   <th className="text-center px-3 py-2.5 text-xs font-medium text-ink-500">Category</th>
                   <th className="text-center px-3 py-2.5 text-xs font-medium text-ink-500">Region</th>
+                  <th className="text-center px-3 py-2.5 text-xs font-medium text-ink-500">Fit</th>
                   <th className="text-center px-3 py-2.5 text-xs font-medium text-ink-500">Contacted</th>
                   <th className="text-center px-3 py-2.5 text-xs font-medium text-ink-500">Status</th>
                   <th className="text-center px-3 py-2.5 text-xs font-medium text-ink-500">Actions</th>
                 </tr></thead>
                 <tbody>
                   {publishers.map(pub => (
-                    <tr key={pub.id} className="border-b border-ink-50 hover:bg-ink-50/50">
+                    <tr key={pub.id} className={`border-b border-ink-50 hover:bg-ink-50/50 ${selectedPubs.has(pub.id!) ? 'bg-accent/5' : ''}`}>
+                      <td className="px-3 py-2.5 text-center">
+                        <input type="checkbox" checked={selectedPubs.has(pub.id!)}
+                          onChange={() => pub.id && togglePub(pub.id)} className="rounded" />
+                      </td>
                       <td className="px-4 py-2.5">
                         <p className="text-xs font-medium text-ink-900">{pub.name}</p>
                         <p className="text-xs text-blue-500">{pub.site || pub.site_url}</p>
@@ -983,10 +1029,20 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
                       </td>
                       <td className="px-3 py-2.5 text-center text-xs text-ink-600">{pub.category}</td>
                       <td className="px-3 py-2.5 text-center text-xs text-ink-600">{pub.region}</td>
-                      <td className="px-3 py-2.5 text-center text-xs text-ink-500">
-                        {pub.contacted_at
-                          ? new Date(pub.contacted_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })
-                          : <span className="text-ink-300">—</span>}
+                      <td className="px-3 py-2.5 text-center">
+                        {pub.fit_score
+                          ? <span className={`text-xs font-bold ${fitColor(pub.fit_score)}`}>{pub.fit_score}%</span>
+                          : <span className="text-ink-300 text-xs">—</span>}
+                      </td>
+                      <td className="px-3 py-2.5 text-center">
+                        <div className="flex flex-col items-center gap-0.5">
+                          {pub.contacted_at
+                            ? <span className="text-xs text-ink-500">{new Date(pub.contacted_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}</span>
+                            : <span className="text-ink-300 text-xs">—</span>}
+                          {isOverdue(pub) && (
+                            <span className="text-[9px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-semibold">⚠ Overdue</span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-3 py-2.5 text-center">
                         <select value={pub.status || 'prospect'} onChange={e => updateStatus(pub.id!, e.target.value)}

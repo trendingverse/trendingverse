@@ -8,6 +8,7 @@ interface Row {
   impressions: number; viewable_impressions: number; viewability_rate: number
   clicks: number; ctr: number; goal: number | null; delivered_pct: number | null
   conversions: number; conversion_rate: number; pixel_token: string | null
+  approval_note?: string; created_at?: string
 }
 interface Summary {
   company_name: string; campaigns: number; active: number
@@ -27,6 +28,7 @@ export function AdvertiserDashboard() {
   const [rows, setRows] = useState<Row[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [expandedRow, setExpandedRow] = useState<string | null>(null)
 
   useEffect(() => {
     fetch('/api/admin/advertisers/dashboard')
@@ -68,6 +70,23 @@ export function AdvertiserDashboard() {
           </div>
         ))}
       </div>
+
+      {/* Pending approval banner */}
+      {rows.some(r => r.approval_status === 'pending') && (
+        <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+          <span className="text-lg shrink-0">⏳</span>
+          <div>
+            <p className="text-sm font-semibold text-amber-800">
+              {rows.filter(r => r.approval_status === 'pending').length === 1
+                ? 'Your campaign is pending approval'
+                : `${rows.filter(r => r.approval_status === 'pending').length} campaigns are pending approval`}
+            </p>
+            <p className="text-xs text-amber-700 mt-0.5">
+              Our team will review your brief and email you once it's approved. Usually within 1 business day.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Campaigns table */}
       <div className="card overflow-hidden">
@@ -115,13 +134,22 @@ export function AdvertiserDashboard() {
             </tr></thead>
             <tbody>
               {rows.map(r => (
-                <tr key={r.id} className="border-b border-ink-50 hover:bg-ink-50/50">
+                <>
+                <tr key={r.id} className={`border-b border-ink-50 hover:bg-ink-50/50 cursor-pointer ${expandedRow === r.id ? 'bg-blue-50/40' : ''}`}
+                  onClick={() => setExpandedRow(expandedRow === r.id ? null : r.id)}>
                   <td className="px-4 py-3">
-                    <p className="text-xs font-semibold text-ink-900">{r.campaign_name}</p>
+                    <p className="text-xs font-semibold text-ink-900 flex items-center gap-1.5">
+                      {r.campaign_name}
+                      <span className="text-ink-300 text-[10px]">{expandedRow === r.id ? '▲' : '▼'}</span>
+                    </p>
                     <p className="text-[10px] text-ink-400">{r.start_date || '—'}{r.end_date ? ` → ${r.end_date}` : ''}</p>
                   </td>
                   <td className="px-3 py-3 text-center">
-                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium capitalize ${STATUS_COLORS[r.status] || 'bg-ink-100 text-ink-500'}`}>{r.status}</span>
+                    <div className="flex flex-col items-center gap-0.5">
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium capitalize ${STATUS_COLORS[r.status] || 'bg-ink-100 text-ink-500'}`}>{r.status}</span>
+                      {r.approval_status === 'pending' && <span className="text-[9px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-medium">⏳ pending</span>}
+                      {r.approval_status === 'rejected' && <span className="text-[9px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full font-medium">✕ rejected</span>}
+                    </div>
                   </td>
                   <td className="px-3 py-3 text-right text-xs">{r.impressions.toLocaleString()}</td>
                   <td className="px-3 py-3 text-right text-xs">
@@ -147,7 +175,8 @@ export function AdvertiserDashboard() {
                   <td className="px-3 py-3 text-center">
                     {r.pixel_token ? (
                       <button
-                        onClick={() => {
+                        onClick={e => {
+                          e.stopPropagation()
                           const snippet = `<img src="${window.location.origin}/api/track/pixel?t=${r.pixel_token}" width="1" height="1" style="display:none" alt="" />`
                           navigator.clipboard.writeText(snippet).then(() => toast.success('Pixel copied! Paste on your thank-you page.'))
                         }}
@@ -159,6 +188,54 @@ export function AdvertiserDashboard() {
                     ) : <span className="text-[10px] text-ink-400">—</span>}
                   </td>
                 </tr>
+                {expandedRow === r.id && (
+                  <tr className="bg-blue-50/30 border-b border-ink-100">
+                    <td colSpan={9} className="px-5 py-4">
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+                        <div>
+                          <p className="text-ink-400 mb-1 font-medium">Approval status</p>
+                          <p className={`font-semibold capitalize ${r.approval_status === 'approved' ? 'text-green-700' : r.approval_status === 'rejected' ? 'text-red-600' : 'text-amber-600'}`}>
+                            {r.approval_status === 'approved' ? '✅ Approved' : r.approval_status === 'rejected' ? '✕ Rejected' : '⏳ Pending review'}
+                          </p>
+                          {r.approval_note && <p className="text-ink-500 mt-1 italic">"{r.approval_note}"</p>}
+                        </div>
+                        <div>
+                          <p className="text-ink-400 mb-1 font-medium">Campaign period</p>
+                          <p className="text-ink-700">{r.start_date || 'Not set'} {r.end_date ? `→ ${r.end_date}` : ''}</p>
+                        </div>
+                        <div>
+                          <p className="text-ink-400 mb-1 font-medium">Goal / Delivery</p>
+                          <p className="text-ink-700">{r.goal ? r.goal.toLocaleString() + ' impressions' : 'No goal set'}</p>
+                          {r.delivered_pct !== null && <p className="text-ink-500">{r.delivered_pct}% delivered</p>}
+                        </div>
+                        <div>
+                          <p className="text-ink-400 mb-1 font-medium">Conversion pixel</p>
+                          {r.pixel_token
+                            ? <p className="text-purple-600 font-mono text-[10px] truncate">t={r.pixel_token.slice(0, 8)}…</p>
+                            : <p className="text-ink-400">Not assigned</p>}
+                        </div>
+                      </div>
+                      {r.clicks > 0 && (
+                        <div className="mt-3 pt-3 border-t border-ink-100 grid grid-cols-3 md:grid-cols-6 gap-3 text-xs text-center">
+                          {[
+                            { l: 'Impressions', v: r.impressions.toLocaleString() },
+                            { l: 'Viewable', v: r.viewable_impressions.toLocaleString() },
+                            { l: 'Viewability', v: r.viewability_rate + '%' },
+                            { l: 'Clicks', v: r.clicks.toLocaleString() },
+                            { l: 'CTR', v: r.ctr + '%' },
+                            { l: 'Conversions', v: (r.conversions || 0).toLocaleString() },
+                          ].map(s => (
+                            <div key={s.l} className="bg-white rounded-lg p-2 border border-ink-100">
+                              <p className="font-semibold text-ink-800">{s.v}</p>
+                              <p className="text-ink-400 text-[10px] mt-0.5">{s.l}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                )}
+                </>
               ))}
             </tbody>
           </table>
