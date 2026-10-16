@@ -159,9 +159,13 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
       return v ? v.split(',').map(s => s.trim()).filter(Boolean) : []
     }
     // Parse geo back to country codes
+    // Use word-boundary regex so "India" doesn't match inside "Indonesia"
     const geoStr = get('Geo/Regions').toLowerCase()
     const parsedCountries = COUNTRIES
-      .filter(c => geoStr.includes(c.label.replace(/^.+? /, '').toLowerCase()))
+      .filter(c => {
+        const name = c.label.replace(/^.+? /, '').toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+        return new RegExp(`\\b${name}\\b`).test(geoStr)
+      })
       .map(c => c.code)
     // Parse timeline
     const timeline = get('Timeline')
