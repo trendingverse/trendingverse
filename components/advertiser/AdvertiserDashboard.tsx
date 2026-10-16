@@ -29,6 +29,36 @@ export function AdvertiserDashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [expandedRow, setExpandedRow] = useState<string | null>(null)
+  const [showCampaignForm, setShowCampaignForm] = useState(false)
+  const [campaignForm, setCampaignForm] = useState({
+    brand: '', campaign_name: '', vertical: '', audience: '',
+    format: '', budget_inr: '', start_date: '', end_date: '',
+    landing_url: '', notes: '',
+  })
+  const [submitting, setSubmitting] = useState(false)
+  const [submitted, setSubmitted] = useState(false)
+
+  async function submitCampaign() {
+    if (!campaignForm.brand || !campaignForm.vertical) {
+      toast.error('Brand and vertical are required'); return
+    }
+    setSubmitting(true)
+    const res = await fetch('/api/advertiser/campaigns', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...campaignForm, budget_inr: campaignForm.budget_inr ? Number(campaignForm.budget_inr) : null }),
+    })
+    if (res.ok) {
+      setSubmitted(true)
+      setShowCampaignForm(false)
+      setCampaignForm({ brand: '', campaign_name: '', vertical: '', audience: '', format: '', budget_inr: '', start_date: '', end_date: '', landing_url: '', notes: '' })
+      toast.success('Campaign brief submitted! We\'ll review and get back to you.')
+    } else {
+      const d = await res.json()
+      toast.error(d.error || 'Failed to submit')
+    }
+    setSubmitting(false)
+  }
 
   useEffect(() => {
     fetch('/api/admin/advertisers/dashboard')
@@ -47,12 +77,109 @@ export function AdvertiserDashboard() {
 
   return (
     <div className="space-y-6 max-w-5xl">
-      <div>
-        <h1 className="font-display text-2xl font-bold text-ink-950">
-          {summary.company_name || 'Your'} Campaigns
-        </h1>
-        <p className="text-sm text-ink-400 mt-1">Live delivery for your campaigns — updated continuously.</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="font-display text-2xl font-bold text-ink-950">
+            {summary.company_name || 'Your'} Campaigns
+          </h1>
+          <p className="text-sm text-ink-400 mt-1">Live delivery for your campaigns — updated continuously.</p>
+        </div>
+        <button onClick={() => { setShowCampaignForm(v => !v); setSubmitted(false) }}
+          className="btn-primary text-sm px-4 py-2 whitespace-nowrap">
+          {showCampaignForm ? '✕ Cancel' : '+ New Campaign'}
+        </button>
       </div>
+
+      {/* Self-serve campaign brief form */}
+      {showCampaignForm && (
+        <div className="card p-5 border-2 border-accent/20 space-y-4">
+          <p className="font-semibold text-ink-900">📝 Submit a Campaign Brief</p>
+          <p className="text-xs text-ink-400">Fill in your campaign details and our team will review and activate it within 24–48 hours.</p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label className="label">Brand / Company *</label>
+              <input className="input" value={campaignForm.brand}
+                onChange={e => setCampaignForm(f => ({ ...f, brand: e.target.value }))}
+                placeholder="e.g. Nykaa" />
+            </div>
+            <div>
+              <label className="label">Campaign Name</label>
+              <input className="input" value={campaignForm.campaign_name}
+                onChange={e => setCampaignForm(f => ({ ...f, campaign_name: e.target.value }))}
+                placeholder="e.g. Diwali Sale 2026" />
+            </div>
+            <div>
+              <label className="label">Vertical / Category *</label>
+              <select className="input" value={campaignForm.vertical}
+                onChange={e => setCampaignForm(f => ({ ...f, vertical: e.target.value }))}>
+                <option value="">Select vertical…</option>
+                {['E-Commerce','BFSI','Auto','FMCG','OTT / Entertainment','Ed-Tech','Gaming','Travel','Health & Pharma','Real Estate','Fashion & Lifestyle','Food & Beverage','Technology','Telecom','Sports'].map(v => (
+                  <option key={v} value={v}>{v}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="label">Target Audience</label>
+              <input className="input" value={campaignForm.audience}
+                onChange={e => setCampaignForm(f => ({ ...f, audience: e.target.value }))}
+                placeholder="e.g. Males 25–44, urban, SEC A/B" />
+            </div>
+            <div>
+              <label className="label">Ad Format</label>
+              <select className="input" value={campaignForm.format}
+                onChange={e => setCampaignForm(f => ({ ...f, format: e.target.value }))}>
+                <option value="">Select format…</option>
+                {['Display Banner','Native Article','Video Pre-Roll','Sponsored Content','Newsletter Sponsorship','Push Notification'].map(f => (
+                  <option key={f} value={f}>{f}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="label">Budget (₹)</label>
+              <input type="number" className="input" value={campaignForm.budget_inr}
+                onChange={e => setCampaignForm(f => ({ ...f, budget_inr: e.target.value }))}
+                placeholder="e.g. 50000" min={0} step={1000} />
+            </div>
+            <div>
+              <label className="label">Start Date</label>
+              <input type="date" className="input" value={campaignForm.start_date}
+                onChange={e => setCampaignForm(f => ({ ...f, start_date: e.target.value }))} />
+            </div>
+            <div>
+              <label className="label">End Date</label>
+              <input type="date" className="input" value={campaignForm.end_date}
+                onChange={e => setCampaignForm(f => ({ ...f, end_date: e.target.value }))} />
+            </div>
+          </div>
+
+          <div>
+            <label className="label">Landing Page URL</label>
+            <input type="url" className="input" value={campaignForm.landing_url}
+              onChange={e => setCampaignForm(f => ({ ...f, landing_url: e.target.value }))}
+              placeholder="https://…" />
+          </div>
+
+          <div>
+            <label className="label">Additional Notes</label>
+            <textarea className="input resize-none" rows={3} value={campaignForm.notes}
+              onChange={e => setCampaignForm(f => ({ ...f, notes: e.target.value }))}
+              placeholder="Creative requirements, special targeting, exclusions, etc." />
+          </div>
+
+          <button onClick={submitCampaign} disabled={submitting}
+            className="btn-primary py-2.5 w-full disabled:opacity-50">
+            {submitting ? 'Submitting…' : '🚀 Submit Campaign Brief'}
+          </button>
+        </div>
+      )}
+
+      {submitted && (
+        <div className="card p-4 bg-green-50 border border-green-200 text-center">
+          <p className="text-green-700 font-medium">✅ Campaign brief submitted!</p>
+          <p className="text-xs text-green-600 mt-1">Our team will review and get back to you within 24–48 hours.</p>
+        </div>
+      )}
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">

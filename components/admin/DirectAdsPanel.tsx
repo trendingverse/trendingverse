@@ -109,6 +109,11 @@ export function DirectAdsPanel() {
   const [collapseCities, setCollapseCities] = useState(true)
   const [editCollapsePublishers, setEditCollapsePublishers] = useState(true)
   const [editCollapseCountries, setEditCollapseCountries] = useState(true)
+  const [activityAd, setActivityAd] = useState<DirectAd | null>(null)
+  const [adEvents, setAdEvents] = useState<any[]>([])
+  const [eventsLoading, setEventsLoading] = useState(false)
+  const [noteInput, setNoteInput] = useState('')
+  const [addingNote, setAddingNote] = useState(false)
   const [reportModal, setReportModal] = useState<DirectAd | null>(null)
   const [reportEmail, setReportEmail] = useState('')
   const [reportData, setReportData] = useState<any>(null)
@@ -275,6 +280,35 @@ async function fetchAdvertisers() {
   function toggleCond(field: string, val: string) {
     const arr = (segForm.conditions as any)[field] as string[]
     setSegForm(f => ({ ...f, conditions: { ...f.conditions, [field]: arr.includes(val) ? arr.filter((x: string) => x !== val) : [...arr, val] } }))
+  }
+
+  async function openActivityLog(ad: DirectAd) {
+    setActivityAd(ad)
+    setAdEvents([])
+    setNoteInput('')
+    setEventsLoading(true)
+    try {
+      const res = await fetch(`/api/audience/ad-events?ad_id=${ad.id}`)
+      if (res.ok) setAdEvents(await res.json())
+    } catch { /* silent */ }
+    setEventsLoading(false)
+  }
+
+  async function addNote() {
+    if (!activityAd || !noteInput.trim()) return
+    setAddingNote(true)
+    const res = await fetch('/api/audience/ad-events', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ad_id: activityAd.id, event_type: 'note', description: noteInput.trim() }),
+    })
+    if (res.ok) {
+      const ev = await res.json()
+      setAdEvents(prev => [ev, ...prev])
+      setNoteInput('')
+      toast.success('Note added')
+    } else toast.error('Failed to add note')
+    setAddingNote(false)
   }
 
   async function openReport(ad: DirectAd) {
@@ -1159,6 +1193,7 @@ async function fetchAdvertisers() {
                         <td className="px-3 py-3 text-center">
                           <div className="flex items-center justify-center gap-1">
                             <button onClick={() => openReport(ad)} className="text-xs px-2 py-1 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100" title="View Report">📊</button>
+                            <button onClick={() => openActivityLog(ad)} className="text-xs px-2 py-1 rounded-lg bg-ink-100 text-ink-600 hover:bg-ink-200" title="Activity Log">📋</button>
                             {(ad as any).pixel_token && (
                               <button
                                 title="Copy conversion pixel"
@@ -1692,6 +1727,70 @@ async function fetchAdvertisers() {
                 </button>
                 <button onClick={() => setEditingAd(null)} className="px-4 py-2 text-sm bg-ink-100 text-ink-600 rounded-xl">Cancel</button>
               </div>
+            </div>
+          </div>
+        </>
+      )}
+      {/* Activity Log Modal */}
+      {activityAd && (
+        <>
+          <div className="fixed inset-0 bg-black/40 z-40" onClick={() => setActivityAd(null)} />
+          <div className="fixed inset-0 flex items-center justify-center z-50 p-4">
+            <div className="card w-full max-w-lg max-h-[90vh] overflow-y-auto p-6 space-y-5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-semibold text-ink-900">📋 Activity Log</p>
+                  <p className="text-xs text-ink-400">{activityAd.campaign_name}</p>
+                </div>
+                <button onClick={() => setActivityAd(null)} className="text-ink-400 hover:text-ink-700 text-lg leading-none">×</button>
+              </div>
+
+              {/* Add note */}
+              <div className="flex gap-2">
+                <input className="input flex-1 text-sm"
+                  placeholder="Add a note or update…"
+                  value={noteInput}
+                  onChange={e => setNoteInput(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && !e.shiftKey && addNote()}
+                />
+                <button onClick={addNote} disabled={addingNote || !noteInput.trim()}
+                  className="btn-primary text-xs px-3 disabled:opacity-50">
+                  {addingNote ? '…' : '+ Add'}
+                </button>
+              </div>
+
+              {/* Timeline */}
+              {eventsLoading ? (
+                <div className="py-8 text-center text-ink-400 text-sm">Loading events…</div>
+              ) : adEvents.length === 0 ? (
+                <div className="py-8 text-center text-ink-400 text-sm">No activity yet. Add a note above.</div>
+              ) : (
+                <div className="space-y-3">
+                  {adEvents.map((ev, i) => {
+                    const icon = ev.event_type === 'note' ? '📝'
+                      : ev.event_type === 'approved' ? '✅'
+                      : ev.event_type === 'rejected' ? '❌'
+                      : ev.event_type === 'activated' ? '▶'
+                      : ev.event_type === 'paused' ? '⏸'
+                      : '📌'
+                    return (
+                      <div key={ev.id || i} className="flex gap-3">
+                        <div className="flex flex-col items-center">
+                          <span className="text-base">{icon}</span>
+                          {i < adEvents.length - 1 && <div className="w-px flex-1 bg-ink-100 mt-1" />}
+                        </div>
+                        <div className="pb-3 flex-1">
+                          <p className="text-sm text-ink-900">{ev.description}</p>
+                          <p className="text-[10px] text-ink-400 mt-0.5">
+                            {ev.created_by && <span className="mr-2">{ev.created_by}</span>}
+                            {ev.created_at && new Date(ev.created_at).toLocaleString()}
+                          </p>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           </div>
         </>

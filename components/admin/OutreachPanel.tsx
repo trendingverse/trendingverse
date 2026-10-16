@@ -8,6 +8,12 @@ interface Publisher {
   monthly_audience: string; contact_email: string; contact_phone: string
   contact_name?: string; notes?: string; status?: string; contacted_at?: string
   why?: string; fit_score?: number; contact_verified?: boolean; contact_source?: string
+  follow_up_date?: string
+}
+
+interface Payout {
+  id?: string; publisher_id: string; month: string
+  amount_inr: number; notes?: string; paid_at?: string
 }
 
 interface Campaign {
@@ -46,6 +52,10 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
   const [selectedCampaignId, setSelectedCampaignId] = useState<string>('')
   const [selectedCountries, setSelectedCountries] = useState<string[]>([])
   const [selectedPubs, setSelectedPubs] = useState<Set<string>>(new Set())
+  const [payouts, setPayouts] = useState<Payout[]>([])
+  const [payoutPub, setPayoutPub] = useState<Publisher | null>(null)
+  const [payoutForm, setPayoutForm] = useState({ month: new Date().toISOString().slice(0, 7), amount_inr: 0, notes: '' })
+  const [savingPayout, setSavingPayout] = useState(false)
   const [campaignForm, setCampaignForm] = useState({
     brand: '',
     vertical: '',
@@ -464,6 +474,31 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
     a.href = URL.createObjectURL(blob)
     a.download = `Outreach-${new Date().toISOString().split('T')[0]}.csv`
     a.click()
+  }
+
+  async function fetchPayouts(publisherId: string) {
+    try {
+      const res = await fetch(`/api/outreach/payouts?publisher_id=${publisherId}`)
+      if (res.ok) setPayouts(await res.json())
+    } catch { /* silent */ }
+  }
+
+  async function savePayout() {
+    if (!payoutPub?.id || !payoutForm.month || payoutForm.amount_inr <= 0) {
+      toast.error('Month and amount required'); return
+    }
+    setSavingPayout(true)
+    const res = await fetch('/api/outreach/payouts', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ publisher_id: payoutPub.id, ...payoutForm }),
+    })
+    if (res.ok) {
+      const data = await res.json()
+      setPayouts(prev => [data, ...prev.filter(p => p.month !== payoutForm.month)])
+      toast.success('Payout saved!')
+      setPayoutForm({ month: new Date().toISOString().slice(0, 7), amount_inr: 0, notes: '' })
+    } else toast.error('Failed to save payout')
+    setSavingPayout(false)
   }
 
   function sendGmail() {
@@ -1035,6 +1070,43 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
             </div>
           )}
 
+          {/* Pipeline funnel */}
+          {publishers.length > 0 && (() => {
+            const stages = [
+              { k: 'prospect', l: 'Prospect', color: 'text-ink-600 bg-ink-100' },
+              { k: 'contacted', l: 'Contacted', color: 'text-blue-700 bg-blue-100' },
+              { k: 'responded', l: 'Responded', color: 'text-amber-700 bg-amber-100' },
+              { k: 'onboarded', l: 'Onboarded', color: 'text-green-700 bg-green-100' },
+            ]
+            const counts = Object.fromEntries(stages.map(s => [s.k, publishers.filter(p => (p.status || 'prospect') === s.k).length]))
+            const rejected = publishers.filter(p => p.status === 'rejected').length
+            return (
+              <div className="card p-3 flex items-center gap-1 flex-wrap">
+                {stages.map((s, i) => (
+                  <div key={s.k} className="flex items-center gap-1">
+                    <div className={`flex flex-col items-center px-3 py-1.5 rounded-lg ${s.color}`}>
+                      <span className="text-sm font-bold leading-none">{counts[s.k]}</span>
+                      <span className="text-[10px] font-medium mt-0.5">{s.l}</span>
+                    </div>
+                    {i < stages.length - 1 && (
+                      <div className="flex flex-col items-center text-ink-300 text-[10px]">
+                        <span>→</span>
+                        {counts[stages[i].k] > 0 && (
+                          <span className="text-[9px]">{Math.round((counts[stages[i+1].k] / counts[stages[i].k]) * 100)}%</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+                <div className="ml-auto text-[10px] text-ink-400 flex items-center gap-2">
+                  {rejected > 0 && <span className="bg-red-50 text-red-500 px-2 py-1 rounded-lg">{rejected} rejected</span>}
+                  <span className="text-ink-300">|</span>
+                  <span>{publishers.length} total</span>
+                </div>
+              </div>
+            )
+          })()}
+
           {/* Bulk action bar */}
           {selectedPubs.size > 0 && (
             <div className="card p-3 flex items-center gap-3 bg-accent/5 border border-accent/20">
@@ -1079,6 +1151,7 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
                   <th className="text-center px-3 py-2.5 text-xs font-medium text-ink-500">Region</th>
                   <th className="text-center px-3 py-2.5 text-xs font-medium text-ink-500">Fit</th>
                   <th className="text-center px-3 py-2.5 text-xs font-medium text-ink-500">Contacted</th>
+                  <th className="text-center px-3 py-2.5 text-xs font-medium text-ink-500">Follow-up</th>
                   <th className="text-center px-3 py-2.5 text-xs font-medium text-ink-500">Status</th>
                   <th className="text-center px-3 py-2.5 text-xs font-medium text-ink-500">Actions</th>
                 </tr></thead>
@@ -1115,6 +1188,24 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
                         </div>
                       </td>
                       <td className="px-3 py-2.5 text-center">
+                        {(() => {
+                          const isFollowUpDue = pub.follow_up_date && new Date(pub.follow_up_date) <= new Date()
+                          return (
+                            <div className="flex flex-col items-center gap-0.5">
+                              <input
+                                type="date"
+                                value={pub.follow_up_date || ''}
+                                onChange={e => pub.id && updateStatus(pub.id, pub.status || 'prospect', { follow_up_date: e.target.value })}
+                                className="text-[10px] border border-ink-200 rounded px-1 py-0.5 w-24"
+                              />
+                              {isFollowUpDue && (
+                                <span className="text-[9px] bg-red-50 text-red-600 px-1.5 py-0.5 rounded-full font-semibold">🔔 Due</span>
+                              )}
+                            </div>
+                          )
+                        })()}
+                      </td>
+                      <td className="px-3 py-2.5 text-center">
                         <select value={pub.status || 'prospect'} onChange={e => updateStatus(pub.id!, e.target.value)}
                           className="text-xs border border-ink-200 rounded-lg px-2 py-0.5 bg-white text-ink-700">
                           {['prospect','contacted','responded','onboarded','rejected'].map(s => (
@@ -1123,8 +1214,14 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
                         </select>
                       </td>
                       <td className="px-3 py-2.5 text-center">
-                        <button onClick={() => draftEmail(pub)}
-                          className="text-xs px-2 py-1 bg-accent text-white rounded-lg">✉ Draft</button>
+                        <div className="flex items-center gap-1 justify-center">
+                          <button onClick={() => draftEmail(pub)}
+                            className="text-xs px-2 py-1 bg-accent text-white rounded-lg">✉ Draft</button>
+                          {pub.status === 'onboarded' && (
+                            <button onClick={() => { setPayoutPub(pub); fetchPayouts(pub.id!) }}
+                              className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded-lg hover:bg-green-200">₹</button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -1181,6 +1278,98 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
               className="flex-1 btn-primary text-xs py-2 disabled:opacity-50">✉ Send via Gmail</button>
           </div>
         </div>
+      )}
+
+      {/* Publisher Revenue / Payout Modal */}
+      {payoutPub && (
+        <>
+          <div className="fixed inset-0 bg-black/40 z-40" onClick={() => { setPayoutPub(null); setPayouts([]) }} />
+          <div className="fixed inset-0 flex items-center justify-center z-50 p-4">
+            <div className="card w-full max-w-lg max-h-[90vh] overflow-y-auto p-6 space-y-5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-semibold text-ink-900">₹ Revenue Tracker — {payoutPub.name}</p>
+                  <p className="text-xs text-ink-400">{payoutPub.contact_email}</p>
+                </div>
+                <button onClick={() => { setPayoutPub(null); setPayouts([]) }}
+                  className="text-ink-400 hover:text-ink-700 text-lg leading-none">×</button>
+              </div>
+
+              {/* Add / Edit payout form */}
+              <div className="bg-ink-50 rounded-xl p-4 space-y-3">
+                <p className="text-xs font-semibold text-ink-600 uppercase tracking-wide">Log Monthly Payout</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="label">Month</label>
+                    <input type="month" className="input"
+                      value={payoutForm.month}
+                      onChange={e => setPayoutForm(f => ({ ...f, month: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="label">Amount (₹)</label>
+                    <input type="number" className="input" min={0} step={100}
+                      value={payoutForm.amount_inr || ''}
+                      onChange={e => setPayoutForm(f => ({ ...f, amount_inr: Number(e.target.value) }))}
+                      placeholder="e.g. 15000" />
+                  </div>
+                </div>
+                <div>
+                  <label className="label">Notes (optional)</label>
+                  <input className="input"
+                    value={payoutForm.notes}
+                    onChange={e => setPayoutForm(f => ({ ...f, notes: e.target.value }))}
+                    placeholder="e.g. Q3 rev share — Article #42" />
+                </div>
+                <button onClick={savePayout} disabled={savingPayout}
+                  className="btn-primary text-xs py-2 w-full disabled:opacity-50">
+                  {savingPayout ? 'Saving…' : '💾 Save Payout'}
+                </button>
+              </div>
+
+              {/* Payout history */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-semibold text-ink-600 uppercase tracking-wide">History</p>
+                  {payouts.length > 0 && (
+                    <button onClick={() => {
+                      const rows = [['Month','Amount (₹)','Notes','Paid At'], ...payouts.map(p => [p.month, p.amount_inr, p.notes || '', p.paid_at ? new Date(p.paid_at).toLocaleDateString() : ''])]
+                      const csv = rows.map(r => r.map(v => `"${v}"`).join(',')).join('\n')
+                      const a = document.createElement('a'); a.href = 'data:text/csv,' + encodeURIComponent(csv)
+                      a.download = `payouts_${payoutPub.name?.replace(/\s+/g, '_')}.csv`; a.click()
+                      toast.success('CSV downloaded')
+                    }} className="text-xs px-2 py-1 bg-ink-100 text-ink-600 rounded-lg hover:bg-ink-200">
+                      ↓ Export CSV
+                    </button>
+                  )}
+                </div>
+                {payouts.length === 0 ? (
+                  <p className="text-xs text-ink-400 text-center py-6">No payouts logged yet.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {payouts.map(p => (
+                      <div key={p.id || p.month} className="flex items-center justify-between p-3 bg-ink-50 rounded-xl">
+                        <div>
+                          <p className="text-sm font-semibold text-ink-900">₹{p.amount_inr.toLocaleString('en-IN')}</p>
+                          <p className="text-xs text-ink-500">{p.month}{p.notes ? ` — ${p.notes}` : ''}</p>
+                        </div>
+                        <button onClick={() => setPayoutForm({ month: p.month, amount_inr: p.amount_inr, notes: p.notes || '' })}
+                          className="text-xs px-2 py-1 border border-ink-200 text-ink-500 rounded-lg hover:border-accent hover:text-accent">
+                          Edit
+                        </button>
+                      </div>
+                    ))}
+                    <div className="flex items-center justify-between p-3 bg-green-50 rounded-xl border border-green-100">
+                      <p className="text-xs font-semibold text-green-700">Total Paid</p>
+                      <p className="text-sm font-bold text-green-700">
+                        ₹{payouts.reduce((s, p) => s + (p.amount_inr || 0), 0).toLocaleString('en-IN')}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </>
       )}
 
       {/* Edit Campaign Modal — full structured form */}
