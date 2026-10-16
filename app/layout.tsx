@@ -11,7 +11,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <head>
         {/* Inline script: apply dark class before first paint to avoid flash */}
-        <script dangerouslySetInnerHTML={{ __html: `(function(){try{var t=localStorage.getItem('tv-theme');if(t==='dark'||(!t&&window.location.pathname.startsWith('/admin'))){document.documentElement.classList.add('dark')}}catch(e){}})()` }} />
+        <script dangerouslySetInnerHTML={{ __html: `(function(){try{var p=window.location.pathname;if(p.startsWith('/admin')){document.documentElement.classList.add('dark')}else{var t=localStorage.getItem('tv-theme');if(t==='dark')document.documentElement.classList.add('dark')}}catch(e){}})()` }} />
         {process.env.NEXT_PUBLIC_ADSENSE_CLIENT && (
           <script async src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${process.env.NEXT_PUBLIC_ADSENSE_CLIENT}`} crossOrigin="anonymous" />
         )}
