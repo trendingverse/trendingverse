@@ -6,7 +6,7 @@ interface Publisher {
   id?: string; name: string; site: string; site_url?: string
   category: string; region: string; language: string
   monthly_audience: string; contact_email: string; contact_phone: string
-  contact_name?: string; notes?: string; status?: string
+  contact_name?: string; notes?: string; status?: string; contacted_at?: string
   why?: string; fit_score?: number; contact_verified?: boolean; contact_source?: string
 }
 
@@ -371,12 +371,13 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
     setSavingPub(null)
   }
 
-  async function updateStatus(id: string, status: string) {
+  async function updateStatus(id: string, status: string, extra?: Record<string, string>) {
+    const payload: Record<string, string> = { id, status, ...extra }
     await fetch('/api/outreach/publishers', {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, status }),
+      body: JSON.stringify(payload),
     })
-    setPublishers(prev => prev.map(p => p.id === id ? { ...p, status } : p))
+    setPublishers(prev => prev.map(p => p.id === id ? { ...p, status, ...extra } : p))
   }
 
   function downloadCSV(pubs: Publisher[]) {
@@ -402,7 +403,7 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
     const url = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(draftingFor.contact_email)}&su=${encodeURIComponent(subjectLine)}&body=${encodeURIComponent(body)}`
     window.open(url, '_blank')
     setSendModal(false)
-    if (draftingFor.id) updateStatus(draftingFor.id, 'contacted')
+    if (draftingFor.id) updateStatus(draftingFor.id, 'contacted', { contacted_at: new Date().toISOString() })
     toast.success('Gmail opened — review and send!')
   }
 
@@ -965,6 +966,7 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
                   <th className="text-left px-3 py-2.5 text-xs font-medium text-ink-500">Contact</th>
                   <th className="text-center px-3 py-2.5 text-xs font-medium text-ink-500">Category</th>
                   <th className="text-center px-3 py-2.5 text-xs font-medium text-ink-500">Region</th>
+                  <th className="text-center px-3 py-2.5 text-xs font-medium text-ink-500">Contacted</th>
                   <th className="text-center px-3 py-2.5 text-xs font-medium text-ink-500">Status</th>
                   <th className="text-center px-3 py-2.5 text-xs font-medium text-ink-500">Actions</th>
                 </tr></thead>
@@ -981,6 +983,11 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
                       </td>
                       <td className="px-3 py-2.5 text-center text-xs text-ink-600">{pub.category}</td>
                       <td className="px-3 py-2.5 text-center text-xs text-ink-600">{pub.region}</td>
+                      <td className="px-3 py-2.5 text-center text-xs text-ink-500">
+                        {pub.contacted_at
+                          ? new Date(pub.contacted_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })
+                          : <span className="text-ink-300">—</span>}
+                      </td>
                       <td className="px-3 py-2.5 text-center">
                         <select value={pub.status || 'prospect'} onChange={e => updateStatus(pub.id!, e.target.value)}
                           className="text-xs border border-ink-200 rounded-lg px-2 py-0.5 bg-white text-ink-700">

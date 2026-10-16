@@ -77,7 +77,29 @@ export function AdvertiserDashboard() {
           </p>
         </div>
         {rows.length === 0 ? (
-          <p className="text-sm text-ink-400 p-8 text-center">No campaigns yet. Your account manager will set these up.</p>
+          <div className="p-8 space-y-6">
+            <p className="text-sm text-ink-400 text-center">No campaigns yet. Your account manager will set these up — here's what to expect:</p>
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mt-4">
+              {[
+                { icon: '📋', step: '1', title: 'Campaign approved', desc: 'Your account manager reviews and approves your campaign brief and creative assets.' },
+                { icon: '🚀', step: '2', title: 'Goes live', desc: 'Your ad is activated and starts serving across TrendingVerse publisher properties.' },
+                { icon: '📊', step: '3', title: 'Track delivery', desc: 'Impressions, viewability, clicks, and conversions update in real time on this dashboard.' },
+                { icon: '🎯', step: '4', title: 'Conversion pixel', desc: 'Paste the pixel snippet on your thank-you page to track post-click conversions.' },
+              ].map(s => (
+                <div key={s.step} className="flex flex-col items-center text-center gap-2 p-4 bg-ink-50 rounded-xl">
+                  <div className="relative">
+                    <span className="text-2xl">{s.icon}</span>
+                    <span className="absolute -top-1 -right-2 w-4 h-4 rounded-full bg-accent text-white text-[9px] font-bold flex items-center justify-center">{s.step}</span>
+                  </div>
+                  <p className="text-xs font-semibold text-ink-900">{s.title}</p>
+                  <p className="text-[11px] text-ink-500 leading-relaxed">{s.desc}</p>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-ink-400 text-center pt-2">
+              Questions? Reach out to your account manager and we'll get your campaign set up quickly.
+            </p>
+          </div>
         ) : (
           <table className="w-full text-sm">
             <thead><tr className="border-b border-ink-100">
