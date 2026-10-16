@@ -379,6 +379,76 @@ export function OutreachPanel({ isAdmin }: { isAdmin: boolean }) {
       body: JSON.stringify(payload),
     })
     setPublishers(prev => prev.map(p => p.id === id ? { ...p, status, ...extra } : p))
+
+    // Fire onboarding email when a publisher is marked as onboarded
+    if (status === 'onboarded') {
+      const pub = publishers.find(p => p.id === id)
+      if (pub?.contact_email) {
+        const name = pub.contact_name || pub.name || 'Publisher'
+        const siteName = pub.name || pub.site_url || 'your publication'
+        const subject = `Welcome to TrendingVerse — you're onboarded! 🎉`
+        const html = `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background:#F3F4F6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 20px;">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;">
+        <tr><td style="background:#111827;border-radius:16px 16px 0 0;padding:28px 32px;text-align:center;">
+          <h1 style="margin:0;font-size:24px;color:#fff;font-weight:800;">Trending<span style="color:#EF4444;">Verse</span></h1>
+          <p style="margin:6px 0 0;color:#9CA3AF;font-size:13px;">Publisher Network</p>
+        </td></tr>
+        <tr><td style="background:linear-gradient(135deg,#7C3AED,#4F46E5);padding:28px 32px;text-align:center;">
+          <p style="margin:0;font-size:36px;">🎉</p>
+          <h2 style="margin:12px 0 4px;color:#fff;font-size:20px;font-weight:700;">You're officially onboarded!</h2>
+          <p style="margin:0;color:rgba(255,255,255,0.85);font-size:14px;">Welcome to the TrendingVerse publisher network, ${name}.</p>
+        </td></tr>
+        <tr><td style="background:#fff;padding:32px;">
+          <table width="100%" cellpadding="0" cellspacing="0">
+            <tr><td style="background:#F9FAFB;border-left:4px solid #7C3AED;border-radius:0 8px 8px 0;padding:16px;margin-bottom:20px;">
+              <p style="margin:0 0 4px;font-size:11px;color:#6B7280;text-transform:uppercase;letter-spacing:0.5px;">Your Publication</p>
+              <p style="margin:0;font-size:16px;font-weight:700;color:#111827;">${siteName}</p>
+            </td></tr>
+            <tr><td style="padding-top:24px;">
+              <p style="margin:0 0 12px;font-size:13px;font-weight:600;color:#374151;">Here's what happens next:</p>
+              ${[
+                ['🚀', 'Ad tags go live', 'Our team will send you the ad unit code snippets to place on your site.'],
+                ['📊', 'Track your earnings', 'Revenue reports update monthly — your account manager will share the dashboard link.'],
+                ['💰', 'Monthly payouts', 'Payments are processed on the 10th of each month via bank transfer or UPI.'],
+                ['📞', 'Dedicated support', 'Reach out to your account manager any time for optimisation tips or creative help.'],
+              ].map(([icon, title, desc]) => `
+              <table cellpadding="0" cellspacing="0" style="margin-bottom:16px;width:100%;">
+                <tr>
+                  <td style="width:36px;font-size:20px;vertical-align:top;padding-top:2px;">${icon}</td>
+                  <td style="padding-left:8px;">
+                    <p style="margin:0 0 2px;font-size:13px;font-weight:600;color:#111827;">${title}</p>
+                    <p style="margin:0;font-size:13px;color:#4B5563;line-height:1.5;">${desc}</p>
+                  </td>
+                </tr>
+              </table>`).join('')}
+            </td></tr>
+            <tr><td style="padding-top:28px;text-align:center;">
+              <a href="https://trendingverse.vercel.app"
+                style="display:inline-block;background:#7C3AED;color:#fff;font-size:14px;font-weight:700;padding:14px 32px;border-radius:10px;text-decoration:none;">
+                Visit TrendingVerse →
+              </a>
+            </td></tr>
+          </table>
+        </td></tr>
+        <tr><td style="background:#F9FAFB;border-radius:0 0 16px 16px;padding:20px 32px;text-align:center;border-top:1px solid #E5E7EB;">
+          <p style="margin:0;font-size:12px;color:#9CA3AF;">© 2026 TrendingVerse · <a href="https://trendingverse.vercel.app" style="color:#6B7280;">trendingverse.online</a></p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`
+        fetch('/api/email/welcome', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: pub.contact_email, subject_override: subject, html_override: html }),
+        }).catch(() => {/* silent */})
+      }
+    }
   }
 
   function downloadCSV(pubs: Publisher[]) {

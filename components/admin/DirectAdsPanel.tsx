@@ -484,8 +484,34 @@ async function fetchAdvertisers() {
 
   if (loading) return <div className="h-24 bg-ink-50 rounded-xl animate-pulse" />
 
+  // Derived summary stats
+  const totalImpressions = ads.reduce((s, a) => s + (a.impressions || 0), 0)
+  const totalConversions = ads.reduce((s, a) => s + (a.conversions || 0), 0)
+  const totalClicks = ads.reduce((s, a) => s + (a.clicks || 0), 0)
+  const pendingCount = ads.filter(a => a.approval_status === 'pending').length
+  const activeCount = ads.filter(a => getStatus(a) === 'active').length
+
   return (
     <div className="space-y-5">
+      {/* Overview summary card */}
+      {ads.length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          {[
+            { l: 'Active', v: activeCount, icon: '🟢', c: 'text-green-600' },
+            { l: 'Total Campaigns', v: ads.length, icon: '🎯', c: 'text-ink-900' },
+            { l: 'Impressions', v: totalImpressions.toLocaleString(), icon: '👁', c: 'text-blue-600' },
+            { l: 'Conversions', v: totalConversions.toLocaleString(), icon: '⚡', c: 'text-purple-600' },
+            { l: 'Pending Approval', v: pendingCount, icon: '⏳', c: pendingCount > 0 ? 'text-amber-600' : 'text-ink-400' },
+          ].map(s => (
+            <div key={s.l} className="card p-4 text-center">
+              <div className="text-lg mb-1">{s.icon}</div>
+              <div className={`text-xl font-bold ${s.c}`}>{s.v}</div>
+              <div className="text-xs text-ink-400 mt-0.5">{s.l}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Tabs */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex gap-1 p-1 bg-ink-100 rounded-xl">
