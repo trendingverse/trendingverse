@@ -15,6 +15,8 @@ export function PublisherEarnings() {
   const [payouts, setPayouts] = useState<any[]>([])
   const [totalPaid, setTotalPaid] = useState(0)
   const [payoutsLoaded, setPayoutsLoaded] = useState(false)
+  const [emailing, setEmailing] = useState(false)
+  const [emailStatus, setEmailStatus] = useState<'idle' | 'sent' | 'error'>('idle')
 
   async function load() {
     setLoading(true)
@@ -61,6 +63,26 @@ export function PublisherEarnings() {
       g.clicks += Number(r.clicks || 0)
     }
     return Array.from(m.values()).sort((a, b) => (a.key < b.key ? 1 : -1))
+  }
+
+  async function emailReport() {
+    setEmailing(true)
+    setEmailStatus('idle')
+    try {
+      const r = await fetch('/api/publisher/email-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ start, end }),
+      })
+      const d = await r.json()
+      setEmailStatus(d.sent ? 'sent' : 'error')
+    } catch {
+      setEmailStatus('error')
+    } finally {
+      setEmailing(false)
+      // Auto-reset status after 4 seconds
+      setTimeout(() => setEmailStatus('idle'), 4000)
+    }
   }
 
   function downloadCsv() {
@@ -114,6 +136,25 @@ export function PublisherEarnings() {
         <button onClick={downloadCsv} disabled={!data?.by_day?.length}
           className="px-5 py-2.5 rounded-lg border border-ink-300 text-ink-700 hover:bg-surface-2 text-sm font-medium disabled:opacity-50">
           ⬇ Download CSV
+        </button>
+        <button
+          onClick={emailReport}
+          disabled={emailing || !data?.by_day?.length}
+          className={`px-5 py-2.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 ${
+            emailStatus === 'sent'
+              ? 'bg-green-100 text-green-700 border border-green-200'
+              : emailStatus === 'error'
+              ? 'bg-red-50 text-red-600 border border-red-200'
+              : 'border border-ink-300 text-ink-700 hover:bg-surface-2'
+          }`}
+        >
+          {emailing
+            ? '⏳ Sending…'
+            : emailStatus === 'sent'
+            ? '✓ Report sent!'
+            : emailStatus === 'error'
+            ? '✗ Failed — retry'
+            : '✉ Email Report'}
         </button>
       </div>
 
