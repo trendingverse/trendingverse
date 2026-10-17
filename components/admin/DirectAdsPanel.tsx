@@ -703,7 +703,18 @@ async function fetchAdvertisers() {
                             onChange={e => { const f = e.target.files?.[0]; if (f) uploadVideoFile(f, 'video'); e.target.value = '' }} />
                         </label>
                       </div>
-                      {adForm.video_url && <p className="text-xs text-green-600 mt-1 truncate">✓ {adForm.video_url}</p>}
+                      {adForm.video_url && (
+                        <>
+                          <p className="text-xs text-green-600 mt-1 truncate">✓ {adForm.video_url}</p>
+                          <video
+                            key={adForm.video_url}
+                            src={adForm.video_url}
+                            poster={adForm.video_thumbnail || undefined}
+                            muted autoPlay loop playsInline controls
+                            style={{ width: '100%', maxHeight: 180, marginTop: 8, borderRadius: 8, background: '#000', display: 'block' }}
+                          />
+                        </>
+                      )}
                     </div>
                     <div>
                       <label className="label">Thumbnail / Poster <span className="text-ink-400 font-normal">(shown before video loads)</span></label>
@@ -1774,7 +1785,18 @@ async function fetchAdvertisers() {
                             onChange={e => { const f = e.target.files?.[0]; if (f) uploadVideoFile(f, 'edit_video'); e.target.value = '' }} />
                         </label>
                       </div>
-                      {editForm.video_url && <p className="text-xs text-green-600 mt-1 truncate">✓ {editForm.video_url}</p>}
+                      {editForm.video_url && (
+                        <>
+                          <p className="text-xs text-green-600 mt-1 truncate">✓ {editForm.video_url}</p>
+                          <video
+                            key={editForm.video_url}
+                            src={editForm.video_url}
+                            poster={editForm.video_thumbnail || undefined}
+                            muted autoPlay loop playsInline controls
+                            style={{ width: '100%', maxHeight: 180, marginTop: 8, borderRadius: 8, background: '#000', display: 'block' }}
+                          />
+                        </>
+                      )}
                     </div>
                     <div className="col-span-2">
                       <label className="label">Thumbnail / Poster <span className="text-ink-400 font-normal">(shown before video loads)</span></label>
