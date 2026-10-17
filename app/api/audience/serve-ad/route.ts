@@ -190,6 +190,8 @@ export async function POST(req: NextRequest) {
       size_width: bestAd.size_width,
       size_height: bestAd.size_height,
       campaign_name: bestAd.campaign_name,
+      video_url: bestAd.video_url || null,
+      video_thumbnail: bestAd.video_thumbnail || null,
     },
     fallback: null,
   }, { headers: CORS })

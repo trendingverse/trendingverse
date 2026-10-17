@@ -60,6 +60,7 @@ const EMPTY_AD = {
   campaign_name: '', campaign_notes: '', ad_type: 'script',
   headline: '', description: '', image_url: '', cta_text: 'Learn More',
   destination_url: '', ad_code_override: '',
+  video_url: '', video_thumbnail: '',
   target_ad_unit_ids: [] as string[], segment_ids: [] as string[], target_all: false,
 priority: 0, cpm_rate_inr: 0, impressions_cap: 0, start_date: '', end_date: '',
   target_site_urls: [] as string[], target_countries: [] as string[],
@@ -417,6 +418,8 @@ async function fetchAdvertisers() {
       target_states: ad.target_states || [],
       target_cities: ad.target_cities || [],
       target_gender: ad.target_gender || 'all',
+      video_url: (ad as any).video_url || '',
+      video_thumbnail: (ad as any).video_thumbnail || '',
     })
   }
 
@@ -589,15 +592,17 @@ async function fetchAdvertisers() {
                   <span className="w-6 h-6 rounded-full bg-accent text-white text-xs font-bold flex items-center justify-center shrink-0">1</span>
                   <p className="text-sm font-semibold text-ink-900">Ad Creative Type</p>
                 </div>
-                <div className="flex gap-2 mb-3">
+                <div className="flex flex-wrap gap-2 mb-3">
                   {[
                     { k: 'script', l: '📜 Ad Script', sub: 'Paste JS/HTML code' },
                     { k: 'banner', l: '🖼 Banner', sub: 'Image + destination' },
                     { k: 'text', l: '📝 Text Ad', sub: 'Headline + description' },
                     { k: 'native', l: '📰 Native', sub: 'Image + text combo' },
+                    { k: 'outstream', l: '🎬 Outstream Video', sub: 'Autoplay in editorial slot' },
+                    { k: 'inbanner_video', l: '📺 In-Banner Video', sub: 'Video inside banner slot' },
                   ].map(opt => (
                     <button key={opt.k} onClick={() => setAdForm((f: any) => ({ ...f, ad_type: opt.k }))}
-                      className={`flex-1 p-2.5 rounded-xl border text-xs text-left transition-colors ${adForm.ad_type === opt.k ? 'border-accent bg-accent/5' : 'border-ink-200 hover:border-ink-300'}`}>
+                      className={`flex-1 min-w-[140px] p-2.5 rounded-xl border text-xs text-left transition-colors ${adForm.ad_type === opt.k ? 'border-accent bg-accent/5' : 'border-ink-200 hover:border-ink-300'}`}>
                       <p className="font-semibold text-ink-900">{opt.l}</p>
                       <p className="text-ink-400 mt-0.5">{opt.sub}</p>
                     </button>
@@ -637,6 +642,31 @@ async function fetchAdvertisers() {
                       value={adForm.ad_code_override || ''}
                       onChange={e => setAdForm((f: any) => ({ ...f, ad_code_override: e.target.value }))}
                       placeholder={'<script>\n  // Paste advertiser script here\n</script>'} />
+                  </div>
+                ) : (adForm.ad_type === 'outstream' || adForm.ad_type === 'inbanner_video') ? (
+                  <div className="space-y-3">
+                    <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-700">
+                      {adForm.ad_type === 'outstream'
+                        ? '🎬 Outstream: video plays in an editorial slot between paragraphs — auto-plays muted when visible, pauses when scrolled away, has a close button.'
+                        : '📺 In-Banner Video: video plays inside a standard banner slot replacing static creative — auto-plays muted, click to unmute.'}
+                    </div>
+                    <div>
+                      <label className="label">Video URL * <span className="text-ink-400 font-normal">(MP4 or WebM hosted URL)</span></label>
+                      <input className="input" value={adForm.video_url || ''}
+                        onChange={e => setAdForm((f: any) => ({ ...f, video_url: e.target.value }))}
+                        placeholder="https://cdn.example.com/ad-video.mp4" />
+                    </div>
+                    <div>
+                      <label className="label">Thumbnail / Poster Image <span className="text-ink-400 font-normal">(shown before video loads)</span></label>
+                      <input className="input" value={adForm.video_thumbnail || ''}
+                        onChange={e => setAdForm((f: any) => ({ ...f, video_thumbnail: e.target.value }))}
+                        placeholder="https://cdn.example.com/poster.jpg" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div><label className="label">Headline</label><input className="input" value={adForm.headline} onChange={e => setAdForm((f: any) => ({ ...f, headline: e.target.value }))} /></div>
+                      <div><label className="label">CTA Text</label><input className="input" value={adForm.cta_text} onChange={e => setAdForm((f: any) => ({ ...f, cta_text: e.target.value }))} /></div>
+                    </div>
+                    <div><label className="label">Destination URL *</label><input className="input" value={adForm.destination_url} onChange={e => setAdForm((f: any) => ({ ...f, destination_url: e.target.value }))} placeholder="https://advertiser.com" /></div>
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 gap-3">
@@ -1718,6 +1748,14 @@ async function fetchAdvertisers() {
                     </div>
                   )}
                 </div>
+
+                {/* Video fields — only shown for video ad types */}
+                {(editingAd?.ad_type === 'outstream' || editingAd?.ad_type === 'inbanner_video') && (
+                  <>
+                    <div className="col-span-2"><label className="label">Video URL <span className="text-ink-400 font-normal">(MP4 or WebM)</span></label><input className="input" value={editForm.video_url || ''} onChange={e => setEditForm((f: any) => ({ ...f, video_url: e.target.value }))} placeholder="https://cdn.example.com/ad-video.mp4" /></div>
+                    <div className="col-span-2"><label className="label">Thumbnail / Poster <span className="text-ink-400 font-normal">(shown before video loads)</span></label><input className="input" value={editForm.video_thumbnail || ''} onChange={e => setEditForm((f: any) => ({ ...f, video_thumbnail: e.target.value }))} placeholder="https://cdn.example.com/poster.jpg" /></div>
+                  </>
+                )}
 
                 <div className="col-span-2"><label className="label">Notes</label><textarea className="input resize-none" rows={2} value={editForm.campaign_notes || ''} onChange={e => setEditForm((f: any) => ({ ...f, campaign_notes: e.target.value }))} /></div>
               </div>
