@@ -642,16 +642,35 @@ async function fetchAdvertisers() {
 
                 {showPreview && adForm.ad_type !== 'script' && (
                   <div className="mb-3 p-4 bg-ink-950 rounded-xl flex items-center justify-center">
-                    <div style={{ width: Math.min(adForm.size_width || 300, 280), background: '#fff', borderRadius: 8, overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,0.3)' }}>
-                      {adForm.image_url && (adForm.ad_type === 'banner' || adForm.ad_type === 'native') && (
-                        <img src={adForm.image_url} alt="Ad preview" style={{ width: '100%', display: 'block', maxHeight: 150, objectFit: 'cover' }}
-                          onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                    <div style={{ width: Math.min(adForm.size_width || 300, 360), background: '#000', borderRadius: 8, overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,0.3)', position: 'relative' }}>
+                      {/* Video preview for outstream / inbanner_video */}
+                      {(adForm.ad_type === 'outstream' || adForm.ad_type === 'inbanner_video') ? (
+                        adForm.video_url ? (
+                          <video
+                            src={adForm.video_url}
+                            poster={adForm.video_thumbnail || undefined}
+                            muted autoPlay loop playsInline controls
+                            style={{ width: '100%', display: 'block', maxHeight: 220, background: '#000' }}
+                          />
+                        ) : (
+                          <div style={{ height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#666', fontSize: 12 }}>
+                            📹 No video uploaded yet
+                          </div>
+                        )
+                      ) : (
+                        adForm.image_url && (adForm.ad_type === 'banner' || adForm.ad_type === 'native') && (
+                          <img src={adForm.image_url} alt="Ad preview" style={{ width: '100%', display: 'block', maxHeight: 150, objectFit: 'cover' }}
+                            onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                        )
                       )}
-                      <div style={{ padding: '10px 12px' }}>
-                        {adForm.headline && <p style={{ fontSize: 13, fontWeight: 700, color: '#111', margin: '0 0 4px' }}>{adForm.headline}</p>}
-                        {adForm.description && <p style={{ fontSize: 11, color: '#666', margin: '0 0 8px', lineHeight: 1.4 }}>{adForm.description}</p>}
-                        {adForm.cta_text && <span style={{ display: 'inline-block', background: '#ef4444', color: '#fff', fontSize: 11, fontWeight: 600, padding: '4px 12px', borderRadius: 6 }}>{adForm.cta_text}</span>}
-                      </div>
+                      {/* Caption row */}
+                      {(adForm.headline || adForm.cta_text) && (
+                        <div style={{ padding: '10px 12px', background: '#fff' }}>
+                          {adForm.headline && <p style={{ fontSize: 13, fontWeight: 700, color: '#111', margin: '0 0 4px' }}>{adForm.headline}</p>}
+                          {adForm.description && <p style={{ fontSize: 11, color: '#666', margin: '0 0 8px', lineHeight: 1.4 }}>{adForm.description}</p>}
+                          {adForm.cta_text && <span style={{ display: 'inline-block', background: '#ef4444', color: '#fff', fontSize: 11, fontWeight: 600, padding: '4px 12px', borderRadius: 6 }}>{adForm.cta_text}</span>}
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
