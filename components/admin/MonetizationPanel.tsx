@@ -132,7 +132,7 @@ export function MonetizationPanel({ isAdmin = false }: { isAdmin?: boolean }) {
     if (!adForm.name.trim()) return toast.error('Name is required')
     if (!adForm.site_url.trim()) return toast.error('Choose the site this unit belongs to')
     if (!adForm.network_name.trim()) return toast.error('Choose the network (or "direct")')
-    if (!adForm.ad_code.trim() && adForm.ad_type !== 'gam') return toast.error('Paste the ad code')
+    if (!adForm.ad_code.trim() && adForm.ad_type !== 'gam' && adForm.ad_type !== 'direct') return toast.error('Paste the ad code')
     setSaving(true)
     try {
       const res = await fetch('/api/monetization/ad-units', {
@@ -301,12 +301,19 @@ export function MonetizationPanel({ isAdmin = false }: { isAdmin?: boolean }) {
                   </div>
                 </div>
               )}
-              <div>
-                <label className="label">Ad Code {adForm.ad_type === 'gam' ? '(optional override)' : '(paste full tag — one zone per unit)'}</label>
-                <textarea className="input font-mono text-xs resize-none" rows={4}
-                  value={adForm.ad_code} onChange={e => setAdForm({ ...adForm, ad_code: e.target.value })}
-                  placeholder={adForm.ad_type === 'gam' ? '<script>/* GPT tag */</script>' : '<script ...></script>'} />
-              </div>
+              {adForm.ad_type !== 'direct' && (
+                <div>
+                  <label className="label">Ad Code {adForm.ad_type === 'gam' ? '(optional override)' : '(paste full tag — one zone per unit)'}</label>
+                  <textarea className="input font-mono text-xs resize-none" rows={4}
+                    value={adForm.ad_code} onChange={e => setAdForm({ ...adForm, ad_code: e.target.value })}
+                    placeholder={adForm.ad_type === 'gam' ? '<script>/* GPT tag */</script>' : '<script ...></script>'} />
+                </div>
+              )}
+              {adForm.ad_type === 'direct' && (
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-700">
+                  🎯 <strong>Direct slot</strong> — no ad code needed. After creating this unit, go to <strong>Direct Campaigns</strong> to attach a creative and set targeting.
+                </div>
+              )}
               <div className="flex gap-3">
                 <button onClick={createAdUnit} disabled={saving} className="btn-primary disabled:opacity-50">{saving ? 'Saving…' : 'Create Ad Unit'}</button>
                 <button onClick={() => setShowAdForm(false)} className="btn-secondary">Cancel</button>
@@ -549,7 +556,14 @@ export function MonetizationPanel({ isAdmin = false }: { isAdmin?: boolean }) {
                     <div><label className="label">GAM Unit Path</label><input className="input font-mono text-xs" value={editForm.gam_unit_path} onChange={e => setEditForm({ ...editForm, gam_unit_path: e.target.value })} /></div>
                   </>
                 )}
-                <div className="col-span-2"><label className="label">Ad Code</label><textarea className="input font-mono text-xs resize-none" rows={5} value={editForm.ad_code} onChange={e => setEditForm({ ...editForm, ad_code: e.target.value })} /></div>
+                {editForm.ad_type !== 'direct' && (
+                  <div className="col-span-2"><label className="label">Ad Code</label><textarea className="input font-mono text-xs resize-none" rows={5} value={editForm.ad_code} onChange={e => setEditForm({ ...editForm, ad_code: e.target.value })} /></div>
+                )}
+                {editForm.ad_type === 'direct' && (
+                  <div className="col-span-2 p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-700">
+                    🎯 <strong>Direct slot</strong> — creative is managed in Direct Campaigns, not here.
+                  </div>
+                )}
                 <div className="col-span-2 flex items-center gap-2">
                   <input type="checkbox" checked={editForm.is_active} onChange={e => setEditForm({ ...editForm, is_active: e.target.checked })} className="w-4 h-4 accent-accent" />
                   <label className="text-sm text-ink-700">Active</label>
