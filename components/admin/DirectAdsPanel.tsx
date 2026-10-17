@@ -1033,7 +1033,7 @@ async function fetchAdvertisers() {
                   <div><label className="label">Start Date</label><input type="date" className="input" value={adForm.start_date} onChange={e => setAdForm((f: any) => ({ ...f, start_date: e.target.value }))} /></div>
                   <div><label className="label">End Date</label><input type="date" className="input" value={adForm.end_date} onChange={e => setAdForm((f: any) => ({ ...f, end_date: e.target.value }))} /></div>
                   {adForm.pricing_model === 'cpm' && (
-                    <div><label className="label">CPM Rate (₹)</label><input type="number" className="input" min={0} step="0.01" value={adForm.cpm_rate_inr} onChange={e => setAdForm((f: any) => ({ ...f, cpm_rate_inr: parseFloat(e.target.value) || 0 }))} /></div>
+                    <div><label className="label">CPM Rate (₹)</label><input type="number" className="input" min={0.1} step="0.1" placeholder="e.g. 10" value={adForm.cpm_rate_inr || ''} onChange={e => setAdForm((f: any) => ({ ...f, cpm_rate_inr: parseFloat(e.target.value) || 0 }))} /></div>
                   )}
                   {adForm.pricing_model === 'cpc' && (
                     <div><label className="label">CPC Rate (₹)</label><input type="number" className="input" min={0} step="0.01" value={adForm.cpc_rate_inr} onChange={e => setAdForm((f: any) => ({ ...f, cpc_rate_inr: parseFloat(e.target.value) || 0 }))} /></div>
@@ -1646,7 +1646,7 @@ async function fetchAdvertisers() {
                 <div className="col-span-2"><label className="label">Destination URL</label><input className="input" value={editForm.destination_url || ''} onChange={e => setEditForm((f: any) => ({ ...f, destination_url: e.target.value }))} /></div>
                 <div><label className="label">Start Date</label><input type="date" className="input" value={editForm.start_date || ''} onChange={e => setEditForm((f: any) => ({ ...f, start_date: e.target.value }))} /></div>
                 <div><label className="label">End Date</label><input type="date" className="input" value={editForm.end_date || ''} onChange={e => setEditForm((f: any) => ({ ...f, end_date: e.target.value }))} /></div>
-                <div><label className="label">CPM Rate (₹)</label><input type="number" className="input" value={editForm.cpm_rate_inr || 0} onChange={e => setEditForm((f: any) => ({ ...f, cpm_rate_inr: parseFloat(e.target.value) || 0 }))} /></div>
+                <div><label className="label">CPM Rate (₹)</label><input type="number" className="input" min={0.1} step="0.1" placeholder="e.g. 10" value={editForm.cpm_rate_inr || ''} onChange={e => setEditForm((f: any) => ({ ...f, cpm_rate_inr: parseFloat(e.target.value) || 0 }))} /></div>
                 <div><label className="label">Priority (0-100)</label><input type="number" className="input" min={0} max={100} value={editForm.priority || 0} onChange={e => setEditForm((f: any) => ({ ...f, priority: parseInt(e.target.value) || 0 }))} /></div>
 
                 {/* Site targeting — collapsible in edit modal */}
