@@ -301,9 +301,12 @@
     }
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-  } else {
+  // Wait for full page load (all resources done) before initialising ad slots.
+  // This avoids competing with the publisher's own content/scripts on load,
+  // and ensures video ads only render once the page is stable.
+  if (document.readyState === 'complete') {
     init();
+  } else {
+    window.addEventListener('load', init);
   }
 })();
