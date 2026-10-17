@@ -31,6 +31,18 @@ interface UnitPerf {
   ad_unit_id: string; network_name: string; date: string
   impressions: number; clicks: number; revenue_usd: number; cpm_usd: number; ctr: number
 }
+interface LineItem {
+  id: string; ad_id: string; ad_type: string
+  headline: string | null; description: string | null; cta_text: string | null
+  destination_url: string | null; image_url: string | null
+  video_url: string | null; video_thumbnail: string | null
+  is_active: boolean; notes: string | null; created_at: string
+}
+const EMPTY_LINE_ITEM: Partial<LineItem> = {
+  ad_type: 'outstream', headline: '', description: '', cta_text: 'Learn More',
+  destination_url: '', image_url: '', video_url: '', video_thumbnail: '',
+  is_active: true, notes: '',
+}
 
 const POSITION_LABELS: Record<string, string> = {
   header: '🔼 Header', in_content: '📍 In-Content', footer: '🔽 Footer', sidebar: '◧ Sidebar'
@@ -129,6 +141,14 @@ export function DirectAdsPanel() {
     by_city: true,
   })
   const [videoUploading, setVideoUploading] = useState<'video' | 'thumb' | 'edit_video' | 'edit_thumb' | null>(null)
+
+  // ── Line Items ────────────────────────────────────────────────────────────
+  const [lineItemsAd, setLineItemsAd]       = useState<DirectAd | null>(null)
+  const [lineItems, setLineItems]           = useState<LineItem[]>([])
+  const [lineItemsLoading, setLineItemsLoading] = useState(false)
+  const [newLineItem, setNewLineItem]       = useState<Partial<LineItem>>(EMPTY_LINE_ITEM)
+  const [savingLineItem, setSavingLineItem] = useState(false)
+  const [editingLineItem, setEditingLineItem] = useState<LineItem | null>(null)
 
   useEffect(() => { fetchAll(); fetchGeoData(); fetchPublisherSites(); fetchAdvertisers() }, [])
   useEffect(() => { if (activeTab === 'performance') fetchPerformance() }, [activeTab, perfDays])
@@ -391,6 +411,72 @@ async function fetchAdvertisers() {
       toast.success('Uploaded!')
     } catch { toast.error('Upload failed') }
     finally { setVideoUploading(null) }
+  }
+
+  // ── Line Items helpers ────────────────────────────────────────────────────
+  async function openLineItems(ad: DirectAd) {
+    setLineItemsAd(ad)
+    setLineItems([])
+    setNewLineItem({ ...EMPTY_LINE_ITEM })
+    setEditingLineItem(null)
+    setLineItemsLoading(true)
+    const res = await fetch(`/api/audience/direct-ads/line-items?ad_id=${ad.id}`)
+    if (res.ok) setLineItems(await res.json())
+    setLineItemsLoading(false)
+  }
+
+  async function createLineItem() {
+    if (!lineItemsAd) return
+    setSavingLineItem(true)
+    const res = await fetch('/api/audience/direct-ads/line-items', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...newLineItem, ad_id: lineItemsAd.id }),
+    })
+    if (res.ok) {
+      const created = await res.json()
+      setLineItems(prev => [...prev, created])
+      setNewLineItem({ ...EMPTY_LINE_ITEM })
+      toast.success('Line item added!')
+    } else {
+      const d = await res.json()
+      toast.error(d.error || 'Failed to add line item')
+    }
+    setSavingLineItem(false)
+  }
+
+  async function saveLineItemEdit() {
+    if (!editingLineItem) return
+    setSavingLineItem(true)
+    const res = await fetch('/api/audience/direct-ads/line-items', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(editingLineItem),
+    })
+    if (res.ok) {
+      setLineItems(prev => prev.map(li => li.id === editingLineItem.id ? editingLineItem : li))
+      setEditingLineItem(null)
+      toast.success('Line item updated!')
+    } else {
+      const d = await res.json()
+      toast.error(d.error || 'Failed to update')
+    }
+    setSavingLineItem(false)
+  }
+
+  async function deleteLineItem(id: string) {
+    if (!confirm('Delete this line item?')) return
+    const res = await fetch(`/api/audience/direct-ads/line-items?id=${id}`, { method: 'DELETE' })
+    if (res.ok) {
+      setLineItems(prev => prev.filter(li => li.id !== id))
+      toast.success('Deleted')
+    } else toast.error('Delete failed')
+  }
+
+  async function toggleLineItem(li: LineItem) {
+    const res = await fetch('/api/audience/direct-ads/line-items', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: li.id, is_active: !li.is_active }),
+    })
+    if (res.ok) setLineItems(prev => prev.map(x => x.id === li.id ? { ...x, is_active: !li.is_active } : x))
   }
 
   async function saveAd() {
@@ -1247,6 +1333,7 @@ async function fetchAdvertisers() {
                           <div className="flex items-center justify-center gap-1">
                             <button onClick={() => openReport(ad)} className="text-xs px-2 py-1 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100" title="View Report">📊</button>
                             <button onClick={() => openActivityLog(ad)} className="text-xs px-2 py-1 rounded-lg bg-ink-100 text-ink-600 hover:bg-ink-200" title="Activity Log">📋</button>
+                            <button onClick={() => openLineItems(ad)} className="text-xs px-2 py-1 rounded-lg bg-violet-50 text-violet-600 hover:bg-violet-100" title="Line Items / Creatives">📦</button>
                             {(ad as any).pixel_token && (
                               <button
                                 title="Copy conversion pixel"
@@ -1824,6 +1911,232 @@ async function fetchAdvertisers() {
           </div>
         </>
       )}
+      {/* ── Line Items Modal ─────────────────────────────────────────────────── */}
+      {lineItemsAd && (
+        <>
+          <div className="fixed inset-0 bg-black/40 z-40" onClick={() => { setLineItemsAd(null); setEditingLineItem(null) }} />
+          <div className="fixed inset-0 flex items-start justify-center z-50 p-4 overflow-y-auto">
+            <div className="card w-full max-w-2xl my-8 p-6 space-y-5">
+              {/* Header */}
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="font-semibold text-ink-900">📦 Line Items</p>
+                  <p className="text-xs text-ink-400 mt-0.5">{lineItemsAd.campaign_name}</p>
+                  <p className="text-[11px] text-ink-400 mt-1 max-w-sm">
+                    Each line item is a separate creative for a specific ad type (e.g. Outstream + In-Banner Video on the same campaign).
+                    The plugin passes <code className="bg-ink-100 px-1 rounded">ad_type</code> to request the matching creative.
+                  </p>
+                </div>
+                <button onClick={() => { setLineItemsAd(null); setEditingLineItem(null) }}
+                  className="text-ink-400 hover:text-ink-700 text-xl leading-none ml-4">×</button>
+              </div>
+
+              {/* Existing line items */}
+              {lineItemsLoading ? (
+                <div className="py-6 text-center text-ink-400 text-sm">Loading…</div>
+              ) : lineItems.length === 0 ? (
+                <div className="py-4 text-center text-ink-400 text-sm">
+                  No line items yet. Add one below — the campaign will fall back to its default creative until you do.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {lineItems.map(li => (
+                    <div key={li.id} className={`border rounded-xl p-3 space-y-2 ${li.is_active ? 'border-ink-200' : 'border-ink-100 bg-ink-50 opacity-60'}`}>
+                      {editingLineItem?.id === li.id ? (
+                        // ── inline edit ──────────────────────────────────────
+                        <div className="space-y-3">
+                          <div className="flex flex-wrap gap-2">
+                            {['display','banner','text','native','outstream','inbanner_video','script'].map(t => (
+                              <button key={t} onClick={() => setEditingLineItem(x => x ? { ...x, ad_type: t } : x)}
+                                className={`px-2.5 py-1 text-xs rounded-lg border transition-colors ${editingLineItem.ad_type === t ? 'border-accent bg-accent/10 text-accent font-semibold' : 'border-ink-200 text-ink-600 hover:border-ink-300'}`}>
+                                {t}
+                              </button>
+                            ))}
+                          </div>
+                          {(editingLineItem.ad_type === 'outstream' || editingLineItem.ad_type === 'inbanner_video') && (
+                            <div className="space-y-2">
+                              <div>
+                                <label className="label text-[11px]">Video URL</label>
+                                <input className="input text-xs" value={editingLineItem.video_url || ''}
+                                  onChange={e => setEditingLineItem(x => x ? { ...x, video_url: e.target.value } : x)}
+                                  placeholder="https://…" />
+                              </div>
+                              <div>
+                                <label className="label text-[11px]">Thumbnail URL</label>
+                                <input className="input text-xs" value={editingLineItem.video_thumbnail || ''}
+                                  onChange={e => setEditingLineItem(x => x ? { ...x, video_thumbnail: e.target.value } : x)}
+                                  placeholder="https://…" />
+                              </div>
+                            </div>
+                          )}
+                          {(editingLineItem.ad_type === 'banner' || editingLineItem.ad_type === 'native' || editingLineItem.ad_type === 'display') && (
+                            <div>
+                              <label className="label text-[11px]">Image URL</label>
+                              <input className="input text-xs" value={editingLineItem.image_url || ''}
+                                onChange={e => setEditingLineItem(x => x ? { ...x, image_url: e.target.value } : x)}
+                                placeholder="https://…" />
+                            </div>
+                          )}
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="label text-[11px]">Headline</label>
+                              <input className="input text-xs" value={editingLineItem.headline || ''}
+                                onChange={e => setEditingLineItem(x => x ? { ...x, headline: e.target.value } : x)} />
+                            </div>
+                            <div>
+                              <label className="label text-[11px]">CTA</label>
+                              <input className="input text-xs" value={editingLineItem.cta_text || ''}
+                                onChange={e => setEditingLineItem(x => x ? { ...x, cta_text: e.target.value } : x)} />
+                            </div>
+                          </div>
+                          <div>
+                            <label className="label text-[11px]">Destination URL</label>
+                            <input className="input text-xs" value={editingLineItem.destination_url || ''}
+                              onChange={e => setEditingLineItem(x => x ? { ...x, destination_url: e.target.value } : x)}
+                              placeholder="https://advertiser.com" />
+                          </div>
+                          <div className="flex gap-2">
+                            <button onClick={saveLineItemEdit} disabled={savingLineItem}
+                              className="btn-primary text-xs px-3 py-1.5 disabled:opacity-50">
+                              {savingLineItem ? 'Saving…' : 'Save'}
+                            </button>
+                            <button onClick={() => setEditingLineItem(null)}
+                              className="text-xs px-3 py-1.5 bg-ink-100 text-ink-600 rounded-lg">Cancel</button>
+                          </div>
+                        </div>
+                      ) : (
+                        // ── read view ────────────────────────────────────────
+                        <div className="flex items-start gap-3">
+                          {(li.video_url && (li.ad_type === 'outstream' || li.ad_type === 'inbanner_video')) && (
+                            <video src={li.video_url} poster={li.video_thumbnail || undefined}
+                              muted playsInline style={{ width: 80, height: 56, borderRadius: 6, objectFit: 'cover', background: '#000', flexShrink: 0 }}
+                              onMouseOver={e => (e.target as HTMLVideoElement).play()}
+                              onMouseOut={e => { (e.target as HTMLVideoElement).pause(); (e.target as HTMLVideoElement).currentTime = 0 }}
+                            />
+                          )}
+                          {(li.image_url && (li.ad_type === 'banner' || li.ad_type === 'native' || li.ad_type === 'display')) && (
+                            <img src={li.image_url} alt="" style={{ width: 80, height: 56, borderRadius: 6, objectFit: 'cover', flexShrink: 0 }} />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-[10px] font-semibold bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full">{li.ad_type}</span>
+                              {!li.is_active && <span className="text-[10px] bg-amber-100 text-amber-600 px-2 py-0.5 rounded-full">paused</span>}
+                            </div>
+                            {li.headline && <p className="text-xs font-medium text-ink-900 truncate">{li.headline}</p>}
+                            {li.destination_url && <p className="text-[10px] text-ink-400 truncate">{li.destination_url}</p>}
+                            {li.video_url && <p className="text-[10px] text-blue-500 truncate">🎬 {li.video_url}</p>}
+                          </div>
+                          <div className="flex gap-1 shrink-0">
+                            <button onClick={() => setEditingLineItem(li)} className="text-xs px-2 py-1 rounded-lg bg-ink-100 text-ink-600 hover:bg-ink-200" title="Edit">✏</button>
+                            <button onClick={() => toggleLineItem(li)} className={`text-xs px-2 py-1 rounded-lg ${li.is_active ? 'bg-amber-50 text-amber-600' : 'bg-green-50 text-green-600'}`} title={li.is_active ? 'Pause' : 'Activate'}>
+                              {li.is_active ? '⏸' : '▶'}
+                            </button>
+                            <button onClick={() => deleteLineItem(li.id)} className="text-xs px-2 py-1 rounded-lg text-red-500 hover:bg-red-50" title="Delete">🗑</button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Add new line item */}
+              {!editingLineItem && (
+                <div className="border-t border-ink-100 pt-4 space-y-3">
+                  <p className="text-xs font-semibold text-ink-700">+ Add Line Item</p>
+                  {/* Ad type selector */}
+                  <div>
+                    <label className="label text-[11px]">Ad Type *</label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {[
+                        { k: 'outstream', l: '🎬 Outstream' },
+                        { k: 'inbanner_video', l: '📺 In-Banner Video' },
+                        { k: 'banner', l: '🖼 Banner' },
+                        { k: 'display', l: '🟩 Display' },
+                        { k: 'native', l: '📰 Native' },
+                        { k: 'text', l: '📝 Text' },
+                        { k: 'script', l: '📜 Script' },
+                      ].map(opt => (
+                        <button key={opt.k}
+                          onClick={() => setNewLineItem(f => ({ ...f, ad_type: opt.k }))}
+                          className={`px-2.5 py-1 text-xs rounded-lg border transition-colors ${newLineItem.ad_type === opt.k ? 'border-accent bg-accent/10 text-accent font-semibold' : 'border-ink-200 text-ink-600 hover:border-ink-300'}`}>
+                          {opt.l}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Video fields */}
+                  {(newLineItem.ad_type === 'outstream' || newLineItem.ad_type === 'inbanner_video') && (
+                    <div className="space-y-2">
+                      <div>
+                        <label className="label text-[11px]">Video URL * <span className="text-ink-400 font-normal">(MP4/WebM — paste from Media Library or Supabase)</span></label>
+                        <input className="input text-xs" value={newLineItem.video_url || ''}
+                          onChange={e => setNewLineItem(f => ({ ...f, video_url: e.target.value }))}
+                          placeholder="https://…" />
+                        {newLineItem.video_url && (
+                          <video key={newLineItem.video_url} src={newLineItem.video_url}
+                            muted autoPlay loop playsInline controls
+                            style={{ width: '100%', maxHeight: 140, marginTop: 6, borderRadius: 6, background: '#000', display: 'block' }} />
+                        )}
+                      </div>
+                      <div>
+                        <label className="label text-[11px]">Thumbnail URL <span className="text-ink-400 font-normal">(optional poster image)</span></label>
+                        <input className="input text-xs" value={newLineItem.video_thumbnail || ''}
+                          onChange={e => setNewLineItem(f => ({ ...f, video_thumbnail: e.target.value }))}
+                          placeholder="https://…" />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Image field */}
+                  {(newLineItem.ad_type === 'banner' || newLineItem.ad_type === 'native' || newLineItem.ad_type === 'display') && (
+                    <div>
+                      <label className="label text-[11px]">Image URL *</label>
+                      <input className="input text-xs" value={newLineItem.image_url || ''}
+                        onChange={e => setNewLineItem(f => ({ ...f, image_url: e.target.value }))}
+                        placeholder="https://…" />
+                    </div>
+                  )}
+
+                  {/* Common creative fields */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="label text-[11px]">Headline</label>
+                      <input className="input text-xs" value={newLineItem.headline || ''}
+                        onChange={e => setNewLineItem(f => ({ ...f, headline: e.target.value }))}
+                        placeholder="Ad headline…" />
+                    </div>
+                    <div>
+                      <label className="label text-[11px]">CTA Text</label>
+                      <input className="input text-xs" value={newLineItem.cta_text || ''}
+                        onChange={e => setNewLineItem(f => ({ ...f, cta_text: e.target.value }))} />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="label text-[11px]">Description</label>
+                    <input className="input text-xs" value={newLineItem.description || ''}
+                      onChange={e => setNewLineItem(f => ({ ...f, description: e.target.value }))}
+                      placeholder="Optional ad description…" />
+                  </div>
+                  <div>
+                    <label className="label text-[11px]">Destination URL</label>
+                    <input className="input text-xs" value={newLineItem.destination_url || ''}
+                      onChange={e => setNewLineItem(f => ({ ...f, destination_url: e.target.value }))}
+                      placeholder="https://advertiser.com" />
+                  </div>
+
+                  <button onClick={createLineItem} disabled={savingLineItem || !newLineItem.ad_type}
+                    className="btn-primary text-xs px-4 py-2 disabled:opacity-50">
+                    {savingLineItem ? 'Adding…' : '+ Add Line Item'}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+
       {/* Activity Log Modal */}
       {activityAd && (
         <>

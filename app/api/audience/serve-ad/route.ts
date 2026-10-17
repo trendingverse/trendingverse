@@ -32,7 +32,7 @@ async function geoFromIp(ip: string): Promise<{ city: string; state: string; cou
 }
 
 export async function POST(req: NextRequest) {
-  const { fingerprint, site_url, position } = await req.json().catch(() => ({}))
+  const { fingerprint, site_url, position, ad_type: requested_ad_type } = await req.json().catch(() => ({}))
   if (!fingerprint) return NextResponse.json({ ad: null, fallback: 'network' }, { headers: CORS })
   const admin = createServiceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -168,6 +168,36 @@ export async function POST(req: NextRequest) {
   }
   const bestAd = ads.find(a => a.id === winner.id)!
 
+  // Check for a line item that matches the requested ad_type.
+  // If the plugin passes ad_type (e.g. "outstream", "inbanner_video"), we pick
+  // the matching line item's creative; otherwise fall back to campaign-level fields.
+  let lineItemCreative: {
+    ad_type: string; headline: string | null; description: string | null
+    image_url: string | null; cta_text: string | null; destination_url: string | null
+    video_url: string | null; video_thumbnail: string | null
+  } | null = null
+
+  if (requested_ad_type) {
+    const { data: lineItems } = await admin
+      .from('direct_ad_line_items')
+      .select('ad_type,headline,description,image_url,cta_text,destination_url,video_url,video_thumbnail')
+      .eq('ad_id', bestAd.id)
+      .eq('is_active', true)
+    const match = (lineItems || []).find((li: any) => li.ad_type === requested_ad_type)
+    if (match) lineItemCreative = match
+  }
+
+  const creative = lineItemCreative ?? {
+    ad_type:         bestAd.ad_type,
+    headline:        bestAd.headline,
+    description:     bestAd.description,
+    image_url:       bestAd.image_url,
+    cta_text:        bestAd.cta_text,
+    destination_url: bestAd.destination_url,
+    video_url:       bestAd.video_url || null,
+    video_thumbnail: bestAd.video_thumbnail || null,
+  }
+
   Promise.all([
     admin.from('direct_ad_events').insert({
       ad_id: bestAd.id, fingerprint, event_type: 'impression', site_url,
@@ -180,18 +210,19 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({
     ad: {
       id: bestAd.id,
-      ad_type: bestAd.ad_type,
+      ad_type: creative.ad_type,
       ad_slot_id: bestAd.ad_slot_id,
-      headline: bestAd.headline,
-      description: bestAd.description,
-      image_url: bestAd.image_url,
-      cta_text: bestAd.cta_text,
-      destination_url: bestAd.destination_url,
+      headline: creative.headline,
+      description: creative.description,
+      image_url: creative.image_url,
+      cta_text: creative.cta_text,
+      destination_url: creative.destination_url,
       size_width: bestAd.size_width,
       size_height: bestAd.size_height,
       campaign_name: bestAd.campaign_name,
-      video_url: bestAd.video_url || null,
-      video_thumbnail: bestAd.video_thumbnail || null,
+      video_url: creative.video_url,
+      video_thumbnail: creative.video_thumbnail,
+      has_line_items: !!lineItemCreative,
     },
     fallback: null,
   }, { headers: CORS })
