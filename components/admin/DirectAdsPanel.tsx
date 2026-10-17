@@ -510,12 +510,14 @@ async function fetchAdvertisers() {
     setEditForm({
       campaign_name: ad.campaign_name || '',
       campaign_notes: ad.campaign_notes || '',
+      ad_type: ad.ad_type || 'display',
       headline: ad.headline || '',
       description: ad.description || '',
       destination_url: ad.destination_url || '',
       cta_text: ad.cta_text || '',
       image_url: ad.image_url || '',
       priority: ad.priority || 0,
+      priority_tier: ad.priority_tier || 2,
       cpm_rate_inr: ad.cpm_rate_inr || 0,
       impressions_cap: ad.impressions_cap || 0,
       start_date: ad.start_date || '',
@@ -525,6 +527,9 @@ async function fetchAdvertisers() {
       target_states: ad.target_states || [],
       target_cities: ad.target_cities || [],
       target_gender: ad.target_gender || 'all',
+      target_all: ad.target_all || false,
+      target_ad_unit_ids: ad.target_ad_unit_ids || [],
+      segment_ids: ad.segment_ids || [],
       video_url: (ad as any).video_url || '',
       video_thumbnail: (ad as any).video_thumbnail || '',
     })
@@ -1741,16 +1746,90 @@ async function fetchAdvertisers() {
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
+
+                {/* Campaign Name + Notes */}
                 <div className="col-span-2"><label className="label">Campaign Name</label><input className="input" value={editForm.campaign_name} onChange={e => setEditForm((f: any) => ({ ...f, campaign_name: e.target.value }))} /></div>
+
+                {/* Ad Type */}
+                <div className="col-span-2">
+                  <label className="label">Ad Type</label>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { k: 'display', l: '🖼 Display' }, { k: 'native', l: '📰 Native' },
+                      { k: 'text', l: '✍ Text' }, { k: 'outstream', l: '▶ Outstream Video' },
+                      { k: 'inbanner_video', l: '🎬 In-Banner Video' }, { k: 'script', l: '⚙ Script/Tag' },
+                    ].map(opt => (
+                      <button key={opt.k} onClick={() => setEditForm((f: any) => ({ ...f, ad_type: opt.k }))}
+                        className={`text-xs px-3 py-1.5 rounded-xl border transition-colors ${editForm.ad_type === opt.k ? 'border-accent bg-accent/5 text-accent font-semibold' : 'border-ink-200 text-ink-600 hover:border-ink-300'}`}>
+                        {opt.l}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Creative fields */}
                 <div><label className="label">Headline</label><input className="input" value={editForm.headline || ''} onChange={e => setEditForm((f: any) => ({ ...f, headline: e.target.value }))} /></div>
                 <div><label className="label">CTA Text</label><input className="input" value={editForm.cta_text || ''} onChange={e => setEditForm((f: any) => ({ ...f, cta_text: e.target.value }))} /></div>
+                <div className="col-span-2"><label className="label">Description</label><input className="input" value={editForm.description || ''} onChange={e => setEditForm((f: any) => ({ ...f, description: e.target.value }))} /></div>
                 <div className="col-span-2"><label className="label">Destination URL</label><input className="input" value={editForm.destination_url || ''} onChange={e => setEditForm((f: any) => ({ ...f, destination_url: e.target.value }))} /></div>
+
+                {/* Image — for display/native */}
+                {(editForm.ad_type === 'display' || editForm.ad_type === 'native' || editForm.ad_type === 'banner') && (
+                  <div className="col-span-2"><label className="label">Image URL</label><input className="input" value={editForm.image_url || ''} onChange={e => setEditForm((f: any) => ({ ...f, image_url: e.target.value }))} placeholder="https://…" /></div>
+                )}
+
+                {/* Video fields */}
+                {(editForm.ad_type === 'outstream' || editForm.ad_type === 'inbanner_video') && (
+                  <>
+                    <div className="col-span-2">
+                      <label className="label">Video File <span className="text-ink-400 font-normal">(MP4 or WebM)</span></label>
+                      <div className="flex gap-2 items-center">
+                        <input className="input flex-1" value={editForm.video_url || ''} onChange={e => setEditForm((f: any) => ({ ...f, video_url: e.target.value }))} placeholder="https://… or upload →" />
+                        <label className={`shrink-0 cursor-pointer px-3 py-2 rounded-xl border text-xs font-semibold transition-colors ${videoUploading === 'edit_video' ? 'border-ink-200 text-ink-400 cursor-not-allowed' : 'border-accent text-accent hover:bg-accent/5'}`}>
+                          {videoUploading === 'edit_video' ? '⏳ Uploading…' : '📤 Upload'}
+                          <input type="file" accept="video/mp4,video/webm,video/ogg" className="hidden" disabled={videoUploading !== null}
+                            onChange={e => { const f = e.target.files?.[0]; if (f) uploadVideoFile(f, 'edit_video'); e.target.value = '' }} />
+                        </label>
+                      </div>
+                      {editForm.video_url && (
+                        <>
+                          <p className="text-xs text-green-600 mt-1 truncate">✓ {editForm.video_url}</p>
+                          <video key={editForm.video_url} src={editForm.video_url} poster={editForm.video_thumbnail || undefined}
+                            muted autoPlay loop playsInline controls
+                            style={{ width: '100%', maxHeight: 180, marginTop: 8, borderRadius: 8, background: '#000', display: 'block' }} />
+                        </>
+                      )}
+                    </div>
+                    <div className="col-span-2">
+                      <label className="label">Thumbnail / Poster <span className="text-ink-400 font-normal">(shown before video loads)</span></label>
+                      <div className="flex gap-2 items-center">
+                        <input className="input flex-1" value={editForm.video_thumbnail || ''} onChange={e => setEditForm((f: any) => ({ ...f, video_thumbnail: e.target.value }))} placeholder="https://… or upload →" />
+                        <label className={`shrink-0 cursor-pointer px-3 py-2 rounded-xl border text-xs font-semibold transition-colors ${videoUploading === 'edit_thumb' ? 'border-ink-200 text-ink-400 cursor-not-allowed' : 'border-ink-300 text-ink-600 hover:border-ink-400'}`}>
+                          {videoUploading === 'edit_thumb' ? '⏳ Uploading…' : '🖼 Upload'}
+                          <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" disabled={videoUploading !== null}
+                            onChange={e => { const f = e.target.files?.[0]; if (f) uploadVideoFile(f, 'edit_thumb'); e.target.value = '' }} />
+                        </label>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {/* Dates + pricing */}
                 <div><label className="label">Start Date</label><input type="date" className="input" value={editForm.start_date || ''} onChange={e => setEditForm((f: any) => ({ ...f, start_date: e.target.value }))} /></div>
                 <div><label className="label">End Date</label><input type="date" className="input" value={editForm.end_date || ''} onChange={e => setEditForm((f: any) => ({ ...f, end_date: e.target.value }))} /></div>
                 <div><label className="label">CPM Rate (₹)</label><input type="number" className="input" min={0.1} step="0.1" placeholder="e.g. 10" value={editForm.cpm_rate_inr || ''} onChange={e => setEditForm((f: any) => ({ ...f, cpm_rate_inr: parseFloat(e.target.value) || 0 }))} /></div>
+                <div><label className="label">Impressions Cap</label><input type="number" className="input" min={0} placeholder="0 = unlimited" value={editForm.impressions_cap || ''} onChange={e => setEditForm((f: any) => ({ ...f, impressions_cap: parseInt(e.target.value) || 0 }))} /></div>
                 <div><label className="label">Priority (0-100)</label><input type="number" className="input" min={0} max={100} value={editForm.priority || 0} onChange={e => setEditForm((f: any) => ({ ...f, priority: parseInt(e.target.value) || 0 }))} /></div>
+                <div>
+                  <label className="label">Priority Tier</label>
+                  <select className="input" value={editForm.priority_tier || 2} onChange={e => setEditForm((f: any) => ({ ...f, priority_tier: parseInt(e.target.value) }))}>
+                    <option value={1}>Tier 1 — Direct Sold (highest)</option>
+                    <option value={2}>Tier 2 — House / Network</option>
+                    <option value={3}>Tier 3 — Remnant</option>
+                  </select>
+                </div>
 
-                {/* Site targeting — collapsible in edit modal */}
+                {/* Target Sites */}
                 <div className="col-span-2 border border-ink-200 rounded-xl overflow-hidden">
                   <button onClick={() => setEditCollapsePublishers(v => !v)}
                     className="w-full flex items-center justify-between px-4 py-3 bg-ink-50 hover:bg-ink-100 transition-colors">
@@ -1791,6 +1870,45 @@ async function fetchAdvertisers() {
                     <div className="px-4 py-2 border-t border-ink-100">
                       <p className="text-xs text-violet-600">✓ {editForm.target_site_urls.join(', ')}</p>
                     </div>
+                  )}
+                </div>
+
+                {/* Ad Units */}
+                <div className="col-span-2">
+                  <label className="label">Ad Units</label>
+                  <div className="flex items-center gap-2 mb-2">
+                    <input type="checkbox" checked={editForm.target_all || false}
+                      onChange={e => setEditForm((f: any) => ({ ...f, target_all: e.target.checked, target_ad_unit_ids: [] }))} className="w-4 h-4 accent-accent" />
+                    <label className="text-sm text-ink-700">Run on <strong>all ad units</strong></label>
+                  </div>
+                  {!editForm.target_all && (
+                    <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                      {adUnits.filter(u => {
+                        if (!(editForm.target_site_urls || []).length) return true
+                        return (editForm.target_site_urls || []).some((s: string) => u.site_url?.includes(s) || s.includes(u.site_url || ''))
+                      }).map(unit => {
+                        const selected = (editForm.target_ad_unit_ids || []).includes(unit.id)
+                        return (
+                          <button key={unit.id} onClick={() => setEditForm((f: any) => ({
+                            ...f,
+                            target_ad_unit_ids: selected
+                              ? (f.target_ad_unit_ids || []).filter((x: string) => x !== unit.id)
+                              : [...(f.target_ad_unit_ids || []), unit.id]
+                          }))}
+                            className={`w-full text-left flex items-center gap-3 px-3 py-2 rounded-xl border transition-all text-xs ${selected ? 'border-accent bg-accent/5' : 'border-ink-200 hover:border-ink-300'}`}>
+                            <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${selected ? 'bg-accent border-accent' : 'border-ink-300'}`}>
+                              {selected && <span className="text-white text-[10px]">✓</span>}
+                            </div>
+                            <span className="font-medium text-ink-800">{unit.name}</span>
+                            <span className="text-ink-400">{unit.position} · {unit.site_url}</span>
+                          </button>
+                        )
+                      })}
+                      {adUnits.length === 0 && <p className="text-xs text-ink-400">No ad units available</p>}
+                    </div>
+                  )}
+                  {(editForm.target_ad_unit_ids || []).length > 0 && (
+                    <p className="text-xs text-green-600 bg-green-50 px-3 py-2 rounded-lg mt-1">✓ {(editForm.target_ad_unit_ids || []).length} unit{(editForm.target_ad_unit_ids || []).length > 1 ? 's' : ''} selected</p>
                   )}
                 </div>
 
@@ -1862,44 +1980,31 @@ async function fetchAdvertisers() {
                   )}
                 </div>
 
-                {/* Video fields — only shown for video ad types */}
-                {(editingAd?.ad_type === 'outstream' || editingAd?.ad_type === 'inbanner_video') && (
-                  <>
-                    <div className="col-span-2">
-                      <label className="label">Video File <span className="text-ink-400 font-normal">(MP4 or WebM)</span></label>
-                      <div className="flex gap-2 items-center">
-                        <input className="input flex-1" value={editForm.video_url || ''} onChange={e => setEditForm((f: any) => ({ ...f, video_url: e.target.value }))} placeholder="https://… or upload →" />
-                        <label className={`shrink-0 cursor-pointer px-3 py-2 rounded-xl border text-xs font-semibold transition-colors ${videoUploading === 'edit_video' ? 'border-ink-200 text-ink-400 cursor-not-allowed' : 'border-accent text-accent hover:bg-accent/5'}`}>
-                          {videoUploading === 'edit_video' ? '⏳ Uploading…' : '📤 Upload'}
-                          <input type="file" accept="video/mp4,video/webm,video/ogg" className="hidden" disabled={videoUploading !== null}
-                            onChange={e => { const f = e.target.files?.[0]; if (f) uploadVideoFile(f, 'edit_video'); e.target.value = '' }} />
-                        </label>
-                      </div>
-                      {editForm.video_url && (
-                        <>
-                          <p className="text-xs text-green-600 mt-1 truncate">✓ {editForm.video_url}</p>
-                          <video
-                            key={editForm.video_url}
-                            src={editForm.video_url}
-                            poster={editForm.video_thumbnail || undefined}
-                            muted autoPlay loop playsInline controls
-                            style={{ width: '100%', maxHeight: 180, marginTop: 8, borderRadius: 8, background: '#000', display: 'block' }}
-                          />
-                        </>
-                      )}
+                {/* Audience Segments */}
+                {segments.length > 0 && (
+                  <div className="col-span-2">
+                    <label className="label">Audience Segments</label>
+                    <div className="space-y-1.5 max-h-36 overflow-y-auto">
+                      {segments.map(seg => {
+                        const selected = (editForm.segment_ids || []).includes(seg.id)
+                        return (
+                          <button key={seg.id} onClick={() => setEditForm((f: any) => ({
+                            ...f,
+                            segment_ids: selected
+                              ? (f.segment_ids || []).filter((x: string) => x !== seg.id)
+                              : [...(f.segment_ids || []), seg.id]
+                          }))}
+                            className={`w-full text-left flex items-center gap-3 px-3 py-2 rounded-xl border transition-all text-xs ${selected ? 'border-violet-400 bg-violet-50' : 'border-ink-200 hover:border-ink-300'}`}>
+                            <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${selected ? 'bg-violet-600 border-violet-600' : 'border-ink-300'}`}>
+                              {selected && <span className="text-white text-[10px]">✓</span>}
+                            </div>
+                            <span className="font-medium text-ink-800">{seg.name}</span>
+                            <span className="text-ink-400">{seg.profile_count?.toLocaleString()} profiles</span>
+                          </button>
+                        )
+                      })}
                     </div>
-                    <div className="col-span-2">
-                      <label className="label">Thumbnail / Poster <span className="text-ink-400 font-normal">(shown before video loads)</span></label>
-                      <div className="flex gap-2 items-center">
-                        <input className="input flex-1" value={editForm.video_thumbnail || ''} onChange={e => setEditForm((f: any) => ({ ...f, video_thumbnail: e.target.value }))} placeholder="https://… or upload →" />
-                        <label className={`shrink-0 cursor-pointer px-3 py-2 rounded-xl border text-xs font-semibold transition-colors ${videoUploading === 'edit_thumb' ? 'border-ink-200 text-ink-400 cursor-not-allowed' : 'border-ink-300 text-ink-600 hover:border-ink-400'}`}>
-                          {videoUploading === 'edit_thumb' ? '⏳ Uploading…' : '🖼 Upload'}
-                          <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" disabled={videoUploading !== null}
-                            onChange={e => { const f = e.target.files?.[0]; if (f) uploadVideoFile(f, 'edit_thumb'); e.target.value = '' }} />
-                        </label>
-                      </div>
-                    </div>
-                  </>
+                  </div>
                 )}
 
                 <div className="col-span-2"><label className="label">Notes</label><textarea className="input resize-none" rows={2} value={editForm.campaign_notes || ''} onChange={e => setEditForm((f: any) => ({ ...f, campaign_notes: e.target.value }))} /></div>
