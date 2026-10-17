@@ -59,12 +59,169 @@
     return el.getBoundingClientRect().height > 20;
   }
 
+  // ── STICKY OUTSTREAM PLAYER ─────────────────────────────────────
+  // Floating bottom-right player that slides in after the user scrolls
+  // 300 px. One per page; only the first outstream ad uses it.
+  var _stickyUsed = false;
+
+  function renderStickyOutstream(slot, ad) {
+    if (_stickyUsed) return false; // already one sticky on this page
+    _stickyUsed = true;
+
+    // Leave a placeholder in the inline slot so the page doesn't reflow oddly
+    slot.innerHTML = '<div style="height:0;overflow:hidden;"></div>';
+
+    var player = document.createElement('div');
+    player.id = 'tv-sticky-outstream';
+    player.style.cssText = [
+      'position:fixed',
+      'bottom:16px',
+      'right:16px',
+      'width:320px',
+      'z-index:2147483647',
+      'border-radius:12px',
+      'overflow:hidden',
+      'background:#000',
+      'box-shadow:0 8px 32px rgba(0,0,0,0.35)',
+      'transform:translateY(120%)',
+      'transition:transform 0.35s cubic-bezier(0.4,0,0.2,1)',
+      'font-family:-apple-system,BlinkMacSystemFont,sans-serif',
+    ].join(';');
+
+    // Header bar: label + close button
+    var header = document.createElement('div');
+    header.style.cssText = [
+      'display:flex',
+      'align-items:center',
+      'justify-content:space-between',
+      'padding:6px 10px',
+      'background:#111',
+    ].join(';');
+    var label = document.createElement('span');
+    label.textContent = 'Advertisement';
+    label.style.cssText = 'color:rgba(255,255,255,0.45);font-size:10px;letter-spacing:0.04em;text-transform:uppercase;';
+    var closeBtn = document.createElement('button');
+    closeBtn.innerHTML = '&#x2715;';
+    closeBtn.title = 'Close';
+    closeBtn.style.cssText = [
+      'background:none',
+      'border:none',
+      'color:rgba(255,255,255,0.6)',
+      'font-size:14px',
+      'cursor:pointer',
+      'padding:0 2px',
+      'line-height:1',
+    ].join(';');
+    closeBtn.addEventListener('click', function () {
+      vid.pause();
+      vid.src = '';
+      player.style.transform = 'translateY(120%)';
+      setTimeout(function () {
+        if (player.parentNode) player.parentNode.removeChild(player);
+      }, 400);
+      if (scrollHandler) window.removeEventListener('scroll', scrollHandler, { passive: true });
+    });
+    header.appendChild(label);
+    header.appendChild(closeBtn);
+
+    // Video
+    var vid = document.createElement('video');
+    vid.src = ad.video_url;
+    if (ad.video_thumbnail) vid.poster = ad.video_thumbnail;
+    vid.muted = true;
+    vid.loop = false;
+    vid.playsInline = true;
+    vid.preload = 'metadata';
+    vid.style.cssText = 'width:100%;display:block;cursor:pointer;';
+    vid.addEventListener('click', function () {
+      beacon(slot, 'direct', 'click');
+      if (ad.destination_url) window.open(ad.destination_url, '_blank', 'noopener');
+    });
+
+    // Mute toggle
+    var muteBtn = document.createElement('button');
+    muteBtn.innerHTML = '🔇';
+    muteBtn.title = 'Toggle mute';
+    muteBtn.style.cssText = [
+      'position:absolute',
+      'bottom:' + (ad.headline || ad.cta_text ? '48px' : '8px'),
+      'left:8px',
+      'background:rgba(0,0,0,0.55)',
+      'border:none',
+      'color:#fff',
+      'font-size:14px',
+      'width:28px',
+      'height:28px',
+      'border-radius:50%',
+      'display:flex',
+      'align-items:center',
+      'justify-content:center',
+      'cursor:pointer',
+      'z-index:10',
+      'padding:0',
+    ].join(';');
+    muteBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      vid.muted = !vid.muted;
+      muteBtn.innerHTML = vid.muted ? '🔇' : '🔊';
+    });
+
+    var vidWrap = document.createElement('div');
+    vidWrap.style.cssText = 'position:relative;';
+    vidWrap.appendChild(vid);
+    vidWrap.appendChild(muteBtn);
+
+    // Caption
+    var capEl = null;
+    if (ad.headline || ad.cta_text) {
+      capEl = document.createElement('div');
+      capEl.style.cssText = 'padding:8px 12px;background:#fff;';
+      if (ad.headline) {
+        var hl = document.createElement('p');
+        hl.textContent = ad.headline;
+        hl.style.cssText = 'font-weight:700;font-size:12px;color:#111;margin:0 0 4px;';
+        capEl.appendChild(hl);
+      }
+      if (ad.cta_text) {
+        var cta = document.createElement('span');
+        cta.textContent = ad.cta_text;
+        cta.style.cssText = 'display:inline-block;background:#d1382c;color:#fff;font-size:11px;font-weight:600;padding:3px 9px;border-radius:4px;cursor:pointer;';
+        cta.addEventListener('click', function () {
+          beacon(slot, 'direct', 'click');
+          if (ad.destination_url) window.open(ad.destination_url, '_blank', 'noopener');
+        });
+        capEl.appendChild(cta);
+      }
+    }
+
+    player.appendChild(header);
+    player.appendChild(vidWrap);
+    if (capEl) player.appendChild(capEl);
+    document.body.appendChild(player);
+
+    beacon(slot, 'direct', 'fill');
+
+    // Slide in after user scrolls 300 px, then autoplay
+    var shown = false;
+    var scrollHandler = function () {
+      if (!shown && window.scrollY > 300) {
+        shown = true;
+        player.style.transform = 'translateY(0)';
+        setTimeout(function () { vid.play().catch(function () {}); }, 350);
+      }
+    };
+    window.addEventListener('scroll', scrollHandler, { passive: true });
+    // If page is already scrolled (e.g. anchor link), show immediately
+    if (window.scrollY > 300) scrollHandler();
+
+    return true;
+  }
+
   // ── VIDEO AD RENDERER ────────────────────────────────────────────
-  // Handles both outstream (editorial slot, close button) and
-  // inbanner_video (replaces banner, no close button).
+  // Handles inbanner_video (replaces banner slot, no close button).
+  // Outstream is handled by renderStickyOutstream above.
   function renderVideoAd(slot, ad) {
-    var isOutstream = ad.ad_type === 'outstream';
-    var w = parseInt(ad.size_width, 10) || (isOutstream ? 640 : 300);
+    var w = parseInt(ad.size_width, 10) || 300;
 
     var wrap = document.createElement('div');
     wrap.className = 'tv-direct-ad tv-video-ad';
@@ -118,39 +275,6 @@
       muteBtn.innerHTML = vid.muted ? '🔇' : '🔊';
     });
 
-    // Outstream gets a close button
-    var closeBtn = null;
-    if (isOutstream) {
-      closeBtn = document.createElement('div');
-      closeBtn.innerHTML = '✕';
-      closeBtn.title = 'Close ad';
-      closeBtn.style.cssText = [
-        'position:absolute',
-        'top:8px',
-        'right:8px',
-        'background:rgba(0,0,0,0.55)',
-        'color:#fff',
-        'font-size:13px',
-        'width:28px',
-        'height:28px',
-        'border-radius:50%',
-        'display:flex',
-        'align-items:center',
-        'justify-content:center',
-        'cursor:pointer',
-        'z-index:10',
-        'user-select:none',
-        'line-height:1',
-      ].join(';');
-
-      closeBtn.addEventListener('click', function (e) {
-        e.stopPropagation();
-        vid.pause();
-        vid.src = '';
-        wrap.style.display = 'none';
-      });
-    }
-
     // Caption row below video (headline + CTA)
     var caption = '';
     if (ad.headline || ad.cta_text) {
@@ -163,7 +287,6 @@
     // Assemble
     wrap.appendChild(vid);
     wrap.appendChild(muteBtn);
-    if (closeBtn) wrap.appendChild(closeBtn);
     if (caption) {
       var capEl = document.createElement('div');
       capEl.innerHTML = caption;
@@ -200,8 +323,16 @@
 
   // Render a DIRECT ad (your own creative)
   function renderDirect(slot, ad) {
-    // Video ad types get the video renderer
-    if (ad.ad_type === 'outstream' || ad.ad_type === 'inbanner_video') {
+    // Outstream → floating sticky player (bottom-right corner on scroll)
+    if (ad.ad_type === 'outstream') {
+      if (ad.video_url) {
+        renderStickyOutstream(slot, ad);
+        return;
+      }
+      // no video_url — fall through to image/text creative
+    }
+    // In-banner video → inline video renderer
+    if (ad.ad_type === 'inbanner_video') {
       if (ad.video_url) {
         renderVideoAd(slot, ad);
         return;
