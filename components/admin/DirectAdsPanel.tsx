@@ -828,52 +828,6 @@ async function fetchAdvertisers() {
                 </div>
 
                 <div className="space-y-4">
-                  {/* Site targeting — collapsible publisher list */}
-                  <div className="border border-ink-200 rounded-xl overflow-hidden">
-                    <button onClick={() => setCollapsePublishers(v => !v)}
-                      className="w-full flex items-center justify-between px-4 py-3 bg-ink-50 hover:bg-ink-100 transition-colors">
-                      <div className="flex items-center gap-2">
-                        <p className="text-xs font-semibold text-ink-700">🌐 Site Targeting</p>
-                        {adForm.target_site_urls?.length > 0 && (
-                          <span className="text-xs bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full">{adForm.target_site_urls.length} selected</span>
-                        )}
-                      </div>
-                      <span className="text-ink-400 text-xs">{collapsePublishers ? '▼ Show' : '▲ Hide'}</span>
-                    </button>
-                    {!collapsePublishers && (
-                      <div className="p-3 space-y-2">
-                        <p className="text-xs text-ink-400">Select publisher sites. Leave empty to run on all sites.</p>
-                        {publisherSites.map(site => {
-                          const selected = adForm.target_site_urls?.includes(site.domain)
-                          return (
-                            <button key={site.domain} onClick={() => setAdForm((f: any) => ({
-                              ...f,
-                              target_site_urls: selected
-                                ? f.target_site_urls.filter((x: string) => x !== site.domain)
-                                : [...(f.target_site_urls || []), site.domain]
-                            }))}
-                              className={`w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all ${selected ? 'border-violet-400 bg-violet-50' : 'border-ink-200 hover:border-ink-300'}`}>
-                              <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${selected ? 'bg-violet-600 border-violet-600' : 'border-ink-300'}`}>
-                                {selected && <span className="text-white text-[10px]">✓</span>}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-xs font-semibold text-ink-900">{site.name}</p>
-                                <p className="text-xs text-ink-400">{site.domain}</p>
-                              </div>
-                              <span className="text-[10px] bg-ink-100 text-ink-500 px-2 py-0.5 rounded-full">{site.articles_count || 0} articles</span>
-                            </button>
-                          )
-                        })}
-                        {publisherSites.length === 0 && <p className="text-xs text-ink-400 bg-ink-50 p-3 rounded-lg">No onboarded publishers yet</p>}
-                      </div>
-                    )}
-                    {adForm.target_site_urls?.length > 0 && collapsePublishers && (
-                      <div className="px-4 py-2 border-t border-ink-100">
-                        <p className="text-xs text-violet-600">✓ {adForm.target_site_urls.join(', ')}</p>
-                      </div>
-                    )}
-                  </div>
-
                   {/* Gender targeting */}
                   <div className="p-4 border border-ink-200 rounded-xl space-y-2">
                     <p className="text-xs font-semibold text-ink-700">👤 Gender</p>
@@ -896,7 +850,7 @@ async function fetchAdvertisers() {
                         <p className="text-xs font-semibold text-ink-700">🌍 Country</p>
                         {adForm.target_countries?.length > 0
                           ? <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">{adForm.target_countries.join(', ')}</span>
-                          : <span className="text-[10px] text-ink-400">{geoCountries.length} available · select to filter states</span>}
+                          : <span className="text-[10px] text-ink-400">Leave empty = all countries (worldwide)</span>}
                       </div>
                       <span className="text-ink-400 text-xs">{collapseCountries ? '▼' : '▲'}</span>
                     </button>

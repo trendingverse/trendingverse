@@ -21,7 +21,7 @@ export async function GET() {
     .from('ad_units')
     .select(`
       id, name, position, size_width, size_height,
-      is_active, network_name, site_url, ad_code
+      is_active, network_name, site_url, ad_code, ad_type
     `)
     .eq('is_active', true)
     .order('position')
@@ -39,10 +39,10 @@ export async function GET() {
     }
   }
 
-  const enriched = (units || []).map(u => ({
+  const enriched = (units || []).map((u: any) => ({
     ...u,
     site_url: u.site_url || siteMap[u.id] || '',
-    network_name: u.network_name || detectNetwork(u.ad_code || ''),
+    network_name: u.network_name || (u.ad_type === 'direct' ? 'direct' : detectNetwork(u.ad_code || '')),
   }))
 
   return NextResponse.json(enriched)
