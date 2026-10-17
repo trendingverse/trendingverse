@@ -16,8 +16,8 @@ export async function POST(req: NextRequest) {
   if (!user || user.email !== ADMIN_EMAIL) return NextResponse.json({ error: 'Admin only' }, { status: 403 })
   const admin = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
   const body = await req.json()
-  // New campaigns require review before they can serve
-  if (!body.approval_status) body.approval_status = 'pending'
+  // Admin-created campaigns are auto-approved (no third-party advertiser review needed)
+  if (!body.approval_status) body.approval_status = 'approved'
   // Coerce empty strings to null for typed DB columns
   if (body.start_date === '') body.start_date = null
   if (body.end_date === '') body.end_date = null

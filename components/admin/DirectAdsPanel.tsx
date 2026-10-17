@@ -1349,6 +1349,9 @@ async function fetchAdvertisers() {
                                 className="text-xs px-2 py-1 rounded-lg bg-purple-50 text-purple-600 hover:bg-purple-100"
                               >🎯</button>
                             )}
+                            {(ad as any).approval_status === 'pending' && (
+                              <button onClick={() => setApproval(ad.id, 'approved')} className="text-xs px-2 py-1 rounded-lg bg-green-50 text-green-700 hover:bg-green-100 font-semibold" title="Approve campaign">✅ Approve</button>
+                            )}
                             <button onClick={() => openEdit(ad)} className="text-xs px-2 py-1 rounded-lg bg-ink-100 text-ink-600 hover:bg-ink-200">✏</button>
                             <button onClick={() => toggleAd(ad.id, ad.is_active)}
                               className={`text-xs px-2 py-1 rounded-lg ${ad.is_active ? 'bg-amber-50 text-amber-600' : 'bg-green-50 text-green-600'}`}>
