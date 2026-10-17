@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { MonetizationPanel } from '@/components/admin/MonetizationPanel'
+import { PublisherDirectAdsPanel } from '@/components/admin/PublisherDirectAdsPanel'
 import { DeliveryHealthBanner } from '@/components/admin/DeliveryHealthBanner'
 import Link from 'next/link'
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'khan.khan.yusuf@gmail.com'
@@ -82,19 +83,24 @@ export default async function MonetizationPage() {
             </div>
           )}
 
+          {/* Publisher: direct ad campaign performance */}
+          {!isAdmin && (
+            <PublisherDirectAdsPanel publisherEmail={user.email!} />
+          )}
+
           {/* Ad units — the slot definitions the WordPress plugin reads. This is
               SETUP (define where ads appear), kept here under a clear heading. */}
-          <div>
-            <div className="mb-4">
-              <h2 className="font-display text-xl font-bold text-ink-950">🧩 Ad Units</h2>
-              <p className="text-sm text-ink-400 mt-1">
-                {isAdmin
-                  ? 'Define the ad slots (position + size) your sites serve. Each slot fills via the mediation waterfall.'
-                  : 'Your ad slots and placements.'}
-              </p>
+          {isAdmin && (
+            <div>
+              <div className="mb-4">
+                <h2 className="font-display text-xl font-bold text-ink-950">🧩 Ad Units</h2>
+                <p className="text-sm text-ink-400 mt-1">
+                  Define the ad slots (position + size) your sites serve. Each slot fills via the mediation waterfall.
+                </p>
+              </div>
+              <MonetizationPanel isAdmin={isAdmin} />
             </div>
-            <MonetizationPanel isAdmin={isAdmin} />
-          </div>
+          )}
         </>
       ) : (
         <div className="card p-8 text-center max-w-lg mx-auto">
