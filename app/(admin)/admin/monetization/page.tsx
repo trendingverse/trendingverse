@@ -25,7 +25,13 @@ export default async function MonetizationPage() {
         </p>
       </div>
 
-      {hasAds ? (
+      {/* Publishers always see their direct-ad panel regardless of plan —
+          they receive admin-sold campaigns, no subscription needed for that. */}
+      {!isAdmin && (
+        <PublisherDirectAdsPanel publisherEmail={user.email!} />
+      )}
+
+      {hasAds && isAdmin ? (
         <>
           {isAdmin && <DeliveryHealthBanner />}
 
@@ -81,11 +87,6 @@ export default async function MonetizationPage() {
                 </div>
               </Link>
             </div>
-          )}
-
-          {/* Publisher: direct ad campaign performance */}
-          {!isAdmin && (
-            <PublisherDirectAdsPanel publisherEmail={user.email!} />
           )}
 
           {/* Ad units — the slot definitions the WordPress plugin reads. This is
