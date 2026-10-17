@@ -42,7 +42,13 @@ export async function POST(req: NextRequest) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   )
 
-  const { data, error } = await admin.from('publisher_ads').insert(body).select().single()
+  // Coerce empty-string UUID fields to null (Postgres rejects "" for uuid columns)
+  const row = { ...body }
+  if (!row.site_id) row.site_id = null
+  if (!row.publisher_id) row.publisher_id = null
+  if (!row.ad_unit_id) row.ad_unit_id = null
+
+  const { data, error } = await admin.from('publisher_ads').insert(row).select().single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json(data, { status: 201 })
 }
