@@ -126,6 +126,18 @@ export function PublisherAdAssignment() {
     !filterPublisher || a.publisher_id === filterPublisher
   )
 
+  // Warn when the chosen ad unit's position is already actively assigned for the same publisher+site
+  const selectedUnit = adUnits.find(a => a.id === form.ad_unit_id)
+  const positionConflicts = selectedUnit
+    ? assignments.filter(a =>
+        a.is_enabled &&
+        a.ad_unit_id !== form.ad_unit_id &&
+        a.ad_units?.position === selectedUnit.position &&
+        (!form.publisher_id || a.publisher_id === form.publisher_id) &&
+        (!form.site_id || !a.site_id || a.site_id === form.site_id)
+      )
+    : []
+
   return (
     <div className="space-y-6">
       <div>
@@ -194,6 +206,18 @@ export function PublisherAdAssignment() {
             <label htmlFor="enabled" className="text-sm text-ink-700">Enabled immediately</label>
           </div>
         </div>
+        {positionConflicts.length > 0 && (
+          <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl text-xs text-amber-800 space-y-1">
+            <p className="font-semibold">⚠️ Position conflict — already assigned at <span className="uppercase">{selectedUnit?.position}</span></p>
+            {positionConflicts.map(c => (
+              <p key={c.id} className="text-amber-700">
+                • <strong>{c.ad_units?.name}</strong> is active on this position
+                {c.sites?.name ? ` (${c.sites.name})` : ''}.
+                Deactivate it first, or choose a different position.
+              </p>
+            ))}
+          </div>
+        )}
         <button onClick={assign} disabled={loading} className="btn-primary">
           Assign Ad Unit →
         </button>
