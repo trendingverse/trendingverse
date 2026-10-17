@@ -128,6 +128,7 @@ export function DirectAdsPanel() {
     by_state: true,
     by_city: true,
   })
+  const [videoUploading, setVideoUploading] = useState<'video' | 'thumb' | 'edit_video' | 'edit_thumb' | null>(null)
 
   useEffect(() => { fetchAll(); fetchGeoData(); fetchPublisherSites(); fetchAdvertisers() }, [])
   useEffect(() => { if (activeTab === 'performance') fetchPerformance() }, [activeTab, perfDays])
@@ -370,6 +371,26 @@ async function fetchAdvertisers() {
     if (res.ok) { toast.success(`Report sent to ${reportEmail}!`); setReportModal(null) }
     else { const d = await res.json(); toast.error(d.error || 'Send failed') }
     setSendingReport(false)
+  }
+
+  async function uploadVideoFile(
+    file: File,
+    field: 'video' | 'thumb' | 'edit_video' | 'edit_thumb'
+  ) {
+    setVideoUploading(field)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await fetch('/api/admin/upload-video', { method: 'POST', body: fd })
+      const d = await res.json()
+      if (!res.ok || !d.url) { toast.error(d.error || 'Upload failed'); return }
+      if (field === 'video') setAdForm((f: any) => ({ ...f, video_url: d.url }))
+      else if (field === 'thumb') setAdForm((f: any) => ({ ...f, video_thumbnail: d.url }))
+      else if (field === 'edit_video') setEditForm((f: any) => ({ ...f, video_url: d.url }))
+      else if (field === 'edit_thumb') setEditForm((f: any) => ({ ...f, video_thumbnail: d.url }))
+      toast.success('Uploaded!')
+    } catch { toast.error('Upload failed') }
+    finally { setVideoUploading(null) }
   }
 
   async function saveAd() {
@@ -651,16 +672,34 @@ async function fetchAdvertisers() {
                         : '📺 In-Banner Video: video plays inside a standard banner slot replacing static creative — auto-plays muted, click to unmute.'}
                     </div>
                     <div>
-                      <label className="label">Video URL * <span className="text-ink-400 font-normal">(MP4 or WebM hosted URL)</span></label>
-                      <input className="input" value={adForm.video_url || ''}
-                        onChange={e => setAdForm((f: any) => ({ ...f, video_url: e.target.value }))}
-                        placeholder="https://cdn.example.com/ad-video.mp4" />
+                      <label className="label">Video File * <span className="text-ink-400 font-normal">(MP4 or WebM, max 200MB)</span></label>
+                      <div className="flex gap-2 items-center">
+                        <input className="input flex-1" value={adForm.video_url || ''}
+                          onChange={e => setAdForm((f: any) => ({ ...f, video_url: e.target.value }))}
+                          placeholder="https://… or upload →" />
+                        <label className={`shrink-0 cursor-pointer px-3 py-2 rounded-xl border text-xs font-semibold transition-colors ${videoUploading === 'video' ? 'border-ink-200 text-ink-400 cursor-not-allowed' : 'border-accent text-accent hover:bg-accent/5'}`}>
+                          {videoUploading === 'video' ? '⏳ Uploading…' : '📤 Upload'}
+                          <input type="file" accept="video/mp4,video/webm,video/ogg" className="hidden"
+                            disabled={videoUploading !== null}
+                            onChange={e => { const f = e.target.files?.[0]; if (f) uploadVideoFile(f, 'video'); e.target.value = '' }} />
+                        </label>
+                      </div>
+                      {adForm.video_url && <p className="text-xs text-green-600 mt-1 truncate">✓ {adForm.video_url}</p>}
                     </div>
                     <div>
-                      <label className="label">Thumbnail / Poster Image <span className="text-ink-400 font-normal">(shown before video loads)</span></label>
-                      <input className="input" value={adForm.video_thumbnail || ''}
-                        onChange={e => setAdForm((f: any) => ({ ...f, video_thumbnail: e.target.value }))}
-                        placeholder="https://cdn.example.com/poster.jpg" />
+                      <label className="label">Thumbnail / Poster <span className="text-ink-400 font-normal">(shown before video loads)</span></label>
+                      <div className="flex gap-2 items-center">
+                        <input className="input flex-1" value={adForm.video_thumbnail || ''}
+                          onChange={e => setAdForm((f: any) => ({ ...f, video_thumbnail: e.target.value }))}
+                          placeholder="https://… or upload →" />
+                        <label className={`shrink-0 cursor-pointer px-3 py-2 rounded-xl border text-xs font-semibold transition-colors ${videoUploading === 'thumb' ? 'border-ink-200 text-ink-400 cursor-not-allowed' : 'border-ink-300 text-ink-600 hover:border-ink-400'}`}>
+                          {videoUploading === 'thumb' ? '⏳ Uploading…' : '🖼 Upload'}
+                          <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden"
+                            disabled={videoUploading !== null}
+                            onChange={e => { const f = e.target.files?.[0]; if (f) uploadVideoFile(f, 'thumb'); e.target.value = '' }} />
+                        </label>
+                      </div>
+                      {adForm.video_thumbnail && <p className="text-xs text-green-600 mt-1 truncate">✓ {adForm.video_thumbnail}</p>}
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div><label className="label">Headline</label><input className="input" value={adForm.headline} onChange={e => setAdForm((f: any) => ({ ...f, headline: e.target.value }))} /></div>
@@ -1752,8 +1791,29 @@ async function fetchAdvertisers() {
                 {/* Video fields — only shown for video ad types */}
                 {(editingAd?.ad_type === 'outstream' || editingAd?.ad_type === 'inbanner_video') && (
                   <>
-                    <div className="col-span-2"><label className="label">Video URL <span className="text-ink-400 font-normal">(MP4 or WebM)</span></label><input className="input" value={editForm.video_url || ''} onChange={e => setEditForm((f: any) => ({ ...f, video_url: e.target.value }))} placeholder="https://cdn.example.com/ad-video.mp4" /></div>
-                    <div className="col-span-2"><label className="label">Thumbnail / Poster <span className="text-ink-400 font-normal">(shown before video loads)</span></label><input className="input" value={editForm.video_thumbnail || ''} onChange={e => setEditForm((f: any) => ({ ...f, video_thumbnail: e.target.value }))} placeholder="https://cdn.example.com/poster.jpg" /></div>
+                    <div className="col-span-2">
+                      <label className="label">Video File <span className="text-ink-400 font-normal">(MP4 or WebM)</span></label>
+                      <div className="flex gap-2 items-center">
+                        <input className="input flex-1" value={editForm.video_url || ''} onChange={e => setEditForm((f: any) => ({ ...f, video_url: e.target.value }))} placeholder="https://… or upload →" />
+                        <label className={`shrink-0 cursor-pointer px-3 py-2 rounded-xl border text-xs font-semibold transition-colors ${videoUploading === 'edit_video' ? 'border-ink-200 text-ink-400 cursor-not-allowed' : 'border-accent text-accent hover:bg-accent/5'}`}>
+                          {videoUploading === 'edit_video' ? '⏳ Uploading…' : '📤 Upload'}
+                          <input type="file" accept="video/mp4,video/webm,video/ogg" className="hidden" disabled={videoUploading !== null}
+                            onChange={e => { const f = e.target.files?.[0]; if (f) uploadVideoFile(f, 'edit_video'); e.target.value = '' }} />
+                        </label>
+                      </div>
+                      {editForm.video_url && <p className="text-xs text-green-600 mt-1 truncate">✓ {editForm.video_url}</p>}
+                    </div>
+                    <div className="col-span-2">
+                      <label className="label">Thumbnail / Poster <span className="text-ink-400 font-normal">(shown before video loads)</span></label>
+                      <div className="flex gap-2 items-center">
+                        <input className="input flex-1" value={editForm.video_thumbnail || ''} onChange={e => setEditForm((f: any) => ({ ...f, video_thumbnail: e.target.value }))} placeholder="https://… or upload →" />
+                        <label className={`shrink-0 cursor-pointer px-3 py-2 rounded-xl border text-xs font-semibold transition-colors ${videoUploading === 'edit_thumb' ? 'border-ink-200 text-ink-400 cursor-not-allowed' : 'border-ink-300 text-ink-600 hover:border-ink-400'}`}>
+                          {videoUploading === 'edit_thumb' ? '⏳ Uploading…' : '🖼 Upload'}
+                          <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" disabled={videoUploading !== null}
+                            onChange={e => { const f = e.target.files?.[0]; if (f) uploadVideoFile(f, 'edit_thumb'); e.target.value = '' }} />
+                        </label>
+                      </div>
+                    </div>
                   </>
                 )}
 
