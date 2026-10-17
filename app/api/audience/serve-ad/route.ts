@@ -19,6 +19,18 @@ function inList(list: any, val: any): boolean {
   return list.some((x: any) => String(x).trim().toLowerCase() === v)
 }
 
+// Real-time IP geo lookup — fallback for new visitors whose profile
+// doesn't exist yet (serve-ad and track fire concurrently on first load)
+async function geoFromIp(ip: string): Promise<{ city: string; state: string; country: string }> {
+  try {
+    if (!ip || ip === '::1' || ip === '127.0.0.1') return { city: '', state: '', country: '' }
+    const res = await fetch(`https://ipwho.is/${ip}?fields=city,region,country`, { signal: AbortSignal.timeout(2000) })
+    const data = await res.json()
+    if (data?.success !== false) return { city: data.city || '', state: data.region || '', country: data.country || '' }
+  } catch { /* fall through */ }
+  return { city: '', state: '', country: '' }
+}
+
 export async function POST(req: NextRequest) {
   const { fingerprint, site_url, position } = await req.json().catch(() => ({}))
   if (!fingerprint) return NextResponse.json({ ad: null, fallback: 'network' }, { headers: CORS })
@@ -35,6 +47,22 @@ export async function POST(req: NextRequest) {
     .select('city, state, country, device_type, gender, interests, page_views')
     .eq('fingerprint', fingerprint)
     .maybeSingle()
+
+  // New visitor — profile not written yet (track and serve-ad fire concurrently).
+  // Do a real-time IP geo lookup so geo-targeted ads can still match on first visit.
+  let geoFallback = { city: '', state: '', country: '' }
+  if (!profile) {
+    const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+               req.headers.get('x-real-ip') || ''
+    geoFallback = await geoFromIp(ip)
+  }
+
+  // Resolved geo — prefer stored profile, fall back to live IP lookup
+  const visitorGeo = {
+    city:    profile?.city    || geoFallback.city,
+    state:   profile?.state   || geoFallback.state,
+    country: profile?.country || geoFallback.country,
+  }
 
   const { data: ads } = await admin
     .from('direct_ads')
@@ -83,9 +111,9 @@ export async function POST(req: NextRequest) {
     const wantCities    = Array.isArray(ad.target_cities) && ad.target_cities.length > 0
     const wantGender    = ad.target_gender && ad.target_gender !== 'all'
 
-    if (wantCountries && !inList(ad.target_countries, profile?.country)) continue
-    if (wantStates && !inList(ad.target_states, profile?.state)) continue
-    if (wantCities && !inList(ad.target_cities, profile?.city)) continue
+    if (wantCountries && !inList(ad.target_countries, visitorGeo.country)) continue
+    if (wantStates    && !inList(ad.target_states,   visitorGeo.state))   continue
+    if (wantCities    && !inList(ad.target_cities,   visitorGeo.city))    continue
     if (wantGender && String(ad.target_gender).toLowerCase() !== String(profile?.gender || '').toLowerCase()) continue
 
     // ── AUDIENCE / TARGET-ALL ELIGIBILITY ──────────────────────
