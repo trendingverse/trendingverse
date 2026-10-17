@@ -44,7 +44,8 @@ function clean(body: any, partial = false): { row?: any; error?: string } {
   }
   if (!partial || has('ad_code')) {
     const code = String(body.ad_code || '').trim()
-    if (!code) return { error: 'Ad code is required' }
+    const isDirect = String(body.ad_type || '').trim() === 'direct'
+    if (!code && !isDirect) return { error: 'Ad code is required' }
     row.ad_code = code
   }
   if (!partial || has('site_url')) {
