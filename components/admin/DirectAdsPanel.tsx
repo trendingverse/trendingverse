@@ -1735,7 +1735,10 @@ async function fetchAdvertisers() {
             <div className="card p-6 w-full max-w-2xl space-y-4 my-8">
               <div className="flex items-center justify-between">
                 <p className="font-semibold text-ink-900">✏ Edit Campaign</p>
-                <button onClick={() => setEditingAd(null)} className="text-xs text-ink-400 hover:text-ink-600">✕</button>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => { setEditingAd(null); openLineItems(editingAd) }} className="text-xs px-3 py-1.5 rounded-lg bg-violet-50 text-violet-600 hover:bg-violet-100 font-medium">📦 Line Items / Creatives</button>
+                  <button onClick={() => setEditingAd(null)} className="text-xs text-ink-400 hover:text-ink-600">✕</button>
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="col-span-2"><label className="label">Campaign Name</label><input className="input" value={editForm.campaign_name} onChange={e => setEditForm((f: any) => ({ ...f, campaign_name: e.target.value }))} /></div>
