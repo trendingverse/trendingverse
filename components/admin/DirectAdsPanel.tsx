@@ -69,7 +69,7 @@ function getStatus(ad: DirectAd) {
 }
 
 const EMPTY_AD = {
-  campaign_name: '', campaign_notes: '', ad_type: 'script',
+  campaign_name: '', campaign_notes: '', ad_type: 'script', position: 'in_content',
   headline: '', description: '', image_url: '', cta_text: 'Learn More',
   destination_url: '', ad_code_override: '',
   video_url: '', video_thumbnail: '',
@@ -511,6 +511,7 @@ async function fetchAdvertisers() {
       campaign_name: ad.campaign_name || '',
       campaign_notes: ad.campaign_notes || '',
       ad_type: ad.ad_type || 'display',
+      position: (ad as any).position || 'in_content',
       headline: ad.headline || '',
       description: ad.description || '',
       destination_url: ad.destination_url || '',
