@@ -18,6 +18,11 @@ export async function POST(req: NextRequest) {
   const body = await req.json()
   // New campaigns require review before they can serve
   if (!body.approval_status) body.approval_status = 'pending'
+  // Coerce empty strings to null for typed DB columns
+  if (body.start_date === '') body.start_date = null
+  if (body.end_date === '') body.end_date = null
+  if (body.video_url === '') body.video_url = null
+  if (body.video_thumbnail === '') body.video_thumbnail = null
   const { data, error } = await admin.from('direct_ads').insert(body).select().single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json(data, { status: 201 })
@@ -28,7 +33,15 @@ export async function PATCH(req: NextRequest) {
   if (!user || user.email !== ADMIN_EMAIL) return NextResponse.json({ error: 'Admin only' }, { status: 403 })
   const admin = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
   const { id, ...updates } = await req.json()
-  await admin.from('direct_ads').update({ ...updates, updated_at: new Date().toISOString() }).eq('id', id)
+
+  // Coerce empty strings to null for typed DB columns
+  if (updates.start_date === '') updates.start_date = null
+  if (updates.end_date === '') updates.end_date = null
+  if (updates.video_url === '') updates.video_url = null
+  if (updates.video_thumbnail === '') updates.video_thumbnail = null
+
+  const { error: updateError } = await admin.from('direct_ads').update({ ...updates, updated_at: new Date().toISOString() }).eq('id', id)
+  if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 })
 
   // Auto-log event when approval_status changes
   if (updates.approval_status) {
