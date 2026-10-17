@@ -11,14 +11,14 @@ const corsHeaders = {
 // content and rate-limits harder). ipwho.is is free + HTTPS + no key.
 async function getLocation(ip: string) {
   try {
-    if (ip === '::1' || ip === '127.0.0.1' || !ip) return { city: '', state: '', country: 'India' }
+    if (ip === '::1' || ip === '127.0.0.1' || !ip) return { city: '', state: '', country: '' }
     const res = await fetch(`https://ipwho.is/${ip}?fields=city,region,country`, { signal: AbortSignal.timeout(2500) })
     const data = await res.json()
     if (data && data.success !== false) {
-      return { city: data.city || '', state: data.region || '', country: data.country || 'India' }
+      return { city: data.city || '', state: data.region || '', country: data.country || '' }
     }
   } catch { /* fall through */ }
-  return { city: '', state: '', country: 'India' }
+  return { city: '', state: '', country: '' }
 }
 
 function getDeviceType(ua: string): string {
@@ -149,8 +149,9 @@ export async function POST(req: NextRequest) {
       os,
     }
     // Don't blank a previously-good location with an empty result
-    if (location.city) upd.city = location.city
-    if (location.state) upd.state = location.state
+    if (location.city)    upd.city    = location.city
+    if (location.state)   upd.state   = location.state
+    if (location.country) upd.country = location.country
     await admin.from('audience_profiles').update(upd).eq('fingerprint', fingerprint)
   } else {
     await admin.from('audience_profiles').insert({
