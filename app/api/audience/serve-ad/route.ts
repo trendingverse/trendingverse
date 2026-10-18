@@ -45,7 +45,7 @@ export async function GET(req: NextRequest) {
   const pos = position
   const normalizedSiteUrl = site_url.replace(/^https?:\/\//, '').replace(/\/$/, '').toLowerCase()
 
-  const { data: allAds, error: allErr } = await admin.from('direct_ads').select('id,campaign_name,is_active,approval_status,position,start_date,end_date,impressions_cap,impressions,target_site_urls,target_all,segment_ids,target_countries,target_states,target_cities,target_gender')
+  const { data: allAds, error: allErr } = await admin.from('direct_ads').select('id,campaign_name,is_active,approval_status,position,start_date,end_date,impressions_cap,impressions,target_site_urls,target_all,segment_ids,target_countries,target_states,target_cities,target_gender,status,pricing_model,cpm_rate_inr,floor_cpm_inr')
   const { data: filtAds, error: filtErr } = await admin
     .from('direct_ads')
     .select('id,campaign_name,is_active,approval_status,position,start_date,end_date,impressions_cap,impressions,target_site_urls,target_all,segment_ids')
@@ -71,6 +71,17 @@ export async function GET(req: NextRequest) {
       checks['site_targeting'] = `PASS (targetSites=${JSON.stringify(targetSites)}, reqSite=${normalizedSiteUrl})`
     }
     checks['audience'] = !!ad.target_all ? 'PASS (target_all=true)' : (!ad.segment_ids?.length ? 'PASS (no segments)' : `needs segment match (${ad.segment_ids?.length} segs)`)
+    // decideWinner.isEligible checks
+    const resolvedStatus = ad.status || (ad.is_active ? 'active' : 'paused')
+    checks['status_for_decisioning'] = resolvedStatus
+    checks['decisioning_status_ok'] = !['paused','completed','draft'].includes(resolvedStatus) ? true : `BLOCKED: status=${resolvedStatus}`
+    checks['pricing_model'] = ad.pricing_model || 'cpm (default)'
+    checks['cpm_rate_inr'] = ad.cpm_rate_inr ?? 0
+    checks['floor_cpm_inr'] = ad.floor_cpm_inr ?? 0
+    if ((ad.pricing_model || 'cpm') === 'cpm') {
+      const floor = Math.max(0, ad.floor_cpm_inr || 0)
+      checks['floor_gate'] = floor > 0 && (ad.cpm_rate_inr || 0) < floor ? `BLOCKED: cpm=${ad.cpm_rate_inr} < floor=${floor}` : `PASS (floor=${floor})`
+    }
     const passesAll = ad.is_active && ad.approval_status === 'approved' &&
       (checks['position_ok'] === true) && (checks['start_date_ok'] === true) &&
       (checks['end_date_ok'] === true) && (checks['impressions_cap_ok'] === true) &&
