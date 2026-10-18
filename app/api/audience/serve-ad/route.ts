@@ -101,7 +101,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const { fingerprint, site_url, position, ad_type: requested_ad_type } = await req.json().catch(() => ({}))
+  const body = await req.json().catch(() => ({}))
+  const { fingerprint, site_url, position, ad_type: requested_ad_type, _debug } = body
   if (!fingerprint) return NextResponse.json({ ad: null, fallback: 'network' }, { headers: CORS })
   const admin = createServiceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -143,6 +144,7 @@ export async function POST(req: NextRequest) {
     .or(`start_date.is.null,start_date.lte.${today}`)
     .or(`end_date.is.null,end_date.gte.${today}`)
   if (!ads?.length) {
+    if (_debug) return NextResponse.json({ _debug: 'DB_QUERY_EMPTY', today, pos, normalizedSiteUrl }, { headers: CORS })
     return NextResponse.json({ ad: null, fallback: 'network' }, { headers: CORS })
   }
 
@@ -214,6 +216,7 @@ export async function POST(req: NextRequest) {
     }
     if (!audienceMatches) continue
 
+    if (_debug) console.log('[serve-ad debug] eligible push:', ad.id, ad.campaign_name)
     eligible.push({
       id: ad.id,
       campaign_name: ad.campaign_name,
@@ -234,8 +237,19 @@ export async function POST(req: NextRequest) {
 
   const winner = decideWinner(eligible, { placementFloorCpm })
   if (!winner) {
+    if (_debug) return NextResponse.json({
+      _debug: 'DECIDE_WINNER_NULL',
+      eligible_count: eligible.length,
+      placementFloorCpm,
+      eligible_ids: eligible.map(e => ({ id: e.id, name: e.campaign_name, status: e.status, tier: e.priority_tier, cpm: e.cpm_rate_inr, pricing: e.pricing_model })),
+    }, { headers: CORS })
     return NextResponse.json({ ad: null, fallback: 'network' }, { headers: CORS })
   }
+  if (_debug) return NextResponse.json({
+    _debug: 'WINNER_FOUND',
+    winner_id: winner.id,
+    eligible_count: eligible.length,
+  }, { headers: CORS })
   const bestAd = ads.find(a => a.id === winner.id)!
 
   // Check for a line item that matches the requested ad_type.
