@@ -31,6 +31,64 @@ async function geoFromIp(ip: string): Promise<{ city: string; state: string; cou
   return { city: '', state: '', country: '' }
 }
 
+export async function GET(req: NextRequest) {
+  // Debug endpoint: GET /api/audience/serve-ad?site_url=...&position=...
+  // Returns which campaigns are in DB and why each passes/fails eligibility
+  const { searchParams } = new URL(req.url)
+  const site_url = searchParams.get('site_url') || ''
+  const position = searchParams.get('position') || 'in_content'
+  const admin = createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+  const today = new Date().toISOString().split('T')[0]
+  const pos = position
+  const normalizedSiteUrl = site_url.replace(/^https?:\/\//, '').replace(/\/$/, '').toLowerCase()
+
+  const { data: allAds, error: allErr } = await admin.from('direct_ads').select('id,campaign_name,is_active,approval_status,position,start_date,end_date,impressions_cap,impressions,target_site_urls,target_all,segment_ids,target_countries,target_states,target_cities,target_gender')
+  const { data: filtAds, error: filtErr } = await admin
+    .from('direct_ads')
+    .select('id,campaign_name,is_active,approval_status,position,start_date,end_date,impressions_cap,impressions,target_site_urls,target_all,segment_ids')
+    .eq('is_active', true)
+    .eq('approval_status', 'approved')
+    .or(`position.is.null,position.eq.${pos}`)
+    .or(`start_date.is.null,start_date.lte.${today}`)
+    .or(`end_date.is.null,end_date.gte.${today}`)
+
+  const diagnostics = (allAds || []).map((ad: any) => {
+    const checks: Record<string, boolean | string> = {}
+    checks['is_active'] = ad.is_active
+    checks['approval_status'] = ad.approval_status
+    checks['position_ok'] = !ad.position || ad.position === pos ? true : `position=${ad.position} vs req=${pos}`
+    checks['start_date_ok'] = !ad.start_date || ad.start_date <= today ? true : `start=${ad.start_date} > today=${today}`
+    checks['end_date_ok'] = !ad.end_date || ad.end_date >= today ? true : `end=${ad.end_date} < today=${today}`
+    checks['impressions_cap_ok'] = ad.impressions_cap <= 0 || (ad.impressions || 0) < ad.impressions_cap ? true : `cap=${ad.impressions_cap} hit (${ad.impressions})`
+    const targetSites = (ad.target_site_urls || []).map((s: string) => s.replace(/^https?:\/\//, '').replace(/\/$/, '').toLowerCase())
+    if (targetSites.length > 0 && normalizedSiteUrl) {
+      const siteMatch = targetSites.some((s: string) => normalizedSiteUrl.includes(s) || s.includes(normalizedSiteUrl))
+      checks['site_targeting'] = siteMatch ? true : `NO MATCH: sites=${JSON.stringify(targetSites)} vs req=${normalizedSiteUrl}`
+    } else {
+      checks['site_targeting'] = `PASS (targetSites=${JSON.stringify(targetSites)}, reqSite=${normalizedSiteUrl})`
+    }
+    checks['audience'] = !!ad.target_all ? 'PASS (target_all=true)' : (!ad.segment_ids?.length ? 'PASS (no segments)' : `needs segment match (${ad.segment_ids?.length} segs)`)
+    const passesAll = ad.is_active && ad.approval_status === 'approved' &&
+      (checks['position_ok'] === true) && (checks['start_date_ok'] === true) &&
+      (checks['end_date_ok'] === true) && (checks['impressions_cap_ok'] === true) &&
+      (checks['site_targeting'] === true || String(checks['site_targeting']).startsWith('PASS'))
+    return { id: ad.id, campaign_name: ad.campaign_name, passes: passesAll, checks }
+  })
+
+  return NextResponse.json({
+    today,
+    pos,
+    normalizedSiteUrl,
+    total_campaigns: allAds?.length || 0,
+    db_filtered_count: filtAds?.length || 0,
+    db_filter_error: filtErr?.message || null,
+    diagnostics,
+  }, { headers: CORS })
+}
+
 export async function POST(req: NextRequest) {
   const { fingerprint, site_url, position, ad_type: requested_ad_type } = await req.json().catch(() => ({}))
   if (!fingerprint) return NextResponse.json({ ad: null, fallback: 'network' }, { headers: CORS })
