@@ -214,6 +214,45 @@ export function AdminSidebar({ isAdmin = false, isAdvertiser = false }: { isAdmi
             </div>
           </div>
         ))}
+
+        {/* Publisher-only: My Campaigns — direct ads sold by the network and assigned to this publisher.
+            Added here (outside PUB_NAV/PUB_ALLOWED) so those constants stay untouched. */}
+        {!isAdmin && !isAdvertiser && (() => {
+          const href = '/admin/monetization'
+          const active = on(href)
+          const d = 'M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z'
+          return (
+            <div style={{ marginBottom:24 }}>
+              {!collapsed && (
+                <p style={{ fontSize:10, fontWeight:600, textTransform:'uppercase', letterSpacing:'0.12em', color:'rgba(255,255,255,0.25)', padding:'0 10px', marginBottom:4 }}>
+                  Ads
+                </p>
+              )}
+              <div style={{ display:'flex', flexDirection:'column', gap:1 }}>
+                <Link href={href} title={collapsed ? 'My Campaigns' : undefined}
+                  style={{
+                    display:'flex', alignItems:'center', gap:10,
+                    padding: collapsed ? '10px' : '8px 12px',
+                    borderRadius:10, fontSize:13, fontWeight: active ? 600 : 400,
+                    color: active ? '#ffffff' : 'rgba(255,255,255,0.60)',
+                    background: active ? 'rgba(230,57,70,0.22)' : 'transparent',
+                    textDecoration:'none', transition:'all 0.12s',
+                    justifyContent: collapsed ? 'center' : 'flex-start',
+                    borderLeft: active && !collapsed ? '2px solid #e63946' : '2px solid transparent',
+                    paddingLeft: active && !collapsed ? '10px' : collapsed ? '10px' : '12px',
+                    boxShadow: active ? 'inset 0 0 20px rgba(230,57,70,0.05)' : 'none',
+                  }}
+                  onMouseEnter={e => { if (!active) { e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; e.currentTarget.style.color = '#ffffff' } }}
+                  onMouseLeave={e => { if (!active) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(255,255,255,0.60)' } }}>
+                  <span style={{ flexShrink:0, color: active ? '#ffffff' : 'rgba(255,255,255,0.40)', display:'flex' }}>
+                    <Icon d={d} size={15} />
+                  </span>
+                  {!collapsed && <span style={{ flex:1 }}>My Campaigns</span>}
+                </Link>
+              </div>
+            </div>
+          )
+        })()}
       </nav>
 
       {/* View Site */}
