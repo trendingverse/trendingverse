@@ -16,8 +16,9 @@ export async function POST(req: NextRequest) {
   if (!user || user.email !== ADMIN_EMAIL) return NextResponse.json({ error: 'Admin only' }, { status: 403 })
   const admin = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
   const body = await req.json()
-  // Admin-created campaigns are auto-approved (no third-party advertiser review needed)
+  // Admin-created campaigns are auto-approved and active
   if (!body.approval_status) body.approval_status = 'approved'
+  if (!body.status) body.status = 'active'
   // Coerce empty strings to null for typed DB columns
   if (body.start_date === '') body.start_date = null
   if (body.end_date === '') body.end_date = null
@@ -33,6 +34,11 @@ export async function PATCH(req: NextRequest) {
   if (!user || user.email !== ADMIN_EMAIL) return NextResponse.json({ error: 'Admin only' }, { status: 403 })
   const admin = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
   const { id, ...updates } = await req.json()
+
+  // When approving a campaign, also mark status active if it's still draft
+  if (updates.approval_status === 'approved' && !updates.status) {
+    updates.status = 'active'
+  }
 
   // Coerce empty strings to null for typed DB columns
   if (updates.start_date === '') updates.start_date = null

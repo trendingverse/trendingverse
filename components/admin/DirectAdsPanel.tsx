@@ -69,7 +69,7 @@ function getStatus(ad: DirectAd) {
 }
 
 const EMPTY_AD = {
-  campaign_name: '', campaign_notes: '', ad_type: 'script', position: 'in_content',
+  campaign_name: '', campaign_notes: '', ad_type: 'script', position: 'in_content', status: 'active',
   headline: '', description: '', image_url: '', cta_text: 'Learn More',
   destination_url: '', ad_code_override: '',
   video_url: '', video_thumbnail: '',

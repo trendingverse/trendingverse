@@ -220,7 +220,9 @@ export async function POST(req: NextRequest) {
     eligible.push({
       id: ad.id,
       campaign_name: ad.campaign_name,
-      status: ad.status || (ad.is_active ? 'active' : 'paused'),
+      // DB query already filters is_active=true + approval_status=approved,
+      // so anything here is live — force 'active' regardless of the status column value.
+      status: 'active',
       is_active: ad.is_active,
       priority_tier: ad.priority_tier || 2,
       delivery_weight: ad.delivery_weight || 1,
