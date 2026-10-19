@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 // Current plugin version hosted on your server
-const PLUGIN_VERSION = '1.0.3'
+const PLUGIN_VERSION = '1.2.4'
 const PLUGIN_SLUG = 'trendingverse-ads'
 const PLUGIN_FILE = 'trendingverse-ads/trendingverse-ads.php'
 const DOWNLOAD_URL = 'https://trendingverse.vercel.app/api/plugin/download'
@@ -28,8 +28,12 @@ export async function GET(req: NextRequest) {
       sections: {
         description: 'Automatically fetches and injects monetization ads from TrendingVerse CMS into all articles.',
         changelog: `
-          <h4>1.0.2</h4><ul><li>Removed ad unit names from publisher view</li></ul>
-          <h4>1.0.1</h4><ul><li>Fixed API endpoint URL</li></ul>
+          <h4>1.2.4</h4><ul><li>Silent auto-update enabled — no publisher action required for future updates</li></ul>
+          <h4>1.2.3</h4><ul><li>Outstream: full IAB crawl-down format — docked poster in article, floats to bottom-right on scroll, close returns to slot, repeatable pop-out cycle</li></ul>
+          <h4>1.2.2</h4><ul><li>Outstream: IntersectionObserver trigger on slot position instead of fixed scroll distance</li></ul>
+          <h4>1.2.1</h4><ul><li>Outstream video ad support</li></ul>
+          <h4>1.2.0</h4><ul><li>Inbanner video ad support, VTR/VCR event tracking</li></ul>
+          <h4>1.1.0</h4><ul><li>Interstitial, sticky footer, multi-slot mediation</li></ul>
           <h4>1.0.0</h4><ul><li>Initial release</li></ul>
         `,
       },
