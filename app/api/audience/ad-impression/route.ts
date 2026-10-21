@@ -1,3 +1,4 @@
+export const runtime = 'edge'
 // app/api/audience/ad-impression/route.ts
 // Logs a HOUSE ad impression — called by the plugin ONLY when a house
 // filler actually renders (i.e. network didn't fill). Keeps house

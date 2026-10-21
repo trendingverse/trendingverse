@@ -1,3 +1,4 @@
+export const runtime = 'edge'
 // app/api/sites/my-site/route.ts
 // Returns the logged-in publisher's saved WordPress site credentials
 // so publish flows can pre-fill them — no more retyping every time.

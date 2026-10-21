@@ -1,28 +1,12 @@
-import { NextRequest, NextResponse } from 'next/server'
-import * as fs from 'fs'
-import * as path from 'path'
+import { NextResponse } from 'next/server'
 
-// This route serves the latest plugin zip file
-// Store the zip in /public/downloads/ in your repo
-export async function GET(req: NextRequest) {
-  try {
-    const zipPath = path.join(process.cwd(), 'public', 'downloads', 'trendingverse-ads.zip')
-    
-    if (!fs.existsSync(zipPath)) {
-      return NextResponse.json({ error: 'Plugin file not found' }, { status: 404 })
-    }
+export const runtime = 'edge'
 
-    const fileBuffer = fs.readFileSync(zipPath)
-    
-    return new NextResponse(fileBuffer, {
-      status: 200,
-      headers: {
-        'Content-Type': 'application/zip',
-        'Content-Disposition': 'attachment; filename="trendingverse-ads.zip"',
-        'Content-Length': fileBuffer.length.toString(),
-      },
-    })
-  } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 500 })
-  }
+// The ZIP is served directly as a static file from /public/downloads/
+// This route just redirects to it so the old URL still works.
+export async function GET() {
+  return NextResponse.redirect(
+    new URL('/downloads/trendingverse-ads.zip', 'https://trendingverse.online'),
+    { status: 302 }
+  )
 }

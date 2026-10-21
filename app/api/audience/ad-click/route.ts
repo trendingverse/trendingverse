@@ -1,3 +1,4 @@
+export const runtime = 'edge'
 // app/api/audience/ad-click/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'

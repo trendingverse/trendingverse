@@ -1,3 +1,4 @@
+export const runtime = 'edge'
 // app/api/tvads/plugin/track/route.ts
 // Public: receives batched impression / viewable / click beacons from the WordPress plugin.
 import { adminDb, CORS, todayIn, DEFAULT_SETTINGS } from '@/lib/tvads/server'

@@ -1,3 +1,4 @@
+export const runtime = 'edge'
 // app/api/video/list/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'

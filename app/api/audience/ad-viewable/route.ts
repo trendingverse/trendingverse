@@ -1,3 +1,4 @@
+export const runtime = 'edge'
 // app/api/audience/ad-viewable/route.ts
 // Records a viewability event (MRC: >=50% in view for >=1s). Mirrors the
 // ad-click endpoint's pattern. Deduped per fingerprint+ad+page-load on the

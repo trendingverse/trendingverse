@@ -1,3 +1,4 @@
+export const runtime = 'edge'
 // app/api/admin/bulk-seo-upgrade/route.ts
 // Upgrades low-scoring articles by adding the structural SEO elements they're
 // missing — mostly deterministic (zero AI cost): image w/ alt text, internal

@@ -1,3 +1,4 @@
+export const runtime = 'edge'
 // app/api/admin/ads-txt/route.ts
 // Admin CRUD for per-publisher ads.txt entries.
 import { NextRequest, NextResponse } from 'next/server'

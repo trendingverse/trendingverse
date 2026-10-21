@@ -1,3 +1,4 @@
+export const runtime = 'edge'
 // app/api/tvads/plugin/config/route.ts
 // Public: the WordPress plugin calls this with its site key. Cached at the edge for 60s.
 import { adminDb, CORS, json, esc, DEFAULT_SETTINGS } from '@/lib/tvads/server'

@@ -1,3 +1,4 @@
+export const runtime = 'edge'
 // app/api/mediation/payouts/diagnostic/route.ts
 // Shows which partner_revenue site_urls match / don't match sites table
 // Admin-only GET

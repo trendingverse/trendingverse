@@ -1,3 +1,4 @@
+export const runtime = 'edge'
 // app/api/publisher/email-report/route.ts
 // POST — sends the publisher's earnings report to their own email address.
 // Auth required; non-admins are always locked to their own data.

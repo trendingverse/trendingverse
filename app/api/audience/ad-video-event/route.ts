@@ -1,3 +1,4 @@
+export const runtime = 'edge'
 // app/api/audience/ad-video-event/route.ts
 // Accepts video lifecycle events from the WordPress plugin for direct campaigns.
 // event_type: 'video_start' | 'video_complete'

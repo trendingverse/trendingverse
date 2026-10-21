@@ -1,3 +1,4 @@
+export const runtime = 'edge'
 // app/api/monetization/ad-units/route.ts  — v2
 // Ad unit CRUD for the Monetization → Ad Units screen.
 // v2: saves site, network and device; validates; warns on duplicate zones;

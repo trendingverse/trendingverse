@@ -1,3 +1,4 @@
+export const runtime = 'edge'
 // app/api/adunits/route.ts
 // Returns all ad units from Monetization for campaign targeting
 import { NextRequest, NextResponse } from 'next/server'

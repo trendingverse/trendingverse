@@ -1,3 +1,4 @@
+export const runtime = 'edge'
 // app/api/track/pixel/route.ts
 // Conversion pixel endpoint — returns a 1x1 transparent GIF and logs the conversion.
 // Advertisers embed: <img src="https://<host>/api/track/pixel?t={pixel_token}" width="1" height="1" style="display:none" alt="">

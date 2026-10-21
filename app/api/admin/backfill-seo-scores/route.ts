@@ -1,3 +1,4 @@
+export const runtime = 'edge'
 // app/api/admin/backfill-seo-scores/route.ts
 // One-time (re-runnable) route that recomputes seo_score for existing
 // articles using the current algorithmic scorer, so old rows stop showing

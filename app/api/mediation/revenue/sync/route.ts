@@ -1,3 +1,4 @@
+export const runtime = 'edge'
 // app/api/mediation/revenue/sync/route.ts
 // ══════════════════════════════════════════════════════════════════
 // Pulls revenue from every partner that has report config, via its

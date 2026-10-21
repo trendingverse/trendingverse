@@ -1,3 +1,4 @@
+export const runtime = 'edge'
 // app/api/mediation/revenue/test/route.ts
 // Runs an adapter with ad-hoc config (from the Add-Network form) WITHOUT
 // saving, so you can verify a generic REST config actually pulls data

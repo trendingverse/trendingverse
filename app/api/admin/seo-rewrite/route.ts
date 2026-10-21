@@ -1,3 +1,4 @@
+export const runtime = 'edge'
 // app/api/admin/seo-rewrite/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'

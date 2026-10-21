@@ -1,3 +1,4 @@
+export const runtime = 'edge'
 // app/api/publisher/earnings/route.ts
 // ══════════════════════════════════════════════════════════════════
 // PUBLISHER earnings — reads revenue_reports for the CURRENT user only.

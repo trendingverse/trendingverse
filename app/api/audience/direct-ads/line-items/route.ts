@@ -1,3 +1,4 @@
+export const runtime = 'edge'
 // app/api/audience/direct-ads/line-items/route.ts
 // CRUD for direct_ad_line_items — admin only.
 // GET  ?ad_id=<uuid>   → list all line items for a campaign

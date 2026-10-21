@@ -1,3 +1,4 @@
+export const runtime = 'edge'
 // app/api/admin/video-assets/route.ts
 // Lists all files in the video-ads Supabase Storage bucket for the Media Library videos tab
 import { NextResponse } from 'next/server'

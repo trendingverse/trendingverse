@@ -1,3 +1,4 @@
+export const runtime = 'edge'
 // app/api/mediation/revenue/route.ts  — v3
 // ══════════════════════════════════════════════════════════════════
 // Earnings data for BOTH audiences:

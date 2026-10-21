@@ -1,3 +1,4 @@
+export const runtime = 'edge'
 // app/api/advertiser/dashboard/route.ts
 // Returns delivery data for the LOGGED-IN advertiser's own campaigns only.
 // Scoped by auth user id — an advertiser can never see another's data.

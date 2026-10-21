@@ -1,3 +1,4 @@
+export const runtime = 'edge'
 // app/api/tvads/report/route.ts
 // Delivery report. Admins see every site; publishers only sites listing their login email.
 // Never returns ad codes, network names or revenue.

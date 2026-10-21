@@ -1,3 +1,4 @@
+export const runtime = 'edge'
 // app/api/publishers/ads-txt/route.ts
 // Serves a publisher's authorized-seller lines as plain text at
 // publisher.com/ads.txt. Uses the SAME auth resolution as the

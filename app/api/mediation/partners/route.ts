@@ -1,3 +1,4 @@
+export const runtime = 'edge'
 // app/api/mediation/partners/route.ts  — v3
 // Saves full report config incl. the generic REST adapter fields.
 import { NextRequest, NextResponse } from 'next/server'
