@@ -162,14 +162,7 @@ Style: photorealistic, natural lighting, professional editorial photography, no 
     if (!imagePart) return null
 
     const buffer = Buffer.from(imagePart.inlineData.data, 'base64')
-    let finalBuffer: Buffer = buffer
-    try {
-      const sharp = (await import('sharp')).default
-      const out = await sharp(buffer).resize(1280, 720, { fit: 'cover' }).jpeg({ quality: 78 }).toBuffer()
-      finalBuffer = Buffer.from(out)
-    } catch { /* use original if sharp unavailable */ }
-
-    return `data:image/jpeg;base64,${finalBuffer.toString('base64')}`
+    return `data:image/jpeg;base64,${buffer.toString('base64')}`
   } catch {
     return null
   }
