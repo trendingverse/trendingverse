@@ -293,19 +293,11 @@ Style requirements: photorealistic, natural lighting, professional editorial new
   }
 }
 
-// Compress to a lightweight web-friendly JPEG — AI image models return
-// large PNGs/high-res files by default; this brings file size down
-// dramatically (typically to 60-150KB) without visible quality loss.
+// Compress to a lightweight web-friendly JPEG — sharp is not available
+// in Edge runtime, so we pass the buffer through as-is. AI images are
+// typically <2MB and WordPress handles resizing server-side.
 async function compressImage(buffer: Buffer): Promise<Buffer> {
-  try {
-    const sharp = (await import('sharp')).default
-    return await sharp(buffer)
-      .resize(1200, 675, { fit: 'cover' })
-      .jpeg({ quality: 80, mozjpeg: true })
-      .toBuffer()
-  } catch {
-    return buffer // fall back to the original if sharp isn't available
-  }
+  return buffer
 }
 
 async function generateAndUploadAIImage(
