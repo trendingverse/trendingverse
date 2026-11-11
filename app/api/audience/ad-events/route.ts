@@ -2,10 +2,12 @@ export const runtime = 'edge'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+function getSupabase() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+}
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL
 
@@ -19,7 +21,7 @@ export async function GET(req: NextRequest) {
   const adId = req.nextUrl.searchParams.get('ad_id')
   if (!adId) return NextResponse.json({ error: 'ad_id required' }, { status: 400 })
 
-  const { data, error } = await supabase
+  const { data, error } = await getSupabase()
     .from('direct_ad_events')
     .select('*')
     .eq('ad_id', adId)
@@ -39,7 +41,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'ad_id, event_type, description required' }, { status: 400 })
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await getSupabase()
     .from('direct_ad_events')
     .insert({
       ad_id,

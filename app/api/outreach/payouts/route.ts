@@ -2,10 +2,12 @@ export const runtime = 'edge'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+function getSupabase() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+}
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL
 
@@ -20,7 +22,7 @@ export async function GET(req: NextRequest) {
   const publisherId = req.nextUrl.searchParams.get('publisher_id')
   if (!publisherId) return NextResponse.json({ error: 'publisher_id required' }, { status: 400 })
 
-  const { data, error } = await supabase
+  const { data, error } = await getSupabase()
     .from('publisher_payouts')
     .select('*')
     .eq('publisher_id', publisherId)
@@ -41,7 +43,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Upsert by publisher_id + month
-  const { data, error } = await supabase
+  const { data, error } = await getSupabase()
     .from('publisher_payouts')
     .upsert(
       { publisher_id, month, amount_inr, notes: notes || null, paid_at: new Date().toISOString() },
