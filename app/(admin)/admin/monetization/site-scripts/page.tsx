@@ -1,6 +1,5 @@
 'use client'
 export const runtime = 'edge'
-export const runtime = 'edge'
 // app/(admin)/admin/monetization/site-scripts/page.tsx
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'

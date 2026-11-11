@@ -1,6 +1,5 @@
 'use client'
 export const runtime = 'edge'
-export const runtime = 'edge'
 // app/(admin)/admin/advertisers/page.tsx
 import { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
