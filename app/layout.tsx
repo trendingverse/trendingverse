@@ -7,6 +7,7 @@ export const metadata: Metadata = {
   title: { template: '%s | TrendingVerse', default: 'TrendingVerse — Breaking News & Trending Stories' },
   description: 'Stay ahead with TrendingVerse — the latest breaking news, trending stories, and in-depth analysis.',
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL||'https://trendingverse.online'),
+  icons: { icon: '/icon.svg' },
 }
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
