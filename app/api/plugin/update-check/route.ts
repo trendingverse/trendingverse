@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from 'next/server'
 const PLUGIN_VERSION = '1.2.4'
 const PLUGIN_SLUG = 'trendingverse-ads'
 const PLUGIN_FILE = 'trendingverse-ads/trendingverse-ads.php'
-const DOWNLOAD_URL = 'https://trendingverse.vercel.app/api/plugin/download'
+const DOWNLOAD_URL = 'https://trendingverse.online/api/plugin/download'
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
@@ -18,8 +18,8 @@ export async function GET(req: NextRequest) {
       name: 'TrendingVerse Ads',
       slug: PLUGIN_SLUG,
       version: PLUGIN_VERSION,
-      author: '<a href="https://trendingverse.vercel.app">TrendingVerse</a>',
-      author_profile: 'https://trendingverse.vercel.app',
+      author: '<a href="https://trendingverse.online">TrendingVerse</a>',
+      author_profile: 'https://trendingverse.online',
       requires: '5.0',
       tested: '6.5',
       requires_php: '7.4',
@@ -39,8 +39,8 @@ export async function GET(req: NextRequest) {
         `,
       },
       banners: {
-        low: 'https://trendingverse.vercel.app/plugin-banner-low.png',
-        high: 'https://trendingverse.vercel.app/plugin-banner-high.png',
+        low: 'https://trendingverse.online/plugin-banner-low.png',
+        high: 'https://trendingverse.online/plugin-banner-high.png',
       },
     })
   }
@@ -51,6 +51,6 @@ export async function GET(req: NextRequest) {
     version: PLUGIN_VERSION,
     package: DOWNLOAD_URL,
     new_version: PLUGIN_VERSION,
-    url: 'https://trendingverse.vercel.app',
+    url: 'https://trendingverse.online',
   })
 }
