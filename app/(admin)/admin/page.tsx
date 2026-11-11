@@ -1,3 +1,4 @@
+export const runtime = 'edge'
 // app/(admin)/admin/page.tsx — v5
 // Publishers see ONLY their own articles (written by them or on their sites),
 // their own quick actions, and their earnings (last 30 days, their share) —

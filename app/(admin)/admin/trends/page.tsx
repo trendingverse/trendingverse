@@ -1,3 +1,4 @@
+export const runtime = 'edge'
 import { TrendingTopicsPanel } from '@/components/admin/TrendingTopicsPanel'
 
 export default function TrendsPage() {

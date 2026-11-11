@@ -1,3 +1,4 @@
+export const runtime = 'edge'
 // app/(admin)/admin/outreach/page.tsx
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'

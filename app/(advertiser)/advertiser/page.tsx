@@ -1,3 +1,4 @@
+export const runtime = 'edge'
 // app/(advertiser)/advertiser/page.tsx
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'

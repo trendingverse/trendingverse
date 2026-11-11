@@ -1,3 +1,4 @@
+export const runtime = 'edge'
 // app/(admin)/admin/revenue/page.tsx — v2
 // Admin sees every network; a publisher sees only their own earnings (no network names).
 import { createClient } from '@/lib/supabase/server'

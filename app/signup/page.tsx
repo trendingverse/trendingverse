@@ -1,3 +1,4 @@
+export const runtime = 'edge'
 'use client'
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'

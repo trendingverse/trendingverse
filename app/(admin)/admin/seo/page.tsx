@@ -1,3 +1,4 @@
+export const runtime = 'edge'
 import { createClient } from '@/lib/supabase/server'
 import { SEOPanel } from '@/components/admin/SEOPanel'
 export default async function SEOPage() {

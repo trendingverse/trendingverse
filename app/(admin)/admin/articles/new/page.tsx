@@ -1,3 +1,4 @@
+export const runtime = 'edge'
 import { createClient } from '@/lib/supabase/server'
 import { ArticleEditor } from '@/components/admin/ArticleEditor'
 export default async function NewArticlePage() {

@@ -1,3 +1,4 @@
+export const runtime = 'edge'
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { createClient } from '@/lib/supabase/server'
 import { ArticleEditor } from '@/components/admin/ArticleEditor'

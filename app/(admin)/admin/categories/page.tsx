@@ -1,3 +1,4 @@
+export const runtime = 'edge'
 import { createClient } from '@/lib/supabase/server'
 import { CategoryManager } from '@/components/admin/CategoryManager'
 export default async function CategoriesPage() {

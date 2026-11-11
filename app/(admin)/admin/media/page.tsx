@@ -1,3 +1,4 @@
+export const runtime = 'edge'
 import { createClient } from '@/lib/supabase/server'
 import { MediaManager } from '@/components/admin/MediaManager'
 export default async function MediaPage() {

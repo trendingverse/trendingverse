@@ -1,3 +1,4 @@
+export const runtime = 'edge'
 // app/(admin)/admin/monetization/site-scripts/page.tsx
 'use client'
 import { useState, useEffect } from 'react'

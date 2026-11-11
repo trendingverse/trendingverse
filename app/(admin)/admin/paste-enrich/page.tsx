@@ -1,3 +1,4 @@
+export const runtime = 'edge'
 import { PasteEnrich } from '@/components/admin/PasteEnrich'
 
 export default function PasteEnrichPage() {

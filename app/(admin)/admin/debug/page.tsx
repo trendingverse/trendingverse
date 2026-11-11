@@ -1,3 +1,4 @@
+export const runtime = 'edge'
 // app/(admin)/admin/debug/page.tsx
 // TEMPORARY diagnostic page — delete after fixing
 

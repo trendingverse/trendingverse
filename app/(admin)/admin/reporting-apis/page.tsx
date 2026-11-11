@@ -1,3 +1,4 @@
+export const runtime = 'edge'
 // app/(admin)/admin/reporting-apis/page.tsx
 // Admin-only: set up each ad network's reporting API for the Earnings sync.
 import { createClient } from '@/lib/supabase/server'

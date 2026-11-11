@@ -1,3 +1,4 @@
+export const runtime = 'edge'
 import { createClient } from '@/lib/supabase/server'
 import { ArticleCard } from '@/components/public/ArticleCard'
 import { AdSlot } from '@/components/public/AdSlot'
