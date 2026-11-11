@@ -1,6 +1,8 @@
 import { MetadataRoute } from 'next'
 import { createAdminClient } from '@/lib/supabase/admin'
 
+export const dynamic = 'force-dynamic'
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const base = process.env.NEXT_PUBLIC_SITE_URL || 'https://trendingverse.online'
   const admin = createAdminClient()
