@@ -1,5 +1,5 @@
-export const runtime = 'edge'
 'use client'
+export const runtime = 'edge'
 // app/(admin)/admin/ad-reports/page.tsx
 import { useEffect, useMemo, useState } from 'react'
 
