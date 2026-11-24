@@ -29,16 +29,16 @@ export async function GET() {
 
   const { data: articleCounts } = await admin.from('articles').select('user_id')
   const { data: sites } = await admin.from('sites').select('user_id, name, site_url, articles_count')
-  const { data: authData } = await admin.auth.admin.listUsers()
-  const authUsers = authData?.users || []
+  // auth.admin.listUsers() is not available in edge runtime — emails come from user_profiles
+  const { data: emailRows } = await admin.from('user_profiles').select('id, email')
+  const emailMap = Object.fromEntries((emailRows || []).map(r => [r.id, r.email]))
 
   const publishers = profiles.map(profile => {
-    const authUser = authUsers.find(u => u.id === profile.id)
     const userArticles = (articleCounts || []).filter(a => a.user_id === profile.id)
     const userSites = (sites || []).filter(s => s.user_id === profile.id)
     return {
       id: profile.id,
-      email: authUser?.email || 'unknown',
+      email: emailMap[profile.id] || profile.full_name || 'unknown',
       full_name: profile.full_name || 'Unknown',
       plan: profile.plan || 'free',
       subscription_status: profile.subscription_status || 'inactive',
@@ -47,7 +47,7 @@ export async function GET() {
       sites: userSites,
       sites_count: userSites.length,
       joined_at: profile.created_at,
-      last_sign_in: authUser?.last_sign_in_at || null,
+      last_sign_in: null,
     }
   })
 
