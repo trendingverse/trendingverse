@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 
-export const runtime = 'nodejs'
+export const runtime = 'edge'
 
 // The ZIP is served directly as a static file from /public/downloads/
 // This route just redirects to it so the old URL still works.

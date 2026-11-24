@@ -1,4 +1,4 @@
-export const runtime = 'nodejs'
+export const runtime = 'edge'
 // app/api/audience/delivery-health/route.ts
 // Flags campaigns that SHOULD be delivering but aren't — the check that
 // would have caught the July-4 outage on day one instead of day five.

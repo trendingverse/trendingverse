@@ -1,4 +1,4 @@
-export const runtime = 'nodejs'
+export const runtime = 'edge'
 // app/api/mediation/payouts/generate/route.ts
 // ══════════════════════════════════════════════════════════════════
 // PAYOUT ENGINE — turns per-site network revenue (partner_revenue) into

@@ -1,4 +1,4 @@
-export const runtime = 'nodejs'
+export const runtime = 'edge'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
@@ -87,8 +87,9 @@ export async function PATCH(req: NextRequest) {
         .maybeSingle()
 
       if (ad?.advertiser_user_id) {
-        const { data: authUser } = await admin.auth.admin.getUserById(ad.advertiser_user_id)
-        const advertiserEmail = authUser?.user?.email
+        const authRes = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/admin/users/${ad.advertiser_user_id}`, { headers: { 'apikey': process.env.SUPABASE_SERVICE_ROLE_KEY!, 'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY!}` } })
+        const authUser = authRes.ok ? await authRes.json() : null
+        const advertiserEmail = authUser?.email
         const { data: profile } = await admin
           .from('user_profiles')
           .select('company_name')

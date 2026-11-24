@@ -1,4 +1,4 @@
-export const runtime = 'nodejs'
+export const runtime = 'edge'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { computeSeoScore } from '@/lib/seo-scorer'
@@ -806,8 +806,9 @@ export async function GET(req: NextRequest) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   )
 
-  const { data: { users } } = await supabase.auth.admin.listUsers()
-  const adminUserId = users?.find(u => u.email === ADMIN_EMAIL)?.id || null
+  const authListRes = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/admin/users?page=1&per_page=1000`, { headers: { 'apikey': process.env.SUPABASE_SERVICE_ROLE_KEY!, 'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY!}` } })
+  const authListData = authListRes.ok ? await authListRes.json() : {}
+  const adminUserId = (authListData.users || []).find((u: any) => u.email === ADMIN_EMAIL)?.id || null
 
   const url = new URL(req.url)
   const langParam = url.searchParams.get('lang') || 'en'

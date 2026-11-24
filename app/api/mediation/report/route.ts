@@ -1,4 +1,4 @@
-export const runtime = 'nodejs'
+export const runtime = 'edge'
 // app/api/mediation/report/route.ts  — v5
 // ══════════════════════════════════════════════════════════════════
 // v5:

@@ -1,4 +1,4 @@
-export const runtime = 'nodejs'
+export const runtime = 'edge'
 // app/api/auth/login-notification/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 

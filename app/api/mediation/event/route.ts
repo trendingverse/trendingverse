@@ -1,4 +1,4 @@
-export const runtime = 'nodejs'
+export const runtime = 'edge'
 // app/api/mediation/event/route.ts
 // Records mediation events (fill / nofill / click / viewable) from the
 // universal tag. This is the raw data Phase 2 aggregates into per-partner
