@@ -1,4 +1,4 @@
-export const runtime = 'edge'
+export const runtime = 'nodejs'
 // app/api/publisher/ad-loader.js/route.ts
 // Returns a self-executing JS that fetches & injects all active ad units for a domain
 // Publisher adds ONE tag: <script src="https://yourdomain.vercel.app/api/publisher/ad-loader.js?site=app.kannadadunia.com" async></script>

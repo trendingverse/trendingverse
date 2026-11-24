@@ -1,4 +1,4 @@
-export const runtime = 'edge'
+export const runtime = 'nodejs'
 // app/api/admin/upload-video/route.ts
 // Admin-only: upload a video/image file to Supabase Storage (video-ads bucket)
 // and return the public URL to be saved on a direct_ads campaign.

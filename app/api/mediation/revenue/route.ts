@@ -1,4 +1,4 @@
-export const runtime = 'edge'
+export const runtime = 'nodejs'
 // app/api/mediation/revenue/route.ts  — v3
 // ══════════════════════════════════════════════════════════════════
 // Earnings data for BOTH audiences:

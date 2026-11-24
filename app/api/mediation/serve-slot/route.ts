@@ -1,4 +1,4 @@
-export const runtime = 'edge'
+export const runtime = 'nodejs'
 // app/api/mediation/serve-slot/route.ts  — v3.5
 // ══════════════════════════════════════════════════════════════════
 // UNIVERSAL SLOT SERVER — multi-partner mediation brain.

@@ -1,4 +1,4 @@
-export const runtime = 'edge'
+export const runtime = 'nodejs'
 // app/api/publisher/direct-ads/route.ts
 // GET — returns direct ad campaigns targeting this publisher's sites,
 //        with per-campaign impressions, clicks/video events, and estimated INR earnings.

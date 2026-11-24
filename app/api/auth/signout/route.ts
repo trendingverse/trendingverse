@@ -1,4 +1,4 @@
-export const runtime = 'edge'
+export const runtime = 'nodejs'
 // app/api/auth/signout/route.ts
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'

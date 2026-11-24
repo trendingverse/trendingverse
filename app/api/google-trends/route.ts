@@ -1,4 +1,4 @@
-export const runtime = 'edge'
+export const runtime = 'nodejs'
 // This replaces app/api/google-trends/route.ts
 // Uses GNews API (free, works on Vercel) with Gemini fallback
 

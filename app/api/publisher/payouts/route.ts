@@ -1,4 +1,4 @@
-export const runtime = 'edge'
+export const runtime = 'nodejs'
 // app/api/publisher/payouts/route.ts
 // Returns payout history for the currently logged-in publisher.
 // Looks up the publisher in publishers_db by their auth email,

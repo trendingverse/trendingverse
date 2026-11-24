@@ -1,4 +1,4 @@
-export const runtime = 'edge'
+export const runtime = 'nodejs'
 // app/api/mediation/popunder/route.ts
 // ══════════════════════════════════════════════════════════════════
 // Returns page-level (popunder / interstitial) ad codes for a site.

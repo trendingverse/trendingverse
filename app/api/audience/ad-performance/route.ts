@@ -1,4 +1,4 @@
-export const runtime = 'edge'
+export const runtime = 'nodejs'
 // app/api/audience/ad-performance/route.ts
 // Returns daily performance per ad unit for optimization dashboard
 import { NextRequest, NextResponse } from 'next/server'

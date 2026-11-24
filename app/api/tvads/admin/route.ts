@@ -1,4 +1,4 @@
-export const runtime = 'edge'
+export const runtime = 'nodejs'
 // app/api/tvads/admin/route.ts
 // Admin-only API for publisher sites, ad units and direct campaigns.
 import { adminDb, currentUser, isTvAdmin, json, newId, newSiteKey, PLACEMENTS, DEVICES, DEFAULT_SETTINGS, DEFAULT_UNITS } from '@/lib/tvads/server'

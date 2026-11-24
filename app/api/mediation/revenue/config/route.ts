@@ -1,4 +1,4 @@
-export const runtime = 'edge'
+export const runtime = 'nodejs'
 // app/api/mediation/revenue/config/route.ts
 // ══════════════════════════════════════════════════════════════════
 // Reporting-API settings per network (demand_partners.config.report).
