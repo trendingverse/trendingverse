@@ -54,10 +54,17 @@ export async function GET(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  // Read API keys from user_profiles (edge-compatible) with env var fallback
+  const { data: profile } = await supabase
+    .from('user_profiles')
+    .select('byoak_gemini_key')
+    .eq('id', user.id)
+    .single()
+
   const { searchParams } = new URL(req.url)
   const region = searchParams.get('region') || 'ALL'
-  const gnewsKey = process.env.GNEWS_API_KEY
-  const geminiKey = process.env.GEMINI_API_KEY_2 || process.env.GEMINI_API_KEY
+  const gnewsKey = process.env.GNEWS_API_KEY || ''
+  const geminiKey = process.env.GEMINI_API_KEY_2 || process.env.GEMINI_API_KEY || profile?.byoak_gemini_key || ''
 
   const regionsToFetch = region === 'ALL'
     ? ['India', 'United States', 'United Kingdom', 'Global']
@@ -99,6 +106,10 @@ export async function GET(req: NextRequest) {
     seen.add(key)
     return true
   })
+
+  if (unique.length === 0 && !geminiKey) {
+    return NextResponse.json({ error: 'FREE_PLAN_NO_KEY', trends: [], total: 0 })
+  }
 
   return NextResponse.json({ trends: unique, total: unique.length, source: gnewsKey ? 'gnews+gemini' : 'gemini', timestamp: new Date().toISOString() })
 }
