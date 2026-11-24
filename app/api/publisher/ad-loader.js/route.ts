@@ -103,6 +103,7 @@ export async function GET(req: NextRequest) {
     headers: {
       'Content-Type': 'application/javascript',
       'Cache-Control': 'public, max-age=300', // cache 5 min
+      'Access-Control-Allow-Origin': '*',
     }
   })
 }
