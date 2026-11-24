@@ -1,12 +1,12 @@
 export const runtime = 'edge'
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { ArticleCard } from '@/components/public/ArticleCard'
 import type { Article } from '@/types'
 
 interface Props { searchParams: Promise<{ q?: string }> }
 export default async function SearchPage({ searchParams }: Props) {
   const { q = '' } = await searchParams
-  const supabase = await createClient()
+  const supabase = createAdminClient()
   let articles: Article[] = []
   if (q.trim()) {
     const { data } = await supabase.from('articles')

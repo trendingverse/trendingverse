@@ -1,5 +1,5 @@
 export const runtime = 'edge'
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { ArticleCard } from '@/components/public/ArticleCard'
 import { AdSlot } from '@/components/public/AdSlot'
 import { notFound } from 'next/navigation'
@@ -18,7 +18,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (['admin', 'login', 'api', 'search', 'article'].includes(slug)) {
     return { title: 'Not Found' }
   }
-  const supabase = await createClient()
+  const supabase = createAdminClient()
   const { data } = await supabase
     .from('categories')
     .select('name,meta_title,meta_desc')
@@ -39,7 +39,7 @@ export default async function CategoryPage({ params, searchParams }: Props) {
     notFound()
   }
 
-  const supabase = await createClient()
+  const supabase = createAdminClient()
   const limit = 12
   const offset = (parseInt(page) - 1) * limit
 

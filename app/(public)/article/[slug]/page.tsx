@@ -1,5 +1,4 @@
 export const runtime = 'edge'
-import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { AdSlot } from '@/components/public/AdSlot'
 import { ArticleCard } from '@/components/public/ArticleCard'
@@ -12,7 +11,7 @@ export const revalidate = 300
 interface Props { params: Promise<{slug:string}> }
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params
-  const supabase = await createClient()
+  const supabase = createAdminClient()
   const { data } = await supabase.from('articles').select('title,meta_description,seo_title,og_image_url,cover_image_url,slug').eq('slug',slug).eq('status','published').single()
   if (!data) return { title: 'Not Found' }
   return { title: data.seo_title||data.title, description: data.meta_description, openGraph: { title: data.seo_title||data.title, images: data.og_image_url||data.cover_image_url ? [{url:data.og_image_url||data.cover_image_url}] : [] } }
@@ -20,8 +19,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function ArticlePage({ params }: Props) {
   const { slug } = await params
-  const supabase = await createClient()
-  const admin = createAdminClient()
+  const supabase = createAdminClient()
+  const admin = supabase
   const { data: article } = await supabase.from('articles').select('*, categories(name,slug,color), article_tags(tags(name,slug))').eq('slug',slug).eq('status','published').single()
   if (!article) notFound()
   admin.from('article_views').insert({ article_id: article.id }).then(() => {})
