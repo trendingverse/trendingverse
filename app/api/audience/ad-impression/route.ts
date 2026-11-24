@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
   if (!ad_id) return NextResponse.json({ ok: false }, { headers: CORS })
   const admin = createServiceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
+    (process.env.SUPABASE_SERVICE_ROLE_KEY||process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY||'')!
   )
   // fetch current count to increment
   const { data: ad } = await admin.from('direct_ads').select('impressions').eq('id', ad_id).maybeSingle()

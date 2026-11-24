@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
 
   const admin = createServiceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
+    (process.env.SUPABASE_SERVICE_ROLE_KEY||process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY||'')!
   )
 
   // Admin can see all sites or filter by publisher
@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json()
   const admin = createServiceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
+    (process.env.SUPABASE_SERVICE_ROLE_KEY||process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY||'')!
   )
 
   const { data, error } = await admin.from('sites').insert({

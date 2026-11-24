@@ -86,7 +86,7 @@ export async function POST(req: NextRequest) {
   const { topic, count = 8 } = await req.json()
   if (!topic) return NextResponse.json({ error: 'topic required' }, { status: 400 })
 
-  const admin = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+  const admin = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, (process.env.SUPABASE_SERVICE_ROLE_KEY||process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY||'')!)
   const { data: profile } = await admin
     .from('user_profiles')
     .select('byoak_gemini_key, byoak_openai_key, byoak_claude_key, byoak_preferred_model, plan')

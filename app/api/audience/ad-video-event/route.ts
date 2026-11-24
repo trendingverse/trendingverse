@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
 
   const admin = createServiceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
+    (process.env.SUPABASE_SERVICE_ROLE_KEY||process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY||'')!
   )
 
   await admin.from('direct_ad_events').insert({ ad_id, fingerprint, event_type, site_url })

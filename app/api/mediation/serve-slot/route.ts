@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
   const { site_url, position, width, height, fingerprint, slot_id, slot_index, ad_unit_id } = body
   const admin = createServiceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
+    (process.env.SUPABASE_SERVICE_ROLE_KEY||process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY||'')!
   )
   const w = parseInt(width, 10) || 300
   const h = parseInt(height, 10) || 250

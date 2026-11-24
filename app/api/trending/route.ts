@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
 
   const region = new URL(req.url).searchParams.get('region') || 'India'
 
-  const admin = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+  const admin = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, (process.env.SUPABASE_SERVICE_ROLE_KEY||process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY||'')!)
   const { data: profile } = await admin
     .from('user_profiles')
     .select('byoak_gemini_key, byoak_openai_key, byoak_claude_key, plan')

@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
   // Non-admins are ALWAYS locked to their own id. Admin may target one.
   const targetPublisher = isAdmin ? (url.searchParams.get('publisher_id') || user.id) : user.id
 
-  const admin = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+  const admin = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, (process.env.SUPABASE_SERVICE_ROLE_KEY||process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY||'')!)
 
   // site_id -> site_url (for display), scoped to this publisher's sites
   const { data: sites } = await admin.from('sites').select('id, site_url, name').eq('user_id', targetPublisher)

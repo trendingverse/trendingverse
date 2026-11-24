@@ -19,7 +19,7 @@ export async function GET() {
   }
   const admin = createServiceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
+    (process.env.SUPABASE_SERVICE_ROLE_KEY||process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY||'')!
   )
   const today = new Date().toISOString().split('T')[0]
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()

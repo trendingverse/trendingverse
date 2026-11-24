@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
   const { ad_id, fingerprint, site_url } = await req.json().catch(() => ({}))
   if (!ad_id) return NextResponse.json({ ok: false }, { headers: CORS })
 
-  const admin = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+  const admin = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, (process.env.SUPABASE_SERVICE_ROLE_KEY||process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY||'')!)
 
   await Promise.all([
     admin.from('direct_ad_events').insert({ ad_id, fingerprint, event_type: 'click', site_url }),

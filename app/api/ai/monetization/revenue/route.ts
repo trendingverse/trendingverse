@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
   const period = searchParams.get('period') || '30'
   const startDate = new Date(Date.now() - parseInt(period) * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
 
-  const admin = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+  const admin = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, (process.env.SUPABASE_SERVICE_ROLE_KEY||process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY||'')!)
 
   let query = admin.from('revenue_reports')
     .select('*, sites(name, site_url), ad_units(name, position)')
@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
   const publisherEarnings = body.revenue_usd * (revenueSharePct / 100)
   const platformEarnings = body.revenue_usd * ((100 - revenueSharePct) / 100)
 
-  const admin = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+  const admin = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, (process.env.SUPABASE_SERVICE_ROLE_KEY||process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY||'')!)
   const { data, error } = await admin.from('revenue_reports').insert({
     publisher_id: body.publisher_id,
     site_id: body.site_id || null,

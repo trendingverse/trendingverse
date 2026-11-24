@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
   const position = searchParams.get('position') || 'in_content'
   const admin = createServiceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
+    (process.env.SUPABASE_SERVICE_ROLE_KEY||process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY||'')!
   )
   const today = new Date().toISOString().split('T')[0]
   const pos = position
@@ -107,7 +107,7 @@ export async function POST(req: NextRequest) {
   if (!fingerprint) return NextResponse.json({ ad: null, fallback: 'network' }, { headers: CORS })
   const admin = createServiceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
+    (process.env.SUPABASE_SERVICE_ROLE_KEY||process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY||'')!
   )
   const today = new Date().toISOString().split('T')[0]
   const normalizedSiteUrl = (site_url || '').replace(/^https?:\/\//, '').replace(/\/$/, '').toLowerCase()

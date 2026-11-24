@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
 
   const admin = createServiceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
+    (process.env.SUPABASE_SERVICE_ROLE_KEY||process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY||'')!
   )
 
   const isAdmin = user.email === ADMIN_EMAIL
@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json()
   const admin = createServiceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
+    (process.env.SUPABASE_SERVICE_ROLE_KEY||process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY||'')!
   )
 
   // Coerce empty-string UUID fields to null (Postgres rejects "" for uuid columns)
@@ -63,7 +63,7 @@ export async function PATCH(req: NextRequest) {
   const { id, is_enabled } = await req.json()
   const admin = createServiceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
+    (process.env.SUPABASE_SERVICE_ROLE_KEY||process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY||'')!
   )
 
   const { error } = await admin.from('publisher_ads').update({ is_enabled }).eq('id', id)
@@ -83,7 +83,7 @@ export async function DELETE(req: NextRequest) {
 
   const admin = createServiceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
+    (process.env.SUPABASE_SERVICE_ROLE_KEY||process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY||'')!
   )
 
   const { error } = await admin.from('publisher_ads').delete().eq('id', id)

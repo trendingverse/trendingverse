@@ -8,7 +8,7 @@ export async function GET(req: NextRequest) {
   if (!key) return NextResponse.json({ error: 'API key required' }, { status: 401 })
   const admin = createServiceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
+    (process.env.SUPABASE_SERVICE_ROLE_KEY||process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY||'')!
   )
   // Look up publisher by API key
   const { data: profile } = await admin

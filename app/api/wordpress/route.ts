@@ -197,7 +197,7 @@ export async function POST(req: NextRequest) {
   const auth = Buffer.from(`${wp_username}:${wp_password}`).toString('base64')
   const geminiKey = process.env.GEMINI_API_KEY!
 
-  const admin = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+  const admin = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, (process.env.SUPABASE_SERVICE_ROLE_KEY||process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY||'')!)
   const { data: site } = await admin.from('sites').select('id').eq('user_id', user.id).eq('site_url', base).single()
 
   // Strip cover image from content — WP theme displays it as featured image already

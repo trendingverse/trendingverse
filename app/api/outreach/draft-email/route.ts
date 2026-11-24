@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
 
   const admin = createServiceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
+    (process.env.SUPABASE_SERVICE_ROLE_KEY||process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY||'')!
   )
   const { data: profile } = await admin
     .from('user_profiles').select('role, company_name, full_name, designation').eq('id', user.id).single()
