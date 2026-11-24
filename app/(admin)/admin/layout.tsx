@@ -1,8 +1,11 @@
-// app/(admin)/admin/layout.tsx — v3
+// app/(admin)/admin/layout.tsx — v4
 // v2: publishers (not admin, not advertiser) are kept out of admin-only pages
 //     by AdminRouteGuard. Real data protection is enforced in the database (RLS).
 // v3: reads the publisher's package (plan) — Analytics is Pro-only.
+// v4: edge runtime — replaced require() with static import for Cloudflare Pages compat.
+export const runtime = 'edge'
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { redirect } from 'next/navigation'
 import { AdminSidebar } from '@/components/admin/AdminSidebar'
 import { AdminHeader } from '@/components/admin/AdminHeader'
@@ -21,8 +24,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   let plan = 'free'
   if (!isAdmin) {
     try {
-      const { createClient: svc } = require('@supabase/supabase-js')
-      const admin = svc(
+      const admin = createServiceClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.SUPABASE_SERVICE_ROLE_KEY!
       )
