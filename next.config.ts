@@ -7,6 +7,7 @@ const nextConfig: NextConfig = {
     SUPABASE_SERVICE_ROLE_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im12aGx3aGtueGRhenVtcGZ4Z2tpIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3ODkyMzg0MywiZXhwIjoyMDk0NDk5ODQzfQ.RRn4l2vE9irfxWepJp94XPH-ZUqMWqiupIKKgyGpJZo',
     // NEXT_PUBLIC_ prefix guarantees static inlining in CF Pages edge runtime
     NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im12aGx3aGtueGRhenVtcGZ4Z2tpIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3ODkyMzg0MywiZXhwIjoyMDk0NDk5ODQzfQ.RRn4l2vE9irfxWepJp94XPH-ZUqMWqiupIKKgyGpJZo',
+    GNEWS_API_KEY: '1dc768476f704d21f1245a8ca0fe6017',
   },
   images: {
     remotePatterns: [
