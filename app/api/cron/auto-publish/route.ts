@@ -554,12 +554,12 @@ async function runCurrencyRatesUpdate(
     })
   )
 
-  // Resolve "Finance → Currency Rates" category once (not per task)
+  // Resolve "Business → Currency Rates" category once (not per task)
   let currencyCategoryId: number | null = null
   try {
-    const financeCatId = await getOrCreateCategory(wpBase, auth, 'Finance')
-    currencyCategoryId = await getOrCreateCategory(wpBase, auth, 'Currency Rates', financeCatId || undefined)
-    if (currencyCategoryId) log.push(`[currency] Using category ID ${currencyCategoryId} (Finance → Currency Rates)`)
+    const businessCatId = await getOrCreateCategory(wpBase, auth, 'Business')
+    currencyCategoryId = await getOrCreateCategory(wpBase, auth, 'Currency Rates', businessCatId || undefined)
+    if (currencyCategoryId) log.push(`[currency] Using category ID ${currencyCategoryId} (Business → Currency Rates)`)
   } catch { log.push('[currency] Category setup failed — publishing without category') }
 
   // Step 3 — build flat list of (corridor × language) tasks
