@@ -3,3 +3,8 @@ compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat"]
 
 pages_build_output_dir = ".vercel/output/static"
+
+[vars]
+GOOGLE_CLIENT_ID = "298231558511-himb068dgd2p6f06p0d5sa647t6m2o5d.apps.googleusercontent.com"
+GSC_REDIRECT_URI = "https://trendingverse-pages.pages.dev/api/gsc/callback"
+GA4_REDIRECT_URI = "https://trendingverse-pages.pages.dev/api/ga4/callback"
