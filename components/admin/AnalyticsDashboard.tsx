@@ -135,20 +135,20 @@ export function AnalyticsDashboard() {
             <span className="text-xs text-ink-500">Cron</span>
           </div>
         </div>
-        <div className="flex items-end gap-1 h-32">
+        <div className="flex items-stretch gap-1 h-32">
           {chartData.map((d, i) => (
-            <div key={i} className="flex-1 flex flex-col items-center gap-0 group relative">
+            <div key={i} className="flex-1 flex flex-col justify-end group relative">
               <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-ink-900 text-white text-xs px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap pointer-events-none z-10">
                 {d.date.slice(5)}: {d.human}👤 {d.cron}⚡
               </div>
-              <div className="w-full flex flex-col justify-end" style={{ height: `${Math.max(2, (d.count / maxCount) * 100)}%` }}>
+              <div className="w-full flex flex-col" style={{ height: `${Math.max(2, (d.count / maxCount) * 100)}%` }}>
                 {d.cron > 0 && (
                   <div className="w-full bg-violet-400 hover:bg-violet-500 rounded-t transition-all"
                     style={{ height: `${(d.cron / Math.max(d.count, 1)) * 100}%` }} />
                 )}
                 {d.human > 0 && (
                   <div className="w-full bg-blue-400 hover:bg-blue-500 transition-all"
-                    style={{ height: `${(d.human / Math.max(d.count, 1)) * 100}%` }} />
+                    style={{ flex: 1 }} />
                 )}
               </div>
             </div>

@@ -59,7 +59,9 @@ useEffect(() => {
   if (!data?.connected) return (
     <div className="card p-8 text-center">
       <div className="text-5xl mb-4">🔍</div>
-      <h3 className="font-display font-bold text-ink-900 text-xl mb-2">Connect Google Search Console</h3>
+      <h3 className="font-display font-bold text-ink-900 text-xl mb-2">
+        {data?.error ? 'Reconnect Google Search Console' : 'Connect Google Search Console'}
+      </h3>
       <p className="text-ink-500 text-sm mb-3 max-w-md mx-auto">
         See clicks, impressions, keyword rankings, and Google Discover traffic for your site.
       </p>
@@ -71,7 +73,7 @@ useEffect(() => {
       )}
       <a href="/api/gsc/auth"
         className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-colors">
-        🔗 Connect Google Search Console
+        🔗 {data?.error ? 'Reconnect Google Search Console' : 'Connect Google Search Console'}
       </a>
       <p className="text-xs text-ink-400 mt-4">You'll be redirected to Google to authorize — takes 30 seconds</p>
     </div>
@@ -137,16 +139,14 @@ useEffect(() => {
       {activeTab === 'overview' && (
         <div className="card p-5">
           <h3 className="font-semibold text-ink-900 mb-4">Clicks vs Impressions — 28 days</h3>
-          <div className="flex items-end gap-0.5 h-36">
+          <div className="flex items-stretch gap-0.5 h-36">
             {chartData.map((d, i) => (
-              <div key={i} className="flex-1 flex flex-col items-center gap-0.5 group relative">
+              <div key={i} className="flex-1 flex flex-col justify-end group relative">
                 <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-ink-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10">
                   {d.date.slice(5)} · 👆{d.clicks} 👁{d.impressions}
                 </div>
-                <div className="w-full flex flex-col justify-end gap-0.5 h-32">
-                  <div className="w-full bg-violet-200 rounded-sm" style={{ height: `${Math.max(2, (d.impressions / maxImpressions) * 60)}%` }} />
-                  <div className="w-full bg-blue-500 rounded-sm" style={{ height: `${Math.max(d.clicks > 0 ? 2 : 0, (d.clicks / maxClicks) * 40)}%` }} />
-                </div>
+                <div className="w-full bg-violet-200 rounded-t-sm" style={{ height: `${Math.max(2, (d.impressions / maxImpressions) * 60)}%` }} />
+                <div className="w-full bg-blue-500" style={{ height: `${Math.max(d.clicks > 0 ? 2 : 0, (d.clicks / maxClicks) * 40)}%` }} />
               </div>
             ))}
           </div>

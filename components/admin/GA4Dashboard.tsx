@@ -227,9 +227,9 @@ export function GA4Dashboard() {
       {activeTab === 'overview' && (
         <div className="card p-5">
           <h3 className="font-semibold text-ink-900 mb-4">Sessions — last 28 days</h3>
-          <div className="flex items-end gap-0.5 h-32">
+          <div className="flex items-stretch gap-0.5 h-32">
             {chartData.map((d, i) => (
-              <div key={i} className="flex-1 group relative">
+              <div key={i} className="flex-1 flex flex-col justify-end group relative">
                 <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-ink-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10">
                   {d.date.slice(5)} · {d.sessions} sessions
                 </div>

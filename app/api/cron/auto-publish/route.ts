@@ -153,7 +153,7 @@ async function generateArticle(title: string, keywords: string[], category: stri
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: {
             temperature: 0.7,
-            maxOutputTokens: 8192,               // was 4096 — long articles were truncating
+            maxOutputTokens: 16384,              // was 8192 — some long articles still truncating
             responseMimeType: 'application/json', // force valid JSON, handles escaping internally
           },
         }),
