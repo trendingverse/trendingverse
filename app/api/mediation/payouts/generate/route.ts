@@ -63,24 +63,26 @@ async function runPayouts(start: string, end: string) {
 
   const DEFAULT_SHARE = 70 // fallback when a site has no publisher_ads config
 
-  // 4. Compute + upsert revenue_reports rows
-  let generated = 0, skipped = 0, urlMiss = 0
-  const firstErrors: string[] = []
+  // 4. Compute all rows in memory, then bulk upsert in chunks
+  // (Cloudflare Workers cap subrequests ~50/invocation — one upsert per row blows past that)
+  const CHUNK = 400 // Supabase upsert handles up to 500 rows comfortably
+  let urlMiss = 0
+  const rows: any[] = []
+  const updatedAt = new Date().toISOString()
 
   for (const r of revRows) {
     const host = normHost(r.site_url)
     const site = siteByHost[host]
-    if (!site) { skipped++; urlMiss++; continue } // revenue for a site we don't recognise
+    if (!site) { urlMiss++; continue }
     const sharePct = shareBySite[site.id] ?? DEFAULT_SHARE
     const grossUsd = Number(r.revenue_usd || 0)
     const grossInr = Number(r.revenue_inr || 0)
     const pubUsd = +(grossUsd * sharePct / 100).toFixed(6)
     const platUsd = +(grossUsd - pubUsd).toFixed(6)
-
-    const { error: upErr } = await admin.from('revenue_reports').upsert({
+    rows.push({
       publisher_id: site.user_id,
       site_id: site.id,
-      ad_unit_id: null,               // site-level payout (not per-unit)
+      ad_unit_id: null,
       report_date: r.revenue_date,
       impressions: Number(r.impressions || 0),
       clicks: Number(r.clicks || 0),
@@ -90,21 +92,31 @@ async function runPayouts(start: string, end: string) {
       publisher_earnings_usd: pubUsd,
       platform_earnings_usd: platUsd,
       network: r.partner_slug || null,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: 'publisher_id,site_id,report_date,network' })
-    if (upErr) {
-      skipped++
-      if (firstErrors.length < 3) firstErrors.push(upErr.message)
-      continue
-    }
-    generated++
+      updated_at: updatedAt,
+    })
   }
+
+  let generated = 0, upsertErrors = 0
+  const firstErrors: string[] = []
+  for (let i = 0; i < rows.length; i += CHUNK) {
+    const { error: upErr, count } = await admin.from('revenue_reports').upsert(
+      rows.slice(i, i + CHUNK),
+      { onConflict: 'publisher_id,site_id,report_date,network', count: 'exact' }
+    )
+    if (upErr) {
+      upsertErrors += Math.min(CHUNK, rows.length - i)
+      if (firstErrors.length < 3) firstErrors.push(upErr.message)
+    } else {
+      generated += count ?? Math.min(CHUNK, rows.length - i)
+    }
+  }
+
   return {
     ok: true,
     generated,
-    skipped,
+    skipped: urlMiss + upsertErrors,
     url_misses: urlMiss,
-    upsert_errors: skipped - urlMiss,
+    upsert_errors: upsertErrors,
     first_errors: firstErrors.length ? firstErrors : undefined,
     range: { start, end },
   }
