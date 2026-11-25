@@ -2,10 +2,10 @@ export const runtime = 'edge'
 import { NextRequest, NextResponse } from 'next/server'
 
 // Current plugin version hosted on your server
-const PLUGIN_VERSION = '1.2.4'
+const PLUGIN_VERSION = '1.0.5'
 const PLUGIN_SLUG = 'trendingverse-ads'
 const PLUGIN_FILE = 'trendingverse-ads/trendingverse-ads.php'
-const DOWNLOAD_URL = 'https://trendingverse.online/api/plugin/download'
+const DOWNLOAD_URL = 'https://trendingverse-pages.pages.dev/api/plugin/download'
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
@@ -18,8 +18,8 @@ export async function GET(req: NextRequest) {
       name: 'TrendingVerse Ads',
       slug: PLUGIN_SLUG,
       version: PLUGIN_VERSION,
-      author: '<a href="https://trendingverse.online">TrendingVerse</a>',
-      author_profile: 'https://trendingverse.online',
+      author: '<a href="https://trendingverse-pages.pages.dev">TrendingVerse</a>',
+      author_profile: 'https://trendingverse-pages.pages.dev',
       requires: '5.0',
       tested: '6.5',
       requires_php: '7.4',
@@ -29,12 +29,8 @@ export async function GET(req: NextRequest) {
       sections: {
         description: 'Automatically fetches and injects monetization ads from TrendingVerse CMS into all articles.',
         changelog: `
-          <h4>1.2.4</h4><ul><li>Silent auto-update enabled — no publisher action required for future updates</li></ul>
-          <h4>1.2.3</h4><ul><li>Outstream: full IAB crawl-down format — docked poster in article, floats to bottom-right on scroll, close returns to slot, repeatable pop-out cycle</li></ul>
-          <h4>1.2.2</h4><ul><li>Outstream: IntersectionObserver trigger on slot position instead of fixed scroll distance</li></ul>
-          <h4>1.2.1</h4><ul><li>Outstream video ad support</li></ul>
-          <h4>1.2.0</h4><ul><li>Inbanner video ad support, VTR/VCR event tracking</li></ul>
-          <h4>1.1.0</h4><ul><li>Interstitial, sticky footer, multi-slot mediation</li></ul>
+          <h4>1.0.5</h4><ul><li>Fixed: switched to new ad-serving endpoint (api/tvads/plugin/config) — ads now load correctly from the TrendingVerse Ad Units system</li><li>Added device targeting (mobile/desktop/all) per unit</li><li>Added time-windowed direct campaign priority over network ads</li><li>iframe srcdoc mode for scripts that use document.write</li></ul>
+          <h4>1.0.4</h4><ul><li>Auto-update support via WordPress plugin API</li></ul>
           <h4>1.0.0</h4><ul><li>Initial release</li></ul>
         `,
       },
