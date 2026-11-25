@@ -13,12 +13,14 @@ export async function GET(req: NextRequest) {
   // Look up publisher by API key
   const { data: profile } = await admin
     .from('user_profiles')
-    .select('id, plan')
+    .select('id, user_id, plan')
     .eq('publisher_api_key', key)
     .single()
   if (!profile) {
     return NextResponse.json({ error: 'Invalid API key' }, { status: 401 })
   }
+  // Use user_id (auth UUID) for joins — falls back to id if user_id not set
+  const publisherId = profile.user_id || profile.id
   // Normalize URL — strip protocol and trailing slash
   const bare = (siteUrl || '').replace(/^https?:\/\//, '').replace(/\/$/, '')
   const httpUrl  = `http://${bare}`
@@ -27,12 +29,12 @@ export async function GET(req: NextRequest) {
   const { data: site } = await admin
     .from('sites')
     .select('id, name, site_url')
-    .eq('user_id', profile.id)
+    .eq('user_id', publisherId)
     .in('site_url', [httpUrl, httpsUrl, bare])
     .single()
   if (!site) {
     return NextResponse.json({
-      publisher: profile.id,
+      publisher: publisherId,
       site: null,
       ads: [],
       message: `No site found for ${siteUrl} — please add your site in TrendingVerse CMS Settings`,
@@ -57,7 +59,7 @@ export async function GET(req: NextRequest) {
         size_height
       )
     `)
-    .eq('publisher_id', profile.id)
+    .eq('publisher_id', publisherId)
     .eq('site_id', site.id)
     .eq('is_enabled', true)
   const ads = (assignments || []).map(a => {
@@ -87,15 +89,9 @@ const safeAds = ads.filter(ad => {
   return !BLOCKED_KEYWORDS.some(keyword => code.includes(keyword))
 })
 return NextResponse.json({
-  publisher: profile.id,
+  publisher: publisherId,
   site: { id: site.id, name: site.name, url: site.site_url },
   ads: safeAds,
   cached_until: new Date(Date.now() + 3600000).toISOString(),
 })
-  return NextResponse.json({
-    publisher: profile.id,
-    site: { id: site.id, name: site.name, url: site.site_url },
-    ads,
-    cached_until: new Date(Date.now() + 3600000).toISOString(),
-  })
 }
