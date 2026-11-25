@@ -25,9 +25,23 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     .eq('slug', slug)
     .single()
   if (!data) return { title: 'Not Found' }
+  const base = process.env.NEXT_PUBLIC_SITE_URL || 'https://trendingverse.online'
   return {
-    title: data.meta_title || data.name,
-    description: data.meta_desc || undefined,
+    title: data.meta_title || `${data.name} News | TrendingVerse`,
+    description: data.meta_desc || `Latest ${data.name} news, trending stories and breaking updates on TrendingVerse.`,
+    alternates: { canonical: `${base}/${slug}` },
+    openGraph: {
+      title: data.meta_title || `${data.name} | TrendingVerse`,
+      description: data.meta_desc || undefined,
+      url: `${base}/${slug}`,
+      siteName: 'TrendingVerse',
+      type: 'website',
+    },
+    twitter: {
+      card: 'summary',
+      title: data.meta_title || `${data.name} | TrendingVerse`,
+      description: data.meta_desc || undefined,
+    },
   }
 }
 

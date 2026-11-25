@@ -14,7 +14,27 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const supabase = createAdminClient()
   const { data } = await supabase.from('articles').select('title,meta_description,seo_title,og_image_url,cover_image_url,slug').eq('slug',slug).eq('status','published').single()
   if (!data) return { title: 'Not Found' }
-  return { title: data.seo_title||data.title, description: data.meta_description, openGraph: { title: data.seo_title||data.title, images: data.og_image_url||data.cover_image_url ? [{url:data.og_image_url||data.cover_image_url}] : [] } }
+  const imgUrl = data.og_image_url || data.cover_image_url || null
+  const base = process.env.NEXT_PUBLIC_SITE_URL || 'https://trendingverse.online'
+  return {
+    title: data.seo_title || data.title,
+    description: data.meta_description,
+    alternates: { canonical: `${base}/article/${data.slug}` },
+    openGraph: {
+      title: data.seo_title || data.title,
+      description: data.meta_description || undefined,
+      url: `${base}/article/${data.slug}`,
+      siteName: 'TrendingVerse',
+      type: 'article',
+      images: imgUrl ? [{ url: imgUrl, width: 1200, height: 675, alt: data.seo_title || data.title }] : [],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: data.seo_title || data.title,
+      description: data.meta_description || undefined,
+      images: imgUrl ? [imgUrl] : [],
+    },
+  }
 }
 
 export default async function ArticlePage({ params }: Props) {
