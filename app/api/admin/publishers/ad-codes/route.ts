@@ -13,14 +13,13 @@ export async function GET(req: NextRequest) {
   // Look up publisher by API key
   const { data: profile } = await admin
     .from('user_profiles')
-    .select('id, user_id, plan')
+    .select('id, plan')
     .eq('publisher_api_key', key)
     .single()
   if (!profile) {
     return NextResponse.json({ error: 'Invalid API key' }, { status: 401 })
   }
-  // Use user_id (auth UUID) for joins — falls back to id if user_id not set
-  const publisherId = profile.user_id || profile.id
+  const publisherId = profile.id
   // Normalize URL — strip protocol and trailing slash
   const bare = (siteUrl || '').replace(/^https?:\/\//, '').replace(/\/$/, '')
   const httpUrl  = `http://${bare}`
