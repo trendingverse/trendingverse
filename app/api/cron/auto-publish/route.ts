@@ -812,6 +812,10 @@ export async function GET(req: NextRequest) {
   const url = new URL(req.url)
   const langParam = url.searchParams.get('lang') || 'en'
   const regionParam = url.searchParams.get('region') || 'India'
+  // mode=article (default) — trending news only
+  // mode=currency — currency rates + direct-ads pacing only
+  // mode=all — everything (original behaviour)
+  const mode = url.searchParams.get('mode') || 'article'
 
   if (!geminiKey) return NextResponse.json({ error: 'GEMINI_API_KEY not set' }, { status: 500 })
   if (!wpUrl || !wpUsername || !wpPassword) return NextResponse.json({ error: 'WordPress credentials not set' }, { status: 500 })
@@ -819,14 +823,22 @@ export async function GET(req: NextRequest) {
   const wpBase = wpUrl.replace(/\/$/, '')
   const auth = Buffer.from(`${wpUsername}:${wpPassword}`).toString('base64')
 
-  // ── Run article publishing AND currency rates update CONCURRENTLY ──
-  // (previously sequential — total time was article_time + currency_time;
-  // now it's max(article_time, currency_time), roughly halving wall-clock time)
-const [articleOutcome, currencyOutcome, pacingOutcome] = await Promise.all([
-    runArticlePublish(supabase, geminiKey, pexelsKey, newsApiKey, wpBase, auth, wpUrl, adminUserId, langParam, regionParam),
-    runCurrencyRatesUpdate(supabase, geminiKey, wpBase, auth).catch((e) => ({ updated: 0, failed: 0, log: [`Currency rates error: ${(e as Error).message}`] })),
-    runDirectAdsPacing(supabase).catch((e) => ({ processed: 0, paused: 0, log: [`Direct-ads pacing error: ${(e as Error).message}`] })),
-    fetch(`${new URL(req.url).origin}/api/mediation/revenue/sync?secret=${process.env.CRON_SECRET}`).catch(() => ({})),
+  const runArticle  = mode === 'article' || mode === 'all'
+  const runCurrency = mode === 'currency' || mode === 'all'
+
+  const [articleOutcome, currencyOutcome, pacingOutcome] = await Promise.all([
+    runArticle
+      ? runArticlePublish(supabase, geminiKey, pexelsKey, newsApiKey, wpBase, auth, wpUrl, adminUserId, langParam, regionParam)
+      : Promise.resolve({ result: { skipped: true }, log: [] }),
+    runCurrency
+      ? runCurrencyRatesUpdate(supabase, geminiKey, wpBase, auth).catch((e) => ({ updated: 0, failed: 0, log: [`Currency rates error: ${(e as Error).message}`] }))
+      : Promise.resolve({ updated: 0, failed: 0, log: [] }),
+    runCurrency
+      ? runDirectAdsPacing(supabase).catch((e) => ({ processed: 0, paused: 0, log: [`Direct-ads pacing error: ${(e as Error).message}`] }))
+      : Promise.resolve({ processed: 0, paused: 0, log: [] }),
+    runCurrency
+      ? fetch(`${new URL(req.url).origin}/api/mediation/revenue/sync?secret=${process.env.CRON_SECRET}`).catch(() => ({}))
+      : Promise.resolve({}),
   ])
 
   const log = [...articleOutcome.log, ...currencyOutcome.log, ...pacingOutcome.log]

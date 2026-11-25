@@ -1,0 +1,24 @@
+name: Currency Rates (daily)
+
+on:
+  schedule:
+    # 3:30 AM UTC = 9:00 AM IST — once daily
+    - cron: '30 3 * * *'
+  workflow_dispatch:
+
+jobs:
+  update-currency:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Update currency rates and run ad pacing
+        run: |
+          RESPONSE=$(curl -s -o /tmp/response.txt -w "%{http_code}" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "https://trendingverse-pages.pages.dev/api/cron/auto-publish?mode=currency")
+          echo "HTTP status: $RESPONSE"
+          cat /tmp/response.txt
+          if [ "$RESPONSE" != "200" ]; then
+            echo "Cron endpoint returned non-200 status"
+            exit 1
+          fi

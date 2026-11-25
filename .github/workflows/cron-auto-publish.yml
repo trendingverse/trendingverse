@@ -1,20 +1,27 @@
-name: Auto Publish (every 10 min)
+name: Auto Publish
 
 on:
   schedule:
+    # Trending news — every 10 minutes
     - cron: '*/10 * * * *'
   workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Mode: article | currency | all'
+        required: false
+        default: 'article'
 
 jobs:
-  auto-publish:
+  publish-article:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
-      - name: Trigger auto-publish cron
+      - name: Publish trending news article
         run: |
+          MODE="${{ github.event.inputs.mode || 'article' }}"
           RESPONSE=$(curl -s -o /tmp/response.txt -w "%{http_code}" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-            "https://trendingverse-pages.pages.dev/api/cron/auto-publish")
+            "https://trendingverse-pages.pages.dev/api/cron/auto-publish?mode=${MODE}")
           echo "HTTP status: $RESPONSE"
           cat /tmp/response.txt
           if [ "$RESPONSE" != "200" ]; then
