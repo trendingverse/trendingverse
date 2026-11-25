@@ -88,7 +88,7 @@ async function getTrendingTopic(geminiKey: string, newsApiKey?: string, region =
       } else {
         url = `https://newsapi.org/v2/top-headlines?country=us&pageSize=10&apiKey=${newsApiKey}`
       }
-      const res = await fetch(url, { cache: 'no-store' })
+      const res = await fetch(url, {})
       if (res.ok) {
         const data = await res.json()
         const articles = (data.articles || []).filter((a: { title: string }) =>
@@ -114,7 +114,6 @@ async function getTrendingTopic(geminiKey: string, newsApiKey?: string, region =
           contents: [{ parts: [{ text: `Today is ${today}. What is ONE specific breaking or trending news topic in ${region} right now? Pick from: politics, technology, sports, entertainment, business, health. Return ONLY JSON: {"title":"Specific news headline","category":"Technology","keywords":["kw1","kw2","kw3","kw4","kw5"]}` }] }],
           generationConfig: { temperature: 1 }
         }),
-        cache: 'no-store'
       }
     )
     if (res.ok) {
@@ -158,7 +157,7 @@ async function generateArticle(title: string, keywords: string[], category: stri
             responseMimeType: 'application/json', // force valid JSON, handles escaping internally
           },
         }),
-        cache: 'no-store',
+        
       }
     )
     const data = await res.json()
