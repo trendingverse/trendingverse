@@ -21,7 +21,7 @@ jobs:
           MODE="${{ github.event.inputs.mode || 'article' }}"
           RESPONSE=$(curl -s -o /tmp/response.txt -w "%{http_code}" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-            "https://trendingverse-pages.pages.dev/api/cron/auto-publish?mode=${MODE}")
+            "https://trendingverse.pages.dev/api/cron/auto-publish?mode=${MODE}")
           echo "HTTP status: $RESPONSE"
           cat /tmp/response.txt
           if [ "$RESPONSE" != "200" ]; then

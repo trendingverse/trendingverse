@@ -6,7 +6,7 @@
 //  - One-click update URL to paste into browser (or send to publisher)
 //  - Copy-to-clipboard for each
 
-const CF_PAGES_BASE = 'https://trendingverse-pages.pages.dev'
+const CF_PAGES_BASE = 'https://trendingverse.pages.dev'
 const PLUGIN_ZIP_URL = `${CF_PAGES_BASE}/downloads/trendingverse-ads.zip`
 const UPDATE_KEY = 'tvads2024update'
 

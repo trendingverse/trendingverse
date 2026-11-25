@@ -14,7 +14,7 @@
 
 // ─── Config ─────────────────────────────────────────────────────────────────
 define('TV_SECRET_KEY',   'tvads2024update');
-define('TV_PLUGIN_ZIP',   'https://trendingverse-pages.pages.dev/downloads/trendingverse-ads.zip');
+define('TV_PLUGIN_ZIP',   'https://trendingverse.pages.dev/downloads/trendingverse-ads.zip');
 define('TV_PLUGIN_SLUG',  'trendingverse-ads/trendingverse-ads.php');
 define('TV_PLUGIN_FOLDER','trendingverse-ads');
 define('TV_ZIP_NAME',     'trendingverse-ads.zip');
@@ -180,7 +180,7 @@ if ($success) {
 
 <?php if ($success): ?>
   <div class="done" id="done" style="display:block">
-    ✅ Plugin updated successfully! Ads should now load from <strong>trendingverse-pages.pages.dev</strong>.<br>
+    ✅ Plugin updated successfully! Ads should now load from <strong>trendingverse.pages.dev</strong>.<br>
     This helper file has been deleted automatically.
   </div>
 <?php else: ?>
