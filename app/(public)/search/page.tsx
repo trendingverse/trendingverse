@@ -2,6 +2,15 @@ export const runtime = 'edge'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { ArticleCard } from '@/components/public/ArticleCard'
 import type { Article } from '@/types'
+import type { Metadata } from 'next'
+
+export function generateMetadata(): Metadata {
+  return {
+    title: 'Search Articles — TrendingVerse',
+    description: 'Search thousands of news articles on TrendingVerse.',
+    robots: { index: false },
+  }
+}
 
 interface Props { searchParams: Promise<{ q?: string }> }
 export default async function SearchPage({ searchParams }: Props) {
@@ -9,10 +18,11 @@ export default async function SearchPage({ searchParams }: Props) {
   const supabase = createAdminClient()
   let articles: Article[] = []
   if (q.trim()) {
+    // Search title, excerpt and tag names
     const { data } = await supabase.from('articles')
       .select('*, categories(name,slug,color)')
       .eq('status','published')
-      .ilike('title', `%${q}%`)
+      .or(`title.ilike.%${q}%,excerpt.ilike.%${q}%,category_name.ilike.%${q}%`)
       .order('published_at', { ascending: false })
       .limit(24)
     articles = (data as Article[]) || []
