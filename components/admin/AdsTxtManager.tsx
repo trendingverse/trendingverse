@@ -11,12 +11,25 @@ interface Entry {
 
 // Common ad systems for one-click preset add
 const PRESETS = [
+  // Direct networks
   { label: 'Google AdSense', ad_system: 'google.com', relationship: 'DIRECT', cert: 'f08c47fec0942fa0', hint: 'pub-XXXXXXXXXXXXXXXX' },
   { label: 'Google Ad Manager', ad_system: 'google.com', relationship: 'DIRECT', cert: 'f08c47fec0942fa0', hint: 'pub-XXXXXXXXXXXXXXXX' },
   { label: 'Amazon (aps)', ad_system: 'aps.amazon.com', relationship: 'DIRECT', cert: '', hint: 'seller ID' },
   { label: 'Media.net', ad_system: 'media.net', relationship: 'DIRECT', cert: '', hint: '8CU...' },
+  { label: 'Adsterra', ad_system: 'adsterra.com', relationship: 'DIRECT', cert: '', hint: 'publisher ID from Adsterra dashboard' },
+  { label: 'Monetag', ad_system: 'monetag.com', relationship: 'DIRECT', cert: '', hint: 'publisher ID from Monetag dashboard' },
+  { label: 'HilltopAds', ad_system: 'hilltopads.net', relationship: 'DIRECT', cert: '', hint: 'publisher ID from HilltopAds dashboard' },
+  { label: 'PropellerAds', ad_system: 'propellerads.com', relationship: 'DIRECT', cert: '', hint: 'publisher ID' },
+  { label: 'Ezoic', ad_system: 'ezoic.com', relationship: 'DIRECT', cert: '', hint: 'site ID' },
+  { label: 'Taboola', ad_system: 'taboola.com', relationship: 'DIRECT', cert: 'c228cbbbfd43fbc2', hint: 'publisher ID' },
+  { label: 'Outbrain', ad_system: 'outbrain.com', relationship: 'DIRECT', cert: '', hint: 'publisher ID' },
+  // SSP / Resellers
   { label: 'Magnite/Rubicon', ad_system: 'rubiconproject.com', relationship: 'RESELLER', cert: '0bfd66d529a55807', hint: 'account ID' },
   { label: 'PubMatic', ad_system: 'pubmatic.com', relationship: 'RESELLER', cert: '5d62403b186f2ace', hint: 'publisher ID' },
+  { label: 'OpenX', ad_system: 'openx.com', relationship: 'RESELLER', cert: '6a698e965929', hint: 'account ID' },
+  { label: 'AppNexus/Xandr', ad_system: 'appnexus.com', relationship: 'RESELLER', cert: 'f5ab79cb980f11d1', hint: 'seat ID' },
+  { label: 'Index Exchange', ad_system: 'indexexchange.com', relationship: 'RESELLER', cert: '50b1c356f2c5c8fc', hint: 'account ID' },
+  { label: 'TripleLift', ad_system: 'triplelift.com', relationship: 'RESELLER', cert: '6c33edb13117fd86', hint: 'account ID' },
 ]
 
 export function AdsTxtManager({ isBase = false }: { isBase?: boolean }) {
