@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from 'next/server'
 const PLUGIN_VERSION = '1.3.0'
 const PLUGIN_SLUG = 'trendingverse-ads'
 const PLUGIN_FILE = 'trendingverse-ads/trendingverse-ads.php'
-const DOWNLOAD_URL = 'https://trendingverse.pages.dev/api/plugin/download'
+const DOWNLOAD_URL = 'https://trendingverse-pages.pages.dev/api/plugin/download'
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
@@ -18,8 +18,8 @@ export async function GET(req: NextRequest) {
       name: 'TrendingVerse Ads',
       slug: PLUGIN_SLUG,
       version: PLUGIN_VERSION,
-      author: '<a href="https://trendingverse.pages.dev">TrendingVerse</a>',
-      author_profile: 'https://trendingverse.pages.dev',
+      author: '<a href="https://trendingverse-pages.pages.dev">TrendingVerse</a>',
+      author_profile: 'https://trendingverse-pages.pages.dev',
       requires: '5.0',
       tested: '6.5',
       requires_php: '7.4',
