@@ -332,6 +332,9 @@ Return ONLY a valid JSON array, no markdown, no commentary before or after:
             _yoast_wpseo_title: r.seo_title + ' - TrendingVerse',
             _yoast_wpseo_metadesc: r.meta_description,
             _yoast_wpseo_focuskw: r.focus_keyword,
+            rank_math_title: r.seo_title + ' - TrendingVerse',
+            rank_math_description: r.meta_description,
+            rank_math_focus_keyword: r.focus_keyword,
           },
         })
 
@@ -499,6 +502,9 @@ Return ONLY a valid JSON array, no markdown, no commentary before or after:
           _yoast_wpseo_title: item.seo_title + ' - TrendingVerse',
           _yoast_wpseo_metadesc: item.meta_description,
           _yoast_wpseo_focuskw: item.focus_keyword,
+          rank_math_title: item.seo_title + ' - TrendingVerse',
+          rank_math_description: item.meta_description,
+          rank_math_focus_keyword: item.focus_keyword,
         },
       })
       if (ok) { applied++; await admin.from('seo_metadata').update({ status: 'applied' }).eq('post_id', item.post_id) }
@@ -550,6 +556,9 @@ export async function POST(req: NextRequest) {
           _yoast_wpseo_title: data.seo_title + ' - TrendingVerse',
           _yoast_wpseo_metadesc: data.meta_description,
           _yoast_wpseo_focuskw: data.focus_keyword,
+          rank_math_title: data.seo_title + ' - TrendingVerse',
+          rank_math_description: data.meta_description,
+          rank_math_focus_keyword: data.focus_keyword,
         },
       })
       if (ok) await admin.from('seo_metadata').update({ status: 'applied' }).eq('post_id', post_id)

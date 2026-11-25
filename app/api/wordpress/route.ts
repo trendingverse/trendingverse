@@ -286,6 +286,9 @@ export async function POST(req: NextRequest) {
           _yoast_wpseo_title: article.seo_title || article.title,
           _yoast_wpseo_metadesc: article.meta_description || '',
           _yoast_wpseo_focuskw: article.focus_keyword || '',
+          rank_math_title: article.seo_title || article.title,
+          rank_math_description: article.meta_description || '',
+          rank_math_focus_keyword: article.focus_keyword || '',
         }
       }),
     })

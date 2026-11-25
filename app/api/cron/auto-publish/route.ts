@@ -685,9 +685,14 @@ async function runArticlePublish(
         categories: categoryIds,
         ...(wpMediaId ? { featured_media: wpMediaId } : {}),
         meta: {
+          // Yoast SEO meta
           _yoast_wpseo_title: article.seo_title || article.title,
           _yoast_wpseo_metadesc: article.meta_description || '',
           _yoast_wpseo_focuskw: article.focus_keyword || '',
+          // Rank Math meta (set alongside Yoast so whichever plugin is active picks it up)
+          rank_math_title: article.seo_title || article.title,
+          rank_math_description: article.meta_description || '',
+          rank_math_focus_keyword: article.focus_keyword || '',
         }
       }),
     })
