@@ -1,0 +1,9 @@
+name = "tv-cron-trigger"
+main = "index.js"
+compatibility_date = "2024-09-23"
+
+[triggers]
+crons = ["*/10 * * * *"]
+
+[vars]
+PAGES_URL = "https://trendingverse-pages.pages.dev"
