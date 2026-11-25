@@ -46,10 +46,16 @@ MANDATORY SEO REQUIREMENTS — the article MUST satisfy ALL of these:
    <figure><img src="" alt="${kw} - ${category} news" width="1200" height="675" /></figure>
    (The src will be filled in by the publish pipeline — do NOT omit this.)
 
+8. AD SLOT: After the second <h2> subheading (roughly mid-article), insert this exact HTML on its own line:
+   <!-- tv-ad-slot -->
+
+9. AUTHOR LINE: At the very end of the article, after the last paragraph, add:
+   <p class="tv-author-byline">By <strong>TrendingVerse Editorial</strong> · Published by <a href="https://trendingverse.online">TrendingVerse</a></p>
+
 Return ONLY valid JSON, nothing else:
 {
   "title": "Headline in ${language} containing focus keyword",
-  "content": "Full HTML article — must start with the <figure> image placeholder, then <h1>, then body paragraphs with <h2> subheadings",
+  "content": "Full HTML article — must start with the <figure> image placeholder, then <h1>, then body paragraphs with <h2> subheadings. Mid-article <!-- tv-ad-slot --> comment. Ends with the author byline <p>.",
   "excerpt": "Compelling 90-110 character summary including the focus keyword",
   "seo_title": "50-60 char SEO title with focus keyword near the start",
   "meta_description": "Exactly 150-160 characters — describe the article, include a call to action, end with - TrendingVerse",

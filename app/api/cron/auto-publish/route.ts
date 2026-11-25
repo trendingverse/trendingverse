@@ -318,6 +318,14 @@ async function generateAndUploadAIImage(
     })
     if (!uploadRes.ok) { log.push('AI image upload to WordPress failed — continuing without image'); return null }
     const media = await uploadRes.json()
+    // Set alt text and caption on the uploaded media
+    if (media.id) {
+      await fetch(`${wpBase}/wp-json/wp/v2/media/${media.id}`, {
+        method: 'POST',
+        headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ alt_text: title, caption: `${category} news illustration – TrendingVerse` }),
+      })
+    }
     log.push(`AI image generated & uploaded (ID: ${media.id}, ${(compressed.length / 1024).toFixed(0)}KB)`)
     return media.id
   } catch (e) {
@@ -650,13 +658,27 @@ async function runArticlePublish(
     const categoryIds = catId ? [catId] : []
     log.push(`Category: ${aiCategory}${catId ? '' : ' (could not create — publishing uncategorized)'}`)
 
+    // Replace <!-- tv-ad-slot --> comment with actual AdSense in-article unit
+    const ADSENSE_PUB = 'ca-pub-1703630141275716'
+    const adHtml = `<div class="tv-mid-article-ad" style="text-align:center;margin:24px 0;">
+<ins class="adsbygoogle" style="display:block;text-align:center;" data-ad-layout="in-article" data-ad-format="fluid" data-ad-client="${ADSENSE_PUB}" data-ad-slot="auto"></ins>
+<script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+</div>`
+    const contentWithAd = (article.content || '').replace('<!-- tv-ad-slot -->', adHtml)
+
+    // Also fix the image placeholder alt text using article title
+    const finalContent = contentWithAd.replace(
+      /<figure><img src="" alt="[^"]*"/,
+      `<figure><img src="" alt="${(article.title || '').replace(/"/g, '&quot;')}"`
+    )
+
     log.push('Publishing to WordPress...')
     const wpRes = await fetch(`${wpBase}/wp-json/wp/v2/posts`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Basic ${auth}` },
       body: JSON.stringify({
         title: article.title,
-        content: article.content,
+        content: finalContent,
         excerpt: article.excerpt,
         status: 'publish',
         slug: slugify(article.title),
