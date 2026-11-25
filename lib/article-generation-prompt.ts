@@ -12,6 +12,7 @@ export function buildArticlePrompt(params: {
 }): string {
   const { title, category, keywords, language, focusKeyword } = params
   const kw = focusKeyword || keywords[0] || title.split(' ').slice(0, 3).join(' ')
+  const categorySlug = category.toLowerCase().replace(/\s+/g, '-')
 
   return `You are a senior journalist for TrendingVerse, an Indian news platform.
 Write a complete, original, SEO-optimized news article in ${language}.
@@ -38,7 +39,10 @@ MANDATORY SEO REQUIREMENTS — the article MUST satisfy ALL of these:
 
 4. KEYWORD DENSITY: Use the focus keyword "${kw}" naturally 4-6 times throughout the article (0.5%-2% density). Do NOT stuff keywords — only use them where they read naturally.
 
-5. LINKS: Include at least one <a href="https://trendingverse.online" target="_blank">TrendingVerse</a> link naturally in the content.
+5. LINKS: Include at least TWO internal links within the article body:
+   - At least one link to the category page: <a href="https://trendingverse.online/${categorySlug}">${category} news on TrendingVerse</a>
+   - One link to the TrendingVerse homepage: <a href="https://trendingverse.online">TrendingVerse</a>
+   Both links should appear naturally in the text, not forced.
 
 6. TONE: Professional journalistic tone. E-E-A-T compliant. Google Discover ready. AdSense safe. No AI spam patterns. No filler phrases like "In conclusion" or "It is worth noting".
 
