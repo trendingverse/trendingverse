@@ -2,7 +2,7 @@ export const runtime = 'edge'
 import { NextRequest, NextResponse } from 'next/server'
 
 // Current plugin version hosted on your server
-const PLUGIN_VERSION = '1.0.5'
+const PLUGIN_VERSION = '1.3.0'
 const PLUGIN_SLUG = 'trendingverse-ads'
 const PLUGIN_FILE = 'trendingverse-ads/trendingverse-ads.php'
 const DOWNLOAD_URL = 'https://trendingverse-pages.pages.dev/api/plugin/download'
@@ -29,7 +29,8 @@ export async function GET(req: NextRequest) {
       sections: {
         description: 'Automatically fetches and injects monetization ads from TrendingVerse CMS into all articles.',
         changelog: `
-          <h4>1.0.5</h4><ul><li>Fixed: switched to new ad-serving endpoint (api/tvads/plugin/config) — ads now load correctly from the TrendingVerse Ad Units system</li><li>Added device targeting (mobile/desktop/all) per unit</li><li>Added time-windowed direct campaign priority over network ads</li><li>iframe srcdoc mode for scripts that use document.write</li></ul>
+          <h4>1.3.0</h4><ul><li>Fixed: corrected ad-serving endpoint — ads now load correctly from assigned ad units</li><li>Bumped version to supersede broken 1.2.3 build</li></ul>
+          <h4>1.0.5</h4><ul><li>Restored original ad-serving endpoint</li><li>Added device targeting (mobile/desktop/all) per unit</li></ul>
           <h4>1.0.4</h4><ul><li>Auto-update support via WordPress plugin API</li></ul>
           <h4>1.0.0</h4><ul><li>Initial release</li></ul>
         `,
