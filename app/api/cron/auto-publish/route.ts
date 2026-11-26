@@ -836,6 +836,25 @@ async function runArticlePublish(
     if (!wpRes.ok) throw new Error(wpData.message || 'WordPress publish failed')
     log.push(`Published: ${wpData.link}`)
 
+    // ── Notify search engines immediately after each publish ──────
+    const publishedUrl: string = wpData.link || ''
+    if (publishedUrl) {
+      const indexNowKey = process.env.INDEXNOW_KEY || 'rankmath'
+      const siteHost = 'trendingverse.online'
+      await Promise.allSettled([
+        // IndexNow (Bing + Yandex) — single URL, server-side so no CORS
+        fetch('https://api.indexnow.org/indexnow', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json; charset=utf-8' },
+          body: JSON.stringify({ host: siteHost, key: indexNowKey, urlList: [publishedUrl] }),
+        }).then(r => { log.push(`IndexNow: ${r.status}`) }).catch(() => {}),
+        // Google sitemap ping — fastest way to surface new content
+        fetch(`https://www.google.com/ping?sitemap=${encodeURIComponent(`https://${siteHost}/sitemap_index.xml`)}`)
+          .then(r => { log.push(`Google sitemap ping: ${r.status}`) }).catch(() => {}),
+      ])
+    }
+    // ─────────────────────────────────────────────────────────────
+
     await supabase.from('articles').insert({
       title: article.title,
       slug: slugify(article.title),
