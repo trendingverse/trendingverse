@@ -53,8 +53,7 @@ async function fetchRSS(country: string): Promise<{ title: string; description: 
     if (results.length >= 10) break
     try {
       const res = await fetch(urls[i], {
-        cache: 'no-store',
-        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; TrendBot/1.0)' },
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; TrendBot/1.0)', 'Cache-Control': 'no-cache' },
         signal: AbortSignal.timeout(5000),
       })
       if (!res.ok) continue
@@ -80,7 +79,7 @@ async function fetchRSS(country: string): Promise<{ title: string; description: 
 async function fetchGNews(country: string, lang: string, apiKey: string) {
   const countryParam = country ? `&country=${country}` : ''
   const url = `https://gnews.io/api/v4/top-headlines?lang=${lang}${countryParam}&max=10&apikey=${apiKey}`
-  const res = await fetch(url, { cache: 'no-store' })
+  const res = await fetch(url)
   if (!res.ok) return []
   const data = await res.json()
   return (data.articles || []).map((a: { title: string; description: string; source: { name: string } }) => ({
@@ -108,7 +107,6 @@ Return ONLY JSON array:
 Flags: India=🇮🇳 US=🇺🇸 UK=🇬🇧 Global=🌍` }] }],
             generationConfig: { temperature: 0.7, maxOutputTokens: 2048 },
           }),
-          cache: 'no-store'
         }
       )
       const data = await res.json()
