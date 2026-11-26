@@ -51,8 +51,8 @@ export async function GET(req: NextRequest) {
   function injectUnit(unit) {
     var container = document.createElement('div');
     container.setAttribute('data-tv-ad', unit.position || 'inline');
-    container.style.textAlign = 'center';
-    container.style.margin = '8px auto';
+    // Mobile-safe: never let any ad unit overflow the viewport width
+    container.style.cssText = 'text-align:center;margin:8px auto;max-width:100%;width:100%;overflow:hidden;box-sizing:border-box;';
 
     // Parse and re-create script tags (innerHTML doesn't execute scripts)
     var temp = document.createElement('div');
@@ -60,7 +60,12 @@ export async function GET(req: NextRequest) {
     var scripts = temp.querySelectorAll('script');
     var nonScripts = temp.querySelectorAll(':not(script)');
 
-    nonScripts.forEach(function(el) { container.appendChild(el.cloneNode(true)); });
+    nonScripts.forEach(function(el) {
+      var clone = el.cloneNode(true);
+      // Clamp any hardcoded width on the element itself (e.g. 728px ins tags)
+      if (clone.style) { clone.style.maxWidth = '100%'; clone.style.boxSizing = 'border-box'; }
+      container.appendChild(clone);
+    });
 
     scripts.forEach(function(s) {
       var newScript = document.createElement('script');
