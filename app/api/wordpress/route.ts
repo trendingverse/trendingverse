@@ -133,7 +133,7 @@ async function determineCategory(title: string, excerpt: string, groqKey: string
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
         body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile',
+          model: 'llama3-70b-8192',
 messages: [{ role: 'user', content: `Categorize this news article into EXACTLY one of these categories: ${VALID_CATEGORIES.join(', ')}.
 
 Title: ${title}

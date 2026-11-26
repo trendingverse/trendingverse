@@ -33,7 +33,7 @@ async function fetchGeminiTrends(regions: string[], groqKey: string) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
       body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
+        model: 'llama3-70b-8192',
 messages: [{ role: 'user', content: `Today is ${today}. List 15 specific trending news headlines from ${regions.join(', ')} happening RIGHT NOW. Be specific — real names, real events. Mix politics, tech, sports, entertainment, business.
 Return ONLY JSON array:
 [{"title":"Specific headline","description":"One sentence","category":"Politics","region":"India","flag":"🇮🇳"}]
