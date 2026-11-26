@@ -24,7 +24,7 @@ function buildPrompt(subject: string, category: string, keywords: string[], lang
 
 async function generateWithGemini(prompt: string, apiKey: string): Promise<Record<string, unknown>> {
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
