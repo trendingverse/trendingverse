@@ -144,7 +144,7 @@ Best regards,
       {
         method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
         body: JSON.stringify({
-          model: 'llama-3.1-70b-versatile',
+          model: 'llama-3.3-70b-versatile',
 messages: [{ role: 'user', content: prompt }],
 temperature: 0.3,
 max_tokens: 4096,
