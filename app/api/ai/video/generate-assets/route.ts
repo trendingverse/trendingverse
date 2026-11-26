@@ -82,15 +82,15 @@ Return ONLY valid JSON, no markdown:
   )
   const data = await res.json()
   if (data.error) {
-    throw new Error(`Gemini API error (${data.error.code || res.status}): ${data.error.message || JSON.stringify(data.error).slice(0, 150)}`)
+    throw new Error(`Groq API error (${data.error.code || res.status}): ${data.error.message || JSON.stringify(data.error).slice(0, 150)}`)
   }
   const raw = data.choices?.[0]?.message?.content || ''
   const finishReason = data.candidates?.[0]?.finishReason || ''
   const cleaned = raw.replace(/```json\n?|```/g, '').trim()
   const match = cleaned.match(/\{[\s\S]*\}/)
   if (!match) {
-    const truncatedNote = finishReason === 'MAX_TOKENS' ? ' [TRUNCATED — hit token limit]' : ''
-    throw new Error(`Could not parse script from Gemini response${truncatedNote}. finishReason=${finishReason}, length=${raw.length}. Tail: ${raw.slice(-200) || '(empty response)'}`)
+    const truncatedNote = finish_reason === 'length' ? ' [TRUNCATED — hit token limit]' : ''
+    throw new Error(`Could not parse script from Groq response${truncatedNote}. finish_reason=${finishReason}, length=${raw.length}. Tail: ${raw.slice(-200) || '(empty response)'}`)
   }
   const parsed = JSON.parse(match[0])
   return parsed.scenes || []

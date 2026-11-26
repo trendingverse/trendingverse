@@ -264,8 +264,8 @@ Return ONLY a valid JSON array, no markdown, no commentary before or after:
   const cleaned = raw.replace(/```json\n?|```/g, '').trim()
   const match = cleaned.match(/\[[\s\S]*\]/)
   if (!match) {
-    const truncatedNote = finishReason === 'MAX_TOKENS' ? ' [TRUNCATED — hit token limit, try a smaller batch]' : ''
-    throw new Error(`No JSON array in Gemini response${truncatedNote}. finishReason=${finishReason}, length=${raw.length}. Tail: ${raw.slice(-200)}`)
+    const truncatedNote = finish_reason === 'length' ? ' [TRUNCATED — hit token limit, try a smaller batch]' : ''
+    throw new Error(`No JSON array in Gemini response${truncatedNote}. finish_reason=${finishReason}, length=${raw.length}. Tail: ${raw.slice(-200)}`)
   }
   return JSON.parse(match[0])
 }

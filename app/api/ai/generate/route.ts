@@ -27,20 +27,18 @@ async function generateWithGemini(prompt: string, apiKey: string): Promise<Recor
     'https://api.groq.com/openai/v1/chat/completions',
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
+        model: 'llama-3.3-70b-versatile',
+          messages: [{ role: 'user', content: prompt }],
           temperature: 0.7,
-          maxOutputTokens: 8192,
-          responseMimeType: 'application/json'
-        }
+          max_tokens: 8192,
       })
     }
   )
   if (!res.ok) {
     const err = await res.json()
-    throw new Error(err.error?.message || `Gemini error ${res.status}`)
+    throw new Error(err.error?.message || `Groq error ${res.status}`)
   }
   const data = await res.json()
   const parts = data.candidates?.[0]?.content?.parts || []

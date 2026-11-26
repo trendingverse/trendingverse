@@ -9,23 +9,21 @@ async function fetchTrends(apiKey: string, region: string) {
     'https://api.groq.com/openai/v1/chat/completions',
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
-        contents: [{
-          parts: [{
-            text: `Today is ${today}. List 6 specific trending news topics RIGHT NOW for ${region}. Be specific — real names, real events happening today.
+        model: 'llama-3.3-70b-versatile',
+          messages: [{ role: 'user', content: `Today is ${today}. List 6 specific trending news topics RIGHT NOW for ${region}. Be specific — real names, real events happening today.
 Return ONLY valid JSON array:
-[{"title":"Specific trending topic","summary":"one sentence context","category":"Technology","keywords":["kw1","kw2","kw3"]}]`
-          }]
-        }],
-        generationConfig: { temperature: 0.8, maxOutputTokens: 1024 }
+[{"title":"Specific trending topic","summary":"one sentence context","category":"Technology","keywords":["kw1","kw2","kw3"]}]` }],
+          temperature: 0.8,
+          max_tokens: 1024,
       }),
       cache: 'no-store'
     }
   )
   if (!res.ok) {
     const err = await res.json()
-    throw new Error(err.error?.message || `Gemini error ${res.status}`)
+    throw new Error(err.error?.message || `Groq error ${res.status}`)
   }
   const data = await res.json()
   const text = data.choices?.[0]?.message?.content || ''
@@ -58,7 +56,7 @@ export async function GET(req: NextRequest) {
   if (plan === 'free' && !hasOwnKey && !isAdmin) {
     return NextResponse.json({
       error: 'FREE_PLAN_NO_KEY',
-      message: 'Add your free Gemini API key in Settings → 🔑 API Keys to detect trending topics.',
+      message: 'Add your Groq API key in Settings → 🔑 API Keys to detect trending topics.',
       action: 'add_key',
       link: '/admin/settings?tab=apikeys',
     }, { status: 403 })

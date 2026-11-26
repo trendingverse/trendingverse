@@ -8,16 +8,18 @@ async function callGemini(prompt: string, apiKey: string): Promise<string[]> {
     'https://api.groq.com/openai/v1/chat/completions',
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 1, maxOutputTokens: 1024 }
+        model: 'llama-3.3-70b-versatile',
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 1,
+          max_tokens: 1024,
       })
     }
   )
   if (!res.ok) {
     const err = await res.json()
-    throw new Error(err.error?.message || `Gemini error ${res.status}`)
+    throw new Error(err.error?.message || `Groq error ${res.status}`)
   }
   const data = await res.json()
   const text = data.choices?.[0]?.message?.content || ''
@@ -105,7 +107,7 @@ export async function POST(req: NextRequest) {
   if (plan === 'free' && !hasOwnKey && !isAdmin) {
     return NextResponse.json({
       error: 'FREE_PLAN_NO_KEY',
-      message: 'Add your free Gemini API key in Settings → 🔑 API Keys to generate headlines.',
+      message: 'Add your Groq API key in Settings → 🔑 API Keys to generate headlines.',
       action: 'add_key',
       link: '/admin/settings?tab=apikeys',
     }, { status: 403 })
