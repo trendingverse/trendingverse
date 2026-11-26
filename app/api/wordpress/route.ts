@@ -35,6 +35,48 @@ googletag.cmd.push(function() {
   return `\n<div style="text-align:center;margin:20px auto;clear:both;">${unit.ad_code}</div>\n`
 }
 
+// Builds a GAM-style sticky anchor banner fixed at the viewport bottom.
+// Renders regardless of where in the DOM it's placed — position:fixed lifts it.
+function buildStickyAnchorHtml(unit: AdUnit): string {
+  const uid = unit.id.slice(0, 8)
+  const w = unit.size_width || 320
+  const h = unit.size_height || 50
+  const wrapperId = `tv-anchor-${uid}`
+
+  let innerHtml: string
+  if (unit.ad_type === 'gam' && unit.gam_network_code && unit.gam_unit_path) {
+    const slotId = `gpt-anchor-${uid}`
+    innerHtml = `<div id="${slotId}">
+<script>
+(function(){
+  var g=window.googletag=window.googletag||{cmd:[]};
+  g.cmd.push(function(){
+    g.defineSlot('${unit.gam_unit_path}',[${w},${h}],'${slotId}').addService(g.pubads());
+    g.pubads().enableSingleRequest();
+    g.enableServices();
+    g.display('${slotId}');
+  });
+})();
+</script>
+</div>`
+  } else {
+    innerHtml = unit.ad_code || ''
+  }
+
+  return `
+<div id="${wrapperId}" style="position:fixed;bottom:0;left:0;right:0;z-index:99999;display:flex;justify-content:center;pointer-events:none;">
+  <div style="position:relative;pointer-events:all;background:#fff;box-shadow:0 -2px 10px rgba(0,0,0,.18);width:${w}px;">
+    <button
+      onclick="(function(){var el=document.getElementById('${wrapperId}');if(el)el.style.display='none';})()"
+      style="position:absolute;top:-22px;right:0;background:rgba(0,0,0,.65);color:#fff;border:none;padding:1px 8px 2px;cursor:pointer;font-size:11px;line-height:1.6;border-radius:3px 3px 0 0;font-family:sans-serif;"
+      aria-label="Close ad">✕ Close</button>
+    <div style="width:${w}px;height:${h}px;overflow:hidden;text-align:center;">
+      ${innerHtml}
+    </div>
+  </div>
+</div>`
+}
+
 function injectAdsIntoContent(content: string, publisherAds: PublisherAd[]): string {
   if (!publisherAds.length) return content
   const inContentAds = publisherAds
@@ -56,7 +98,7 @@ function injectAdsIntoContent(content: string, publisherAds: PublisherAd[]): str
 }
 
 function wrapWithAds(content: string, publisherAds: PublisherAd[]): string {
-  // Deduplicate by ad unit ID — same unit can appear in multiple publisher_ads rows
+  // Deduplicate by ad unit ID
   const seen = new Set<string>()
   const unique = publisherAds.filter(a => {
     if (!a.ad_units?.id || seen.has(a.ad_units.id)) return false
@@ -64,8 +106,9 @@ function wrapWithAds(content: string, publisherAds: PublisherAd[]): string {
     return true
   })
   const headerAds = unique.filter(a => a.is_enabled && a.ad_units?.position === 'header').map(a => buildAdHtml(a.ad_units)).join('')
-  const footerAds = unique.filter(a => a.is_enabled && a.ad_units?.position === 'footer').map(a => buildAdHtml(a.ad_units)).join('')
-  return `${headerAds}${injectAdsIntoContent(content, unique)}${footerAds}`
+  // Footer ads render as sticky anchors fixed to viewport bottom — NOT appended inline
+  const anchorAds = unique.filter(a => a.is_enabled && a.ad_units?.position === 'footer').map(a => buildStickyAnchorHtml(a.ad_units)).join('')
+  return `${headerAds}${injectAdsIntoContent(content, unique)}${anchorAds}`
 }
 
 async function wpFetch(url: string, auth: string, options: RequestInit = {}) {
