@@ -5,25 +5,23 @@ import { createClient as createServiceClient } from '@supabase/supabase-js'
 
 async function callGemini(prompt: string, apiKey: string): Promise<string[]> {
   const res = await fetch(
-    'https://api.groq.com/openai/v1/chat/completions',
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'openai/gpt-oss-120b',
-          messages: [{ role: 'user', content: prompt }],
-          temperature: 1,
-          max_tokens: 1024,
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 1, maxOutputTokens: 1024 },
       })
     }
   )
   if (!res.ok) {
     const err = await res.json()
-    throw new Error(err.error?.message || `Groq error ${res.status}`)
+    throw new Error(err.error?.message || `Gemini error ${res.status}`)
   }
   const data = await res.json()
-  const text = data.choices?.[0]?.message?.content || ''
-  // Parse numbered list or JSON array
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+  // Parse JSON array if returned
   const jsonMatch = text.match(/\[[\s\S]*\]/)
   if (jsonMatch) {
     try { return JSON.parse(jsonMatch[0]) } catch { /* continue */ }
@@ -107,7 +105,7 @@ export async function POST(req: NextRequest) {
   if (plan === 'free' && !hasOwnKey && !isAdmin) {
     return NextResponse.json({
       error: 'FREE_PLAN_NO_KEY',
-      message: 'Add your Groq API key in Settings → 🔑 API Keys to generate headlines.',
+      message: 'Add your Gemini API key in Settings → API Keys to generate headlines.',
       action: 'add_key',
       link: '/admin/settings?tab=apikeys',
     }, { status: 403 })
@@ -134,9 +132,9 @@ Return a numbered list only, one headline per line.`
     }
   }
 
-  // Fallback to platform key for popular/pro/admin
+  // Fallback to platform Gemini key for popular/pro/admin
   if (headlines.length === 0 && canUsePlatformKey) {
-    const platformKey = process.env.GROQ_API_KEY_2 || process.env.GROQ_API_KEY
+    const platformKey = process.env.GEMINI_API_KEY
     if (platformKey) {
       try {
         headlines = await callGemini(prompt, platformKey)

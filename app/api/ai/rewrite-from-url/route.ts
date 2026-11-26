@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
     }, { status: 400 })
   }
 
-  const groqKey = process.env.GROQ_API_KEY
+  const geminiKey = process.env.GEMINI_API_KEY
   const lang = (target_language || 'English').trim()
 
   const prompt = `You are a professional journalist and translator working for an Indian news platform.
@@ -100,23 +100,22 @@ Return ONLY valid JSON, no markdown, no commentary:
 The "content" field must be the full rewritten article as plain paragraphs separated by a blank line (no HTML tags), written entirely in ${lang}, at least 400 words.`
 
   try {
+    if (!geminiKey) return NextResponse.json({ error: 'AI service not configured' }, { status: 500 })
     const aiRes = await fetch(
-      'https://api.groq.com/openai/v1/chat/completions',
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'openai/gpt-oss-120b',
-messages: [{ role: 'user', content: prompt }],
-temperature: 0.4,
-max_tokens: 8192,
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.4, maxOutputTokens: 8192 },
         }),
       }
     )
     const data = await aiRes.json()
-    if (data.error) return NextResponse.json({ error: 'Groq error: ' + data.error.message }, { status: 500 })
+    if (!aiRes.ok) return NextResponse.json({ error: 'Gemini error: ' + (data.error?.message || aiRes.status) }, { status: 500 })
 
-    const raw = data.choices?.[0]?.message?.content || ''
+    const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
     const cleaned = raw.replace(/```json\n?|```/g, '').trim()
     const match = cleaned.match(/\{[\s\S]*\}/)
     if (!match) return NextResponse.json({ error: 'Could not parse AI response' }, { status: 500 })

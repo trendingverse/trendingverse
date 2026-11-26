@@ -6,27 +6,25 @@ import { createClient as createServiceClient } from '@supabase/supabase-js'
 async function fetchTrends(apiKey: string, region: string) {
   const today = new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
   const res = await fetch(
-    'https://api.groq.com/openai/v1/chat/completions',
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'openai/gpt-oss-120b',
-          messages: [{ role: 'user', content: `Today is ${today}. List 6 specific trending news topics RIGHT NOW for ${region}. Be specific — real names, real events happening today.
+        contents: [{ parts: [{ text: `Today is ${today}. List 6 specific trending news topics RIGHT NOW for ${region}. Be specific — real names, real events happening today.
 Return ONLY valid JSON array:
-[{"title":"Specific trending topic","summary":"one sentence context","category":"Technology","keywords":["kw1","kw2","kw3"]}]` }],
-          temperature: 0.8,
-          max_tokens: 1024,
+[{"title":"Specific trending topic","summary":"one sentence context","category":"Technology","keywords":["kw1","kw2","kw3"]}]` }] }],
+        generationConfig: { temperature: 0.8, maxOutputTokens: 1024 },
       }),
       cache: 'no-store'
     }
   )
   if (!res.ok) {
     const err = await res.json()
-    throw new Error(err.error?.message || `Groq error ${res.status}`)
+    throw new Error(err.error?.message || `Gemini error ${res.status}`)
   }
   const data = await res.json()
-  const text = data.choices?.[0]?.message?.content || ''
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
   const match = text.replace(/```json\n?|```/g, '').match(/\[[\s\S]*\]/)
   if (!match) throw new Error(`No JSON in response. Raw: ${(text || '').slice(0, 150)}`)
   return JSON.parse(match[0])
@@ -50,13 +48,13 @@ export async function GET(req: NextRequest) {
   const plan = profile?.plan || 'free'
   const userGeminiKey = profile?.byoak_gemini_key
   const hasOwnKey = !!(userGeminiKey || profile?.byoak_openai_key || profile?.byoak_claude_key)
-  const canUsePlatformKey = plan === 'popular' || plan === 'pro' || plan === 'byoak' || isAdmin  // Admin should also prefer own key if set
+  const canUsePlatformKey = plan === 'popular' || plan === 'pro' || plan === 'byoak' || isAdmin
 
   // Block free plan with no key
   if (plan === 'free' && !hasOwnKey && !isAdmin) {
     return NextResponse.json({
       error: 'FREE_PLAN_NO_KEY',
-      message: 'Add your Groq API key in Settings → 🔑 API Keys to detect trending topics.',
+      message: 'Add your Gemini API key in Settings → API Keys to detect trending topics.',
       action: 'add_key',
       link: '/admin/settings?tab=apikeys',
     }, { status: 403 })
@@ -65,24 +63,22 @@ export async function GET(req: NextRequest) {
   let topics: unknown[] = []
   let lastError = ''
 
-  // Try user's own Gemini key first (including admin)
-  if (userGeminiKey) {
+  // Prefer platform env key (always valid), then user's own key
+  const platformKey = process.env.GEMINI_API_KEY
+  if (platformKey && (canUsePlatformKey || isAdmin)) {
     try {
-      topics = await fetchTrends(userGeminiKey, region)
+      topics = await fetchTrends(platformKey, region)
     } catch (e) {
       lastError = (e as Error).message
     }
   }
 
-  // Fallback to platform key for popular/pro/admin
-  if (topics.length === 0 && canUsePlatformKey) {
-    const platformKey = process.env.GROQ_API_KEY_2 || process.env.GROQ_API_KEY
-    if (platformKey) {
-      try {
-        topics = await fetchTrends(platformKey, region)
-      } catch (e) {
-        lastError = (e as Error).message
-      }
+  // Fallback to user's own Gemini key
+  if (topics.length === 0 && userGeminiKey) {
+    try {
+      topics = await fetchTrends(userGeminiKey, region)
+    } catch (e) {
+      lastError = (e as Error).message
     }
   }
 

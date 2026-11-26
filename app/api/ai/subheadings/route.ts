@@ -21,7 +21,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Content too short to add subheadings' }, { status: 400 })
   }
 
-  const groqKey = process.env.GROQ_API_KEY
+  const geminiKey = process.env.GEMINI_API_KEY
+  if (!geminiKey) return NextResponse.json({ error: 'AI service not configured' }, { status: 500 })
 
   const prompt = `You are an expert content editor. Analyze this article and suggest H2 subheadings to be inserted between paragraphs.
 
@@ -52,20 +53,19 @@ Return ONLY valid JSON array:
 
   try {
     const res = await fetch(
-      'https://api.groq.com/openai/v1/chat/completions',
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'openai/gpt-oss-120b',
-messages: [{ role: 'user', content: prompt }],
-temperature: 0.3,
-max_tokens: 2048,
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.3, maxOutputTokens: 2048 },
         }),
       }
     )
     const data = await res.json()
-    const raw = data.choices?.[0]?.message?.content || ''
+    if (!res.ok) throw new Error(data.error?.message || `Gemini error ${res.status}`)
+    const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
     const cleaned = raw.replace(/```json\n?|```/g, '').trim()
     const match = cleaned.match(/\[[\s\S]*\]/)
     if (!match) return NextResponse.json({ error: 'Could not generate subheadings' }, { status: 500 })
@@ -73,8 +73,7 @@ max_tokens: 2048,
     const subheadings = JSON.parse(match[0])
 
     // Auto-inject subheadings into content
-    // Sort by paragraph number descending so insertions don't shift indices
-    const sorted = [...subheadings].sort((a: any, b: any) => b.before_paragraph - a.before_paragraph)
+    const sorted = [...subheadings].sort((a: { before_paragraph: number }, b: { before_paragraph: number }) => b.before_paragraph - a.before_paragraph)
     const injected = [...paragraphs]
     for (const sh of sorted) {
       const idx = sh.before_paragraph - 1 // 0-based
