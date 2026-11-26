@@ -11,15 +11,35 @@ const REGIONS_MAP: Record<string, { label: string; flag: string; gnewsLang: stri
 }
 
 // Free RSS feeds — no API key, works on edge
-const RSS_FEEDS: Record<string, string> = {
-  in: 'https://feeds.feedburner.com/ndtvnews-top-stories',
-  us: 'https://feeds.npr.org/1001/rss.xml',
-  gb: 'https://feeds.bbci.co.uk/news/rss.xml',
-  '': 'https://feeds.bbci.co.uk/news/world/rss.xml',
+// Note: feedburner redirects fail on Cloudflare edge; use direct feeds
+const RSS_FEEDS: Record<string, string[]> = {
+  in: [
+    'https://www.thehindu.com/feeder/default.rss',
+    'https://timesofindia.indiatimes.com/rssfeeds/296589292.cms',
+  ],
+  us: [
+    'https://feeds.npr.org/1001/rss.xml',
+    'https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml',
+  ],
+  gb: [
+    'https://feeds.bbci.co.uk/news/rss.xml',
+  ],
+  '': [
+    'https://feeds.bbci.co.uk/news/world/rss.xml',
+    'https://feeds.reuters.com/reuters/topNews',
+  ],
+}
+
+const SOURCE_NAMES: Record<string, string[]> = {
+  in: ['The Hindu', 'Times of India'],
+  us: ['NPR', 'NY Times'],
+  gb: ['BBC News'],
+  '': ['BBC World', 'Reuters'],
 }
 
 async function fetchRSS(country: string): Promise<{ title: string; description: string; source: string; flag: string; region: string }[]> {
-  const url = RSS_FEEDS[country] || RSS_FEEDS['']
+  const urls = RSS_FEEDS[country] || RSS_FEEDS['']
+  const sources = SOURCE_NAMES[country] || SOURCE_NAMES['']
   const regionMap: Record<string, { label: string; flag: string }> = {
     in: { label: 'India', flag: '🇮🇳' },
     us: { label: 'United States', flag: '🇺🇸' },
@@ -27,23 +47,34 @@ async function fetchRSS(country: string): Promise<{ title: string; description: 
     '': { label: 'Global', flag: '🌍' },
   }
   const info = regionMap[country] || { label: 'Global', flag: '🌍' }
-  try {
-    const res = await fetch(url, { cache: 'no-store', headers: { 'User-Agent': 'Mozilla/5.0' } })
-    if (!res.ok) return []
-    const xml = await res.text()
-    const items = xml.match(/<item>[\s\S]*?<\/item>/g) || []
-    return items.slice(0, 10).map(item => {
-      const title = (item.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/) || item.match(/<title>(.*?)<\/title>/))?.[1]?.trim() || ''
-      const desc = (item.match(/<description><!\[CDATA\[(.*?)\]\]><\/description>/) || item.match(/<description>(.*?)<\/description>/))?.[1] || ''
-      return {
-        title: title.replace(/ - .*$/, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim(),
-        description: desc.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').slice(0, 150),
-        source: country === 'in' ? 'NDTV' : country === 'us' ? 'NPR' : 'BBC News',
-        flag: info.flag,
-        region: info.label,
-      }
-    }).filter(a => a.title && a.title.length > 10)
-  } catch { return [] }
+  const results: { title: string; description: string; source: string; flag: string; region: string }[] = []
+
+  for (let i = 0; i < urls.length; i++) {
+    if (results.length >= 10) break
+    try {
+      const res = await fetch(urls[i], {
+        cache: 'no-store',
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; TrendBot/1.0)' },
+        signal: AbortSignal.timeout(5000),
+      })
+      if (!res.ok) continue
+      const xml = await res.text()
+      const items = xml.match(/<item>[\s\S]*?<\/item>/g) || []
+      const parsed = items.slice(0, 8).map(item => {
+        const title = (item.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/) || item.match(/<title>(.*?)<\/title>/))?.[1]?.trim() || ''
+        const desc = (item.match(/<description><!\[CDATA\[(.*?)\]\]><\/description>/) || item.match(/<description>(.*?)<\/description>/))?.[1] || ''
+        return {
+          title: title.replace(/ - .*$/, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim(),
+          description: desc.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').slice(0, 150),
+          source: sources[i] || 'News',
+          flag: info.flag,
+          region: info.label,
+        }
+      }).filter(a => a.title && a.title.length > 10)
+      results.push(...parsed)
+    } catch { continue }
+  }
+  return results
 }
 
 async function fetchGNews(country: string, lang: string, apiKey: string) {
@@ -120,12 +151,13 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // 2. RSS fallback (always free, no key)
-  if (allTrends.length === 0) {
-    for (const r of regionsToFetch) {
-      const info = REGIONS_MAP[r] || { label: r, flag: '🌍', gnewsLang: 'en', gnewsCountry: '' }
+  // 2. RSS fallback (always free, no key needed)
+  if (allTrends.length < 5) {
+    // Fetch RSS for each unique country code
+    const countryCodes = [...new Set(regionsToFetch.map(r => REGIONS_MAP[r]?.gnewsCountry ?? ''))]
+    for (const code of countryCodes) {
       try {
-        const articles = await fetchRSS(info.gnewsCountry)
+        const articles = await fetchRSS(code)
         for (const a of articles) {
           allTrends.push({ title: a.title, description: a.description, category: 'News', region: a.region, flag: a.flag, source: a.source })
         }
@@ -133,7 +165,7 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // 3. Gemini AI supplement (if key available)
+  // 3. Gemini AI — always try if key available (primary source when RSS fails)
   if (geminiKey) {
     try {
       const geminiTrends = await fetchGeminiTrends(regionsToFetch, geminiKey)

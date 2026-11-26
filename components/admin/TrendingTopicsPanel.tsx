@@ -82,7 +82,7 @@ export function TrendingTopicsPanel() {
       const res = await fetch(`/api/google-trends?region=${encodeURIComponent(region)}`)
       const data = await res.json()
       if (data.error === 'FREE_PLAN_NO_KEY') {
-        setError('Add your Gemini API key in Settings → API Keys to fetch trends.')
+        setError('Could not fetch trends right now. Try clicking Refresh, or add a Gemini API key in Settings → API Keys for AI-powered trends.')
         return
       }
       if (data.error) throw new Error(data.error)
@@ -112,7 +112,7 @@ export function TrendingTopicsPanel() {
       })
       const data = await res.json()
       if (data.error === 'FREE_PLAN_NO_KEY') {
-        alert('Add your Gemini API key in Settings → API Keys to generate articles.')
+        alert('Article generation requires a Gemini API key. Add one in Settings → API Keys.')
         return
       }
       if (data.error) throw new Error(data.error)
