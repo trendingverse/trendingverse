@@ -62,8 +62,14 @@ export async function GET(req: NextRequest) {
 
     nonScripts.forEach(function(el) {
       var clone = el.cloneNode(true);
-      // Clamp any hardcoded width on the element itself (e.g. 728px ins tags)
-      if (clone.style) { clone.style.maxWidth = '100%'; clone.style.boxSizing = 'border-box'; }
+      // Force 100% width on ad tags — 728px hardcoded widths overflow on mobile
+      // and also cause AdSense to serve a desktop creative instead of a mobile one
+      var tag = (clone.tagName || '').toLowerCase();
+      if (clone.style && (tag === 'ins' || tag === 'iframe' || tag === 'div')) {
+        clone.style.width = '100%';
+        clone.style.maxWidth = '100%';
+        clone.style.boxSizing = 'border-box';
+      }
       container.appendChild(clone);
     });
 

@@ -18,7 +18,7 @@ export function AdSlot({ position, className='' }: Props) {
   if (client && slots[position]) {
     return (
       <div className={`flex justify-center overflow-hidden w-full ${className}`}>
-        <ins className="adsbygoogle" style={{display:'block',width:size.w,maxWidth:'100%',height:'auto',minHeight:size.h,boxSizing:'border-box'}}
+        <ins className="adsbygoogle" style={{display:'block',width:'100%',height:'auto',minHeight:size.h,boxSizing:'border-box'}}
           data-ad-client={client} data-ad-slot={slots[position]} data-ad-format="auto" data-full-width-responsive="true" />
       </div>
     )
