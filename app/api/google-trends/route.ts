@@ -90,30 +90,40 @@ async function fetchGNews(country: string, lang: string, apiKey: string) {
   })).filter((a: { title: string }) => a.title && a.title.length > 15)
 }
 
-async function fetchGeminiTrends(regions: string[], geminiKey: string) {
+async function fetchGeminiTrends(regions: string[], geminiKey: string): Promise<{ items: unknown[]; error?: string }> {
   const today = new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
-  try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: `Today is ${today}. List 15 specific trending news headlines from ${regions.join(', ')} happening RIGHT NOW. Be specific — real names, real events. Mix politics, tech, sports, entertainment, business.
+  // Try models in order until one works
+  const models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash']
+  for (const model of models) {
+    try {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: `Today is ${today}. List 15 specific trending news headlines from ${regions.join(', ')} happening RIGHT NOW. Be specific — real names, real events. Mix politics, tech, sports, entertainment, business.
 Return ONLY JSON array:
 [{"title":"Specific headline","description":"One sentence","category":"Politics","region":"India","flag":"🇮🇳"}]
 Flags: India=🇮🇳 US=🇺🇸 UK=🇬🇧 Global=🌍` }] }],
-          generationConfig: { temperature: 0.7, maxOutputTokens: 2048 },
-        }),
-        cache: 'no-store'
+            generationConfig: { temperature: 0.7, maxOutputTokens: 2048 },
+          }),
+          cache: 'no-store'
+        }
+      )
+      const data = await res.json()
+      if (!res.ok) {
+        const msg = data?.error?.message || `HTTP ${res.status}`
+        // If model deprecated/not found, try next model
+        if (msg.includes('no longer available') || msg.includes('not found') || res.status === 404) continue
+        return { items: [], error: `Gemini ${model}: ${msg}` }
       }
-    )
-    if (!res.ok) return []
-    const data = await res.json()
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
-    const match = text.replace(/```json\n?|```/g, '').match(/\[[\s\S]*\]/)
-    return match ? JSON.parse(match[0]) : []
-  } catch { return [] }
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+      const match = text.replace(/```json\n?|```/g, '').match(/\[[\s\S]*\]/)
+      return { items: match ? JSON.parse(match[0]) : [] }
+    } catch (e) { return { items: [], error: String(e) } }
+  }
+  return { items: [], error: 'All Gemini models unavailable' }
 }
 
 export async function GET(req: NextRequest) {
@@ -130,7 +140,9 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const region = searchParams.get('region') || 'ALL'
   const gnewsKey = process.env.GNEWS_API_KEY || ''
-  const geminiKey = profile?.byoak_gemini_key || process.env.GEMINI_API_KEY || ''
+  // Prefer the platform env key for trends — it's server-side and always valid.
+  // Fall back to user's own key only if env key not set.
+  const geminiKey = process.env.GEMINI_API_KEY || profile?.byoak_gemini_key || ''
 
   const regionsToFetch = region === 'ALL'
     ? ['India', 'United States', 'United Kingdom', 'Global']
@@ -166,16 +178,18 @@ export async function GET(req: NextRequest) {
   }
 
   // 3. Gemini AI — always try if key available (primary source when RSS fails)
+  let geminiError = ''
   if (geminiKey) {
     try {
-      const geminiTrends = await fetchGeminiTrends(regionsToFetch, geminiKey)
-      for (const t of geminiTrends) {
+      const { items: geminiTrends, error: gErr } = await fetchGeminiTrends(regionsToFetch, geminiKey)
+      if (gErr) geminiError = gErr
+      for (const t of (geminiTrends as { title?: string; description?: string; category?: string; region?: string; flag?: string }[])) {
         if (t.title) {
-          const info = REGIONS_MAP[t.region] || { label: t.region || 'Global', flag: t.flag || '🌍' }
+          const info = REGIONS_MAP[t.region || ''] || { label: t.region || 'Global', flag: t.flag || '🌍' }
           allTrends.push({ title: t.title, description: t.description || '', category: t.category || 'General', region: info.label, flag: info.flag, source: 'AI' })
         }
       }
-    } catch { /* ignore */ }
+    } catch (e) { geminiError = String(e) }
   }
 
   // Deduplicate
@@ -188,7 +202,7 @@ export async function GET(req: NextRequest) {
   })
 
   if (unique.length === 0) {
-    return NextResponse.json({ error: 'FREE_PLAN_NO_KEY', trends: [], total: 0 })
+    return NextResponse.json({ error: 'FREE_PLAN_NO_KEY', trends: [], total: 0, debug: geminiError || 'RSS and Gemini both returned empty' })
   }
 
   return NextResponse.json({ trends: unique, total: unique.length, source: gnewsKey ? 'gnews' : 'rss', timestamp: new Date().toISOString() })
