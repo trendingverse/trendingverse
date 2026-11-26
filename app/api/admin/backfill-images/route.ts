@@ -29,8 +29,8 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user || user.email !== ADMIN_EMAIL) return NextResponse.json({ error: 'Admin only' }, { status: 403 })
 
-  const pexelsKey = process.env.PEXELS_API_KEY
-  if (!pexelsKey) return NextResponse.json({ error: 'PEXELS_API_KEY not configured in Cloudflare' }, { status: 500 })
+  const pexelsKey = process.env.PEXELS_API_KEY || 'Hg3cYZqEt9VuKvMh0eP8UBbrzYXUSpLrUMitD9ecBVDLyuwaXyRR3K0Z'
+  if (!pexelsKey) return NextResponse.json({ error: 'PEXELS_API_KEY not configured' }, { status: 500 })
 
   const { limit = 20, article_id } = await req.json().catch(() => ({}))
 

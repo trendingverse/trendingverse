@@ -4,8 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 export async function POST(req: NextRequest) {
   const { title, content, wp_url, wp_username, wp_password } = await req.json()
 
-  const pexelsKey = process.env.PEXELS_API_KEY
-  if (!pexelsKey) return NextResponse.json({ error: 'PEXELS_API_KEY not set' }, { status: 500 })
+  const pexelsKey = process.env.PEXELS_API_KEY || 'Hg3cYZqEt9VuKvMh0eP8UBbrzYXUSpLrUMitD9ecBVDLyuwaXyRR3K0Z'
 
   // Extract keywords from title — ASCII only, remove non-Latin characters
   const cleanTitle = (title || '').replace(/[^\x00-\x7F]/g, ' ').trim()

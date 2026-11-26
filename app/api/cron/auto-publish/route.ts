@@ -785,7 +785,7 @@ export async function GET(req: NextRequest) {
   }
 
   const geminiKey = process.env.GEMINI_API_KEY
-  const pexelsKey = process.env.PEXELS_API_KEY
+  const pexelsKey = process.env.PEXELS_API_KEY || 'Hg3cYZqEt9VuKvMh0eP8UBbrzYXUSpLrUMitD9ecBVDLyuwaXyRR3K0Z'
   const newsApiKey = process.env.NEWS_API_KEY
   const wpUrl = process.env.WP_URL
   const wpUsername = process.env.WP_USERNAME
