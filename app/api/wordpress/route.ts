@@ -17,10 +17,13 @@ interface PublisherAd {
   ad_units: AdUnit; inject_after_paragraph: number; is_enabled: boolean; position?: string
 }
 
+const AD_WRAPPER_STYLE = `background:#f2f2f2;border-radius:4px;padding:8px 4px 4px;margin:20px auto;clear:both;text-align:center;`
+const AD_LABEL_HTML = `<span style="display:block;font-size:9px;line-height:1;color:#999;letter-spacing:.5px;text-transform:uppercase;font-family:sans-serif;margin-bottom:4px;">Advertisement</span>`
+
 function buildAdHtml(unit: AdUnit): string {
   if (unit.ad_type === 'gam' && unit.gam_network_code && unit.gam_unit_path) {
     const divId = `gpt-ad-${unit.id.slice(0, 8)}-${Date.now()}`
-    return `\n<div id="${divId}" style="text-align:center;margin:20px auto;clear:both;">
+    return `\n<div style="${AD_WRAPPER_STYLE}">${AD_LABEL_HTML}<div id="${divId}">
 <script>
 googletag = window.googletag || {cmd: []};
 googletag.cmd.push(function() {
@@ -30,9 +33,9 @@ googletag.cmd.push(function() {
   googletag.display('${divId}');
 });
 </script>
-</div>\n`
+</div></div>\n`
   }
-  return `\n<div style="text-align:center;margin:20px auto;clear:both;">${unit.ad_code}</div>\n`
+  return `\n<div style="${AD_WRAPPER_STYLE}">${AD_LABEL_HTML}${unit.ad_code}</div>\n`
 }
 
 // Builds a GAM-style sticky anchor banner fixed at the viewport bottom.
@@ -71,7 +74,8 @@ function buildStickyAnchorHtml(unit: AdUnit): string {
       onclick="(function(){var el=document.getElementById('${wrapperId}');if(el){el.style.display='none';document.body.style.paddingBottom=el.dataset.prevPad||'';}})()"
       style="position:absolute;top:-22px;right:0;background:rgba(0,0,0,.65);color:#fff;border:none;padding:1px 8px 2px;cursor:pointer;font-size:11px;line-height:1.6;border-radius:3px 3px 0 0;font-family:sans-serif;"
       aria-label="Close ad">✕ Close</button>
-    <div style="width:${w}px;height:${h}px;overflow:hidden;text-align:center;">
+    <div style="font-size:9px;line-height:1;color:#999;letter-spacing:.5px;text-transform:uppercase;font-family:sans-serif;text-align:center;padding:3px 0 2px;background:#f2f2f2;">Advertisement</div>
+    <div style="width:${w}px;height:${h}px;overflow:hidden;text-align:center;background:#f2f2f2;">
       ${innerHtml}
     </div>
   </div>

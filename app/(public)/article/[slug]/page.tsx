@@ -135,7 +135,8 @@ export default async function ArticlePage({ params }: Props) {
     <button onclick="(function(){var el=document.getElementById('${wrapperId}');if(el){el.style.display='none';document.body.style.paddingBottom=el.dataset.prevPad||'';}})();"
       style="position:absolute;top:-22px;right:0;background:rgba(0,0,0,.65);color:#fff;border:none;padding:1px 8px 2px;cursor:pointer;font-size:11px;line-height:1.6;border-radius:3px 3px 0 0;font-family:sans-serif;"
       aria-label="Close ad">✕ Close</button>
-    <div style="width:${w}px;height:${h}px;overflow:hidden;text-align:center;">${innerHtml}</div>
+    <div style="font-size:9px;line-height:1;color:#999;letter-spacing:.5px;text-transform:uppercase;font-family:sans-serif;text-align:center;padding:3px 0 2px;background:#f2f2f2;">Advertisement</div>
+    <div style="width:${w}px;height:${h}px;overflow:hidden;text-align:center;background:#f2f2f2;">${innerHtml}</div>
   </div>
 </div>
 <script>(function(){var el=document.getElementById('${wrapperId}');if(!el)return;el.dataset.prevPad=document.body.style.paddingBottom||'';document.body.style.paddingBottom='${pad}px';})();<\/script>`
