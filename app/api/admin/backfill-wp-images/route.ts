@@ -97,7 +97,7 @@ export async function POST(req: NextRequest) {
   const auth = btoa(`${wpUsername}:${wpPassword}`)
 
   const body = await req.json().catch(() => ({}))
-  const { limit = 30, skip_existing = true, article_id } = body
+  const { limit = 30, skip_existing = true, article_id, offset = 0 } = body
 
   const admin = createServiceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -135,7 +135,7 @@ export async function POST(req: NextRequest) {
     .not('wp_post_id', 'is', null)
     .eq('status', 'published')
     .order('created_at', { ascending: false })
-    .limit(limit)
+    .range(offset, offset + limit - 1)
 
   if (!articles?.length) {
     return NextResponse.json({ updated: 0, message: 'No articles with both cover_image_url and wp_post_id' })
