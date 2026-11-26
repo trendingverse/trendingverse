@@ -789,24 +789,12 @@ async function runArticlePublish(
 </div>`
     const contentWithAd = (article.content || '').replace('<!-- tv-ad-slot -->', adHtml)
 
-    // Replace the empty <figure><img src=""> placeholder with the actual uploaded image,
-    // OR strip broken figures whose src is not a real URL
-    const finalContent = contentWithAd.replace(
-      /<figure[^>]*>\s*<img([^>]+)src="([^"]*)"([^>]*)>\s*<\/figure>/gi,
-      (match, before, src, after) => {
-        // If src is empty and we have a real image, inject it
-        if (!src && coverImageUrl) {
-          const altMatch = (before + after).match(/alt="([^"]*)"/)
-          const alt = altMatch ? altMatch[1] : article.title
-          return `<figure><img${before}src="${coverImageUrl}"${after} /></figure>`
-        }
-        // Keep figures that already have a real URL
-        if (src.startsWith('http://') || src.startsWith('https://') || src.startsWith('/')) return match
-        // Strip broken figures (src is title text or garbage)
-        if (coverImageUrl) return `<figure><img src="${coverImageUrl}" alt="${article.title}" width="1200" height="675" /></figure>`
-        return ''
-      }
-    )
+    // The theme already renders the featured image above the content.
+    // Strip the leading <figure> placeholder from the content body entirely
+    // to avoid a duplicate image at the top of every article.
+    const finalContent = contentWithAd
+      .replace(/^\s*<figure[^>]*>\s*<img[^>]*>\s*<\/figure>\s*/i, '')
+      .trimStart()
 
     log.push('Publishing to WordPress...')
     const wpRes = await fetch(`${wpBase}/wp-json/wp/v2/posts`, {
