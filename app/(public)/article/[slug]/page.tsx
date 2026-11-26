@@ -44,6 +44,16 @@ export default async function ArticlePage({ params }: Props) {
   const { data: article } = await supabase.from('articles').select('*, categories(name,slug,color), article_tags(tags(name,slug))').eq('slug',slug).eq('status','published').single()
   if (!article) notFound()
   admin.from('article_views').insert({ article_id: article.id }).then(() => {})
+
+  // Fetch footer ad units for this site — rendered as sticky anchor banner
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://trendingverse.online'
+  const { data: footerAds } = await supabase
+    .from('publisher_ads')
+    .select('*, ad_units(*), sites!inner(site_url)')
+    .eq('sites.site_url', siteUrl)
+    .eq('is_enabled', true)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const footerUnits = (footerAds || []).filter((a: any) => a.ad_units?.position === 'footer' && a.is_enabled)
   const { data: affiliates } = await supabase.from('affiliate_links').select('url,trigger_keywords').eq('is_active',true)
   // Strip the AI-generated image placeholder (empty src="") that the prompt
   // injects — it shows as a broken thumbnail. The cover image above the article
@@ -102,7 +112,35 @@ export default async function ArticlePage({ params }: Props) {
           </div>
         )}
       </div>
-      <AdSlot position="footer" className="border-t border-ink-100 bg-surface-2 py-3" />
+      {footerUnits.length === 0 && (
+        <AdSlot position="footer" className="border-t border-ink-100 bg-surface-2 py-3" />
+      )}
+      {footerUnits.map((pa: any) => {
+        const u = pa.ad_units
+        const uid = (u.id as string).slice(0, 8)
+        const w: number = u.size_width || 320
+        const h: number = u.size_height || 50
+        const pad = h + 20
+        const wrapperId = `tv-anchor-${uid}`
+        let innerHtml = ''
+        if (u.ad_type === 'gam' && u.gam_network_code && u.gam_unit_path) {
+          const slotId = `gpt-anchor-${uid}`
+          innerHtml = `<div id="${slotId}"><script>(function(){var g=window.googletag=window.googletag||{cmd:[]};g.cmd.push(function(){g.defineSlot('${u.gam_unit_path}',[${w},${h}],'${slotId}').addService(g.pubads());g.pubads().enableSingleRequest();g.enableServices();g.display('${slotId}');});})();<\/script></div>`
+        } else {
+          innerHtml = u.ad_code || ''
+        }
+        const html = `
+<div id="${wrapperId}" style="position:fixed;bottom:0;left:0;right:0;z-index:99999;display:flex;justify-content:center;pointer-events:none;">
+  <div style="position:relative;pointer-events:all;background:#fff;box-shadow:0 -2px 10px rgba(0,0,0,.18);width:${w}px;">
+    <button onclick="(function(){var el=document.getElementById('${wrapperId}');if(el){el.style.display='none';document.body.style.paddingBottom=el.dataset.prevPad||'';}})();"
+      style="position:absolute;top:-22px;right:0;background:rgba(0,0,0,.65);color:#fff;border:none;padding:1px 8px 2px;cursor:pointer;font-size:11px;line-height:1.6;border-radius:3px 3px 0 0;font-family:sans-serif;"
+      aria-label="Close ad">✕ Close</button>
+    <div style="width:${w}px;height:${h}px;overflow:hidden;text-align:center;">${innerHtml}</div>
+  </div>
+</div>
+<script>(function(){var el=document.getElementById('${wrapperId}');if(!el)return;el.dataset.prevPad=document.body.style.paddingBottom||'';document.body.style.paddingBottom='${pad}px';})();<\/script>`
+        return <div key={uid} dangerouslySetInnerHTML={{ __html: html }} />
+      })}
     </>
   )
 }
