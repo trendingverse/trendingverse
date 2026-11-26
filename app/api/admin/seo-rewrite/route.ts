@@ -69,7 +69,7 @@ async function getOrCreateWpCategory(catName: string): Promise<number | null> {
   return null
 }
 
-async function geminiRewrite(posts: any[], geminiKey: string) {
+async function geminiRewrite(posts: any[], groqKey: string) {
   const batch = posts.map(p => ({
     id: p.id,
     title: p.title?.rendered?.replace(/<[^>]+>/g, '').replace(/&#[0-9]+;/g, '').trim() || '',
@@ -100,10 +100,10 @@ Return ONLY a valid JSON array:
 [{"id":1,"discover_headline":"...","seo_title":"...","meta_description":"...","focus_keyword":"...","keywords":["tag1","tag2"],"category":"Politics","seo_score_before":40,"seo_score_after":78}]`
 
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+    'https://api.groq.com/openai/v1/chat/completions',
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: { temperature: 0.3, maxOutputTokens: 8192 },
@@ -111,7 +111,7 @@ Return ONLY a valid JSON array:
     }
   )
   const data = await res.json()
-  const raw  = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+  const raw  = data.choices?.[0]?.message?.content || ''
   const cleaned = raw.replace(/```json\n?|```/g, '').trim()
   const match = cleaned.match(/\[[\s\S]*\]/)
   if (!match) throw new Error('No JSON array in Gemini response: ' + raw.slice(0, 200))
@@ -156,7 +156,7 @@ export async function GET(req: NextRequest) {
 
   // ── ANALYZE ──────────────────────────────────────────────────
   if (action === 'analyze') {
-    const geminiKey = process.env.GEMINI_API_KEY!
+    const groqKey = process.env.GROQ_API_KEY
     const limit = parseInt(searchParams.get('limit') || '20')
     const offset = parseInt(searchParams.get('offset') || '0')
     const wpPage = Math.floor(offset / 100) + 1
@@ -175,7 +175,7 @@ export async function GET(req: NextRequest) {
     for (let i = 0; i < posts.length; i += BATCH_SIZE) {
       const chunk = posts.slice(i, i + BATCH_SIZE)
       try {
-        const rewrites = await geminiRewrite(chunk, geminiKey)
+        const rewrites = await geminiRewrite(chunk, groqKey)
         if (!rewrites.length) return NextResponse.json({ error: 'Gemini returned empty array', analyzed: 0 })
         allResults.push(...rewrites)
       } catch (e) {
@@ -221,7 +221,7 @@ export async function GET(req: NextRequest) {
 // Unlike bulk_fix, this NEVER touches title, tags, or SEO metadata.
 // It only checks whether the current category is appropriate for the
 // content, and corrects it if not.
-async function geminiCategoryCheck(posts: any[], geminiKey: string) {
+async function geminiCategoryCheck(posts: any[], groqKey: string) {
   const batch = posts.map(p => ({
     id: p.id,
     title: p.title?.rendered?.replace(/<[^>]+>/g, '').replace(/&#[0-9]+;/g, '').trim() || '',
@@ -248,10 +248,10 @@ Return ONLY a valid JSON array, no markdown, no commentary before or after:
 [{"id":1,"current_category":"Politics","correct_category":"World","needs_change":true,"reason":"max 5 words"}]`
 
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+    'https://api.groq.com/openai/v1/chat/completions',
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: { temperature: 0.2, maxOutputTokens: 8192 },
@@ -259,7 +259,7 @@ Return ONLY a valid JSON array, no markdown, no commentary before or after:
     }
   )
   const data = await res.json()
-  const raw  = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+  const raw  = data.choices?.[0]?.message?.content || ''
   const finishReason = data.candidates?.[0]?.finishReason || ''
   const cleaned = raw.replace(/```json\n?|```/g, '').trim()
   const match = cleaned.match(/\[[\s\S]*\]/)
@@ -272,7 +272,7 @@ Return ONLY a valid JSON array, no markdown, no commentary before or after:
 
 // ── BULK FIX — categorize + tag + SEO rewrite all articles ───
   if (action === 'bulk_fix') {
-    const geminiKey = process.env.GEMINI_API_KEY!
+    const groqKey = process.env.GROQ_API_KEY
     const limit = parseInt(searchParams.get('limit') || '20')
     const offset = parseInt(searchParams.get('offset') || '0')
 
@@ -295,7 +295,7 @@ Return ONLY a valid JSON array, no markdown, no commentary before or after:
     for (let i = 0; i < posts.length; i += BATCH_SIZE) {
       const chunk = posts.slice(i, i + BATCH_SIZE)
       try {
-        const rewrites = await geminiRewrite(chunk, geminiKey)
+        const rewrites = await geminiRewrite(chunk, groqKey)
         allResults.push(...rewrites)
       } catch (e) {
         return NextResponse.json({ error: (e as Error).message, fixed: 0 })
@@ -376,7 +376,7 @@ Return ONLY a valid JSON array, no markdown, no commentary before or after:
 
   // ── RECATEGORIZE — category-only audit & correction ──────────
   if (action === 'recategorize') {
-    const geminiKey = process.env.GEMINI_API_KEY!
+    const groqKey = process.env.GROQ_API_KEY
     const limit = parseInt(searchParams.get('limit') || '20')
     const offset = parseInt(searchParams.get('offset') || '0')
     const dryRun = searchParams.get('dry_run') === 'true'
@@ -408,7 +408,7 @@ Return ONLY a valid JSON array, no markdown, no commentary before or after:
     for (let i = 0; i < postsWithCurrentCat.length; i += BATCH_SIZE) {
       const chunk = postsWithCurrentCat.slice(i, i + BATCH_SIZE)
       try {
-        const checks = await geminiCategoryCheck(chunk, geminiKey)
+        const checks = await geminiCategoryCheck(chunk, groqKey)
         allResults.push(...checks)
       } catch (e) {
         return NextResponse.json({ error: (e as Error).message, checked: 0, partial_results: allResults })

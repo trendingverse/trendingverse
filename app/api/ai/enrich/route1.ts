@@ -18,15 +18,15 @@ function basicFormat(text: string): string {
     .join('\n')
 }
 
-async function formatContentWithAI(text: string, lang: string, geminiKey: string): Promise<string> {
+async function formatContentWithAI(text: string, lang: string, groqKey: string): Promise<string> {
   if (/<[a-z][\s\S]*>/i.test(text)) return text
 
   try {
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+      'https://api.groq.com/openai/v1/chat/completions',
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
         body: JSON.stringify({
           system_instruction: {
             parts: [{ text: 'You are an HTML formatter. Return only valid HTML content. No markdown, no code fences, no explanations.' }]
@@ -52,7 +52,7 @@ ${text}`
       }
     )
     const data = await res.json()
-    const formatted = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+    const formatted = data.choices?.[0]?.message?.content || ''
     const cleaned = formatted
       .replace(/^[\s]*`{3,}[\s]*(?:html)?[\s]*/i, '')
       .replace(/[\s]*`{3,}[\s]*$/i, '')
@@ -129,16 +129,16 @@ Return this exact JSON structure:
 }`
 
   try {
-    const geminiKey = process.env.GEMINI_API_KEY
-    if (!geminiKey) throw new Error('GEMINI_API_KEY not set')
+    const groqKey = process.env.GROQ_API_KEY
+    if (!groqKey) throw new Error('GROQ_API_KEY not set')
 
     // Run SEO metadata generation and content formatting in parallel
     const [seoRes, formattedContent] = await Promise.all([
       fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+        'https://api.groq.com/openai/v1/chat/completions',
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
           body: JSON.stringify({
             system_instruction: {
               parts: [{
@@ -150,11 +150,11 @@ Return this exact JSON structure:
           }),
         }
       ),
-      formatContentWithAI(content, detectedLang, geminiKey),
+      formatContentWithAI(content, detectedLang, groqKey),
     ])
 
     const data = await seoRes.json()
-    const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+    const raw = data.choices?.[0]?.message?.content || ''
 
     const cleaned = raw
       .replace(/^[\s]*`{3,}[\s]*(?:json)?[\s]*/i, '')

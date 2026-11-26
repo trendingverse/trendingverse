@@ -5,10 +5,10 @@ import { createClient as createServiceClient } from '@supabase/supabase-js'
 
 async function callGemini(prompt: string, apiKey: string): Promise<string[]> {
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`,
+    'https://api.groq.com/openai/v1/chat/completions',
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: { temperature: 1, maxOutputTokens: 1024 }
@@ -20,7 +20,7 @@ async function callGemini(prompt: string, apiKey: string): Promise<string[]> {
     throw new Error(err.error?.message || `Gemini error ${res.status}`)
   }
   const data = await res.json()
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+  const text = data.choices?.[0]?.message?.content || ''
   // Parse numbered list or JSON array
   const jsonMatch = text.match(/\[[\s\S]*\]/)
   if (jsonMatch) {
@@ -134,7 +134,7 @@ Return a numbered list only, one headline per line.`
 
   // Fallback to platform key for popular/pro/admin
   if (headlines.length === 0 && canUsePlatformKey) {
-    const platformKey = process.env.GEMINI_API_KEY_2 || process.env.GEMINI_API_KEY
+    const platformKey = process.env.GROQ_API_KEY_2 || process.env.GROQ_API_KEY
     if (platformKey) {
       try {
         headlines = await callGemini(prompt, platformKey)

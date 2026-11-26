@@ -125,13 +125,13 @@ async function getOrCreateCategory(base: string, auth: string, name: string): Pr
 // Determines the correct category from the article's actual content —
 // never just trusts whatever category_name happens to already be set
 // (which is how dozens of articles ended up Uncategorized previously).
-async function determineCategory(title: string, excerpt: string, geminiKey: string): Promise<string> {
+async function determineCategory(title: string, excerpt: string, groqKey: string): Promise<string> {
   try {
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${geminiKey}`,
+      'https://api.groq.com/openai/v1/chat/completions',
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
         body: JSON.stringify({
           contents: [{ parts: [{ text: `Categorize this news article into EXACTLY one of these categories: ${VALID_CATEGORIES.join(', ')}.
 
@@ -144,7 +144,7 @@ Return ONLY the category name, nothing else — no punctuation, no explanation.`
       }
     )
     const data = await res.json()
-    const text = (data.candidates?.[0]?.content?.parts?.[0]?.text || '').trim()
+    const text = (data.choices?.[0]?.message?.content || '').trim()
     const matched = VALID_CATEGORIES.find(c => c.toLowerCase() === text.toLowerCase())
     return matched || 'World'
   } catch {
@@ -195,7 +195,7 @@ export async function POST(req: NextRequest) {
 
   const base = wp_url.replace(/\/$/, '').replace(/^http:\/\//, 'https://')
   const auth = Buffer.from(`${wp_username}:${wp_password}`).toString('base64')
-  const geminiKey = process.env.GEMINI_API_KEY!
+  const groqKey = process.env.GROQ_API_KEY
 
   const admin = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, (process.env.SUPABASE_SERVICE_ROLE_KEY||process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY||'')!)
   const { data: site } = await admin.from('sites').select('id').eq('user_id', user.id).eq('site_url', base).single()
@@ -240,7 +240,7 @@ export async function POST(req: NextRequest) {
 
     // Determine the correct category from the actual content, then
     // auto-create it on WordPress if it doesn't already exist there.
-    const aiCategory = await determineCategory(article.title, article.excerpt || '', geminiKey)
+    const aiCategory = await determineCategory(article.title, article.excerpt || '', groqKey)
     const catId = await getOrCreateCategory(base, auth, aiCategory)
     const categoryIds = catId ? [catId] : []
 

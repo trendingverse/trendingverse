@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Access denied' }, { status: 403 })
   }
 
-  const geminiKey = process.env.GEMINI_API_KEY!
+  const groqKey = process.env.GROQ_API_KEY
 
   // ── SENDER IDENTITY ──────────────────────────────────────────
   // Generic by default — only use a personal name/title if explicitly typed into this specific campaign's form.
@@ -140,9 +140,9 @@ Best regards,
 
   try {
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+      'https://api.groq.com/openai/v1/chat/completions',
       {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: { temperature: 0.3, maxOutputTokens: 4096 },
@@ -150,7 +150,7 @@ Best regards,
       }
     )
     const data = await res.json()
-    const draft = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+    const draft = data.choices?.[0]?.message?.content || ''
     if (!draft) return NextResponse.json({ error: 'Email generation failed' }, { status: 500 })
     return NextResponse.json({ draft, debug: { hasBrief, hasStructured, hasRawBrief, hasPersonalSender, name, title, company, dealType } })
   } catch (e) {

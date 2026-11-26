@@ -25,13 +25,13 @@ async function fetchGNews(country: string, lang: string, apiKey: string) {
   })).filter((a: { title: string }) => a.title && a.title.length > 15)
 }
 
-async function fetchGeminiTrends(regions: string[], geminiKey: string) {
+async function fetchGeminiTrends(regions: string[], groqKey: string) {
   const today = new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${geminiKey}`,
+    'https://api.groq.com/openai/v1/chat/completions',
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
       body: JSON.stringify({
         contents: [{ parts: [{ text: `Today is ${today}. List 15 specific trending news headlines from ${regions.join(', ')} happening RIGHT NOW. Be specific — real names, real events. Mix politics, tech, sports, entertainment, business.
 Return ONLY JSON array:
@@ -44,7 +44,7 @@ Flags: India=🇮🇳 US=🇺🇸 UK=🇬🇧 Global=🌍` }] }],
   )
   if (!res.ok) return []
   const data = await res.json()
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+  const text = data.choices?.[0]?.message?.content || ''
   const match = text.replace(/```json\n?|```/g, '').match(/\[[\s\S]*\]/)
   try { return match ? JSON.parse(match[0]) : [] } catch { return [] }
 }
@@ -64,7 +64,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const region = searchParams.get('region') || 'ALL'
   const gnewsKey = process.env.GNEWS_API_KEY || ''
-  const geminiKey = process.env.GEMINI_API_KEY_2 || process.env.GEMINI_API_KEY || profile?.byoak_gemini_key || ''
+  const groqKey = process.env.GROQ_API_KEY
 
   const regionsToFetch = region === 'ALL'
     ? ['India', 'United States', 'United Kingdom', 'Global']
@@ -86,9 +86,9 @@ export async function GET(req: NextRequest) {
   }
 
   // Gemini fallback or supplement
-  if (geminiKey) {
+  if (groqKey) {
     try {
-      const geminiTrends = await fetchGeminiTrends(regionsToFetch, geminiKey)
+      const geminiTrends = await fetchGeminiTrends(regionsToFetch, groqKey)
       for (const t of geminiTrends) {
         if (t.title) {
           const info = REGIONS_MAP[t.region] || { label: t.region || 'Global', flag: t.flag || '🌍' }
@@ -107,7 +107,7 @@ export async function GET(req: NextRequest) {
     return true
   })
 
-  if (unique.length === 0 && !geminiKey) {
+  if (unique.length === 0 && !groqKey) {
     return NextResponse.json({ error: 'FREE_PLAN_NO_KEY', trends: [], total: 0 })
   }
 

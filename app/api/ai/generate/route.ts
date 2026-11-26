@@ -24,10 +24,10 @@ function buildPrompt(subject: string, category: string, keywords: string[], lang
 
 async function generateWithGemini(prompt: string, apiKey: string): Promise<Record<string, unknown>> {
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+    'https://api.groq.com/openai/v1/chat/completions',
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {
@@ -176,8 +176,8 @@ export async function POST(req: NextRequest) {
   const userOpenAIKey = profile?.byoak_openai_key
   const userClaudeKey = profile?.byoak_claude_key
   const hasOwnKey = !!(userGeminiKey || userOpenAIKey || userClaudeKey)
-  const platformKey = process.env.GEMINI_API_KEY
-  const platformKey2 = process.env.GEMINI_API_KEY_2
+  const platformKey = process.env.GROQ_API_KEY
+  const platformKey2 = process.env.GROQ_API_KEY_2
   const canUsePlatformKey = plan === 'popular' || plan === 'pro' || plan === 'byoak' || isAdmin
   if (plan === 'free' && !hasOwnKey && !isAdmin) {
     return NextResponse.json({

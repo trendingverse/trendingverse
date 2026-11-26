@@ -6,10 +6,10 @@ import { createClient as createServiceClient } from '@supabase/supabase-js'
 async function fetchTrends(apiKey: string, region: string) {
   const today = new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`,
+    'https://api.groq.com/openai/v1/chat/completions',
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
       body: JSON.stringify({
         contents: [{
           parts: [{
@@ -28,7 +28,7 @@ Return ONLY valid JSON array:
     throw new Error(err.error?.message || `Gemini error ${res.status}`)
   }
   const data = await res.json()
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+  const text = data.choices?.[0]?.message?.content || ''
   const match = text.replace(/```json\n?|```/g, '').match(/\[[\s\S]*\]/)
   if (!match) throw new Error(`No JSON in response. Raw: ${(text || '').slice(0, 150)}`)
   return JSON.parse(match[0])
@@ -78,7 +78,7 @@ export async function GET(req: NextRequest) {
 
   // Fallback to platform key for popular/pro/admin
   if (topics.length === 0 && canUsePlatformKey) {
-    const platformKey = process.env.GEMINI_API_KEY_2 || process.env.GEMINI_API_KEY
+    const platformKey = process.env.GROQ_API_KEY_2 || process.env.GROQ_API_KEY
     if (platformKey) {
       try {
         topics = await fetchTrends(platformKey, region)

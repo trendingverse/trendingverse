@@ -97,16 +97,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Access denied' }, { status: 403 })
   }
 
-  const geminiKey = process.env.GEMINI_API_KEY!
+  const groqKey = process.env.GROQ_API_KEY
   let summary = campaign_summary || { brand: 'Brand', category: 'General', regions: [] }
 
   // Parse brief
   if (!campaign_summary && brief) {
     try {
       const parseRes = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+        'https://api.groq.com/openai/v1/chat/completions',
         {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
           body: JSON.stringify({
             contents: [{ parts: [{ text: `Extract campaign details from this brief. May be free text, bullets, or table format.
 
@@ -186,9 +186,9 @@ Return ONLY a JSON array, no markdown:
 
   try {
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+      'https://api.groq.com/openai/v1/chat/completions',
       {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: { temperature: 0.2, maxOutputTokens: 8192 },
@@ -197,9 +197,9 @@ Return ONLY a JSON array, no markdown:
     )
 
     const data = await res.json()
-    if (data.error) return NextResponse.json({ error: 'Gemini error: ' + data.error.message }, { status: 500 })
+    if (data.error) return NextResponse.json({ error: 'Groq error: ' + data.error.message }, { status: 500 })
 
-    const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+    const raw = data.choices?.[0]?.message?.content || ''
     let suggestions = null
 
     try { suggestions = JSON.parse(raw.trim()) } catch { /* try next */ }

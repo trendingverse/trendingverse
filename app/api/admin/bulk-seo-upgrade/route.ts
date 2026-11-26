@@ -48,7 +48,7 @@ function ensureExcerpt(excerpt: string, content: string, focusKeyword: string): 
 }
 
 // ── AI FIX — generate H2 subheadings + insertion points (cheap) ──
-async function generateH2s(content: string, title: string, focusKeyword: string, geminiKey: string): Promise<string> {
+async function generateH2s(content: string, title: string, focusKeyword: string, groqKey: string): Promise<string> {
   // Only run if content has fewer than 2 H2s
   const existingH2s = (content.match(/<h2/gi) || []).length
   if (existingH2s >= 2) return content
@@ -60,10 +60,10 @@ async function generateH2s(content: string, title: string, focusKeyword: string,
 
   try {
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${geminiKey}`,
+      'https://api.groq.com/openai/v1/chat/completions',
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
         body: JSON.stringify({
           contents: [{ parts: [{ text: `Generate 3 short H2 subheadings for this article. Each should describe a section of the content. Include the keyword "${focusKeyword}" in at least one. Keep each under 8 words.
 
@@ -76,7 +76,7 @@ Return ONLY JSON: {"subheadings":["...","...","..."]}` }] }],
       }
     )
     const data = await res.json()
-    const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+    const raw = data.choices?.[0]?.message?.content || ''
     const match = raw.replace(/```json\n?|```/g, '').trim().match(/\{[\s\S]*\}/)
     if (!match) return content
     const { subheadings } = JSON.parse(match[0])
@@ -111,7 +111,7 @@ export async function GET(req: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     (process.env.SUPABASE_SERVICE_ROLE_KEY||process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY||'')!
   )
-  const geminiKey = process.env.GEMINI_API_KEY!
+  const groqKey = process.env.GROQ_API_KEY
 
   const { searchParams } = new URL(req.url)
   const limit = parseInt(searchParams.get('limit') || '15')  // small batches to avoid timeout
@@ -145,7 +145,7 @@ export async function GET(req: NextRequest) {
 
     // Apply AI H2 fix (cheap, optional)
     if (useAiH2) {
-      content = await generateH2s(content, a.title || '', fk, geminiKey)
+      content = await generateH2s(content, a.title || '', fk, groqKey)
     }
 
     // Re-score

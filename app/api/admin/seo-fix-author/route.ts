@@ -43,7 +43,7 @@ async function getOrCreateCategory(name: string, cache: Record<string, number>):
   return null
 }
 
-async function geminiCategorize(posts: any[], geminiKey: string) {
+async function geminiCategorize(posts: any[], groqKey: string) {
   const batch = posts.map(p => ({
     id: p.id,
     title: p.title?.rendered?.replace(/<[^>]+>/g, '').replace(/&#[0-9]+;/g, '').trim() || '',
@@ -76,10 +76,10 @@ Return ONLY valid JSON array:
 [{"id":123,"category":"Technology"}]`
 
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+    'https://api.groq.com/openai/v1/chat/completions',
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: { temperature: 0.1, maxOutputTokens: 4096 },
@@ -87,7 +87,7 @@ Return ONLY valid JSON array:
     }
   )
   const data = await res.json()
-  const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+  const raw = data.choices?.[0]?.message?.content || ''
   const cleaned = raw.replace(/```json\n?|```/g, '').trim()
   const match = cleaned.match(/\[[\s\S]*\]/)
   if (!match) throw new Error('No JSON in response: ' + raw.slice(0, 200))
@@ -155,7 +155,7 @@ export async function GET(req: NextRequest) {
 
   // ── RECATEGORIZE ──────────────────────────────────────────────
   if (action === 'recategorize') {
-    const geminiKey = process.env.GEMINI_API_KEY!
+    const groqKey = process.env.GROQ_API_KEY
     const wpPage  = Math.floor(offset / 100) + 1
     const wpOff2  = offset % 100
     const raw     = await wpGet(`/posts?per_page=100&page=${wpPage}&status=publish&_fields=id,title,excerpt&orderby=date&order=desc`)
@@ -163,7 +163,7 @@ export async function GET(req: NextRequest) {
     const posts = raw.slice(wpOff2, wpOff2 + limit)
     if (!posts.length) return NextResponse.json({ updated: 0, total: 0 })
 
-    const categorized = await geminiCategorize(posts, geminiKey)
+    const categorized = await geminiCategorize(posts, groqKey)
     const cache: Record<string, number> = {}
 
     // Load existing categories

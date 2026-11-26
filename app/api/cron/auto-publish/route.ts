@@ -26,13 +26,13 @@ const LANGUAGES: Record<string, string> = {
 // Determines the correct category from the actual generated content —
 // never trust an upstream guess blindly. Falls back to 'World' (never
 // leaves a post Uncategorized) if the AI call fails for any reason.
-async function determineCategory(title: string, excerpt: string, geminiKey: string): Promise<string> {
+async function determineCategory(title: string, excerpt: string, groqKey: string): Promise<string> {
   try {
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${geminiKey}`,
+      'https://api.groq.com/openai/v1/chat/completions',
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
         body: JSON.stringify({
           contents: [{ parts: [{ text: `Categorize this news article into EXACTLY one of these categories: ${VALID_CATEGORIES.join(', ')}.
 
@@ -45,7 +45,7 @@ Return ONLY the category name, nothing else — no punctuation, no explanation.`
       }
     )
     const data = await res.json()
-    const text = (data.candidates?.[0]?.content?.parts?.[0]?.text || '').trim()
+    const text = (data.choices?.[0]?.message?.content || '').trim()
     const matched = VALID_CATEGORIES.find(c => c.toLowerCase() === text.toLowerCase())
     return matched || 'World'
   } catch {
@@ -77,7 +77,7 @@ function slugify(text: string): string {
                             // slug stored in Supabase.
 }
 
-async function getTrendingTopic(geminiKey: string, newsApiKey?: string, region = 'India') {
+async function getTrendingTopic(groqKey: string, newsApiKey?: string, region = 'India') {
   if (newsApiKey) {
     try {
       let url = ''
@@ -106,10 +106,10 @@ async function getTrendingTopic(geminiKey: string, newsApiKey?: string, region =
   const today = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })
   try {
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${geminiKey}`,
+      'https://api.groq.com/openai/v1/chat/completions',
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
         body: JSON.stringify({
           contents: [{ parts: [{ text: `Today is ${today}. What is ONE specific breaking or trending news topic in ${region} right now? Pick from: politics, technology, sports, entertainment, business, health. Return ONLY JSON: {"title":"Specific news headline","category":"Technology","keywords":["kw1","kw2","kw3","kw4","kw5"]}` }] }],
           generationConfig: { temperature: 1 }
@@ -118,7 +118,7 @@ async function getTrendingTopic(geminiKey: string, newsApiKey?: string, region =
     )
     if (res.ok) {
       const data = await res.json()
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+      const text = data.choices?.[0]?.message?.content || ''
       const match = text.match(/\{[\s\S]*\}/)
       if (match) {
         const parsed = JSON.parse(match[0])
@@ -139,16 +139,16 @@ async function getTrendingTopic(geminiKey: string, newsApiKey?: string, region =
 // ── REPLACEMENT for generateArticle() in your cron route ─────────
 // Uses Gemini JSON mode + higher token limit + resilient parsing to
 // fix the "No JSON in response" / "Expected ',' or '}'" failures.
-async function generateArticle(title: string, keywords: string[], category: string, geminiKey: string, language = 'en') {
+async function generateArticle(title: string, keywords: string[], category: string, groqKey: string, language = 'en') {
   const langName = LANGUAGES[language] || 'English'
   const prompt = buildArticlePrompt({ title, category, keywords, language: langName })
 
   async function callGemini(): Promise<any> {
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+      'https://api.groq.com/openai/v1/chat/completions',
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: {
@@ -161,24 +161,14 @@ async function generateArticle(title: string, keywords: string[], category: stri
       }
     )
     const data = await res.json()
-    if (data.error) throw new Error('Gemini error: ' + data.error.message)
+    if (data.error) throw new Error('Groq error: ' + data.error.message)
 
-    const finishReason = data.candidates?.[0]?.finishReason
-    const parts = data.candidates?.[0]?.content?.parts || []
-    const text = parts
-      .filter((p: { text?: string }) => p.text)
-      .map((p: { text: string }) => p.text)
-      .join('')
+    const text = (data.choices?.[0]?.message?.content || '')
       .replace(/```json\n?|```/g, '')
       .trim()
 
     if (!text) {
-      throw new Error(`Gemini returned empty response${finishReason ? ` (finishReason: ${finishReason})` : ''}`)
-    }
-    // If the model stopped because it hit the token cap, the JSON is
-    // almost certainly truncated — flag it clearly rather than a cryptic parse error.
-    if (finishReason === 'MAX_TOKENS') {
-      throw new Error('Gemini hit MAX_TOKENS — article too long, JSON truncated. Consider raising maxOutputTokens or shortening the prompt.')
+      throw new Error('Groq returned empty response')
     }
 
     // Resilient parse: JSON mode returns clean JSON, so a direct parse
@@ -228,13 +218,13 @@ async function generateArticle(title: string, keywords: string[], category: stri
 // stories instead, to avoid any risk of looking like a fabricated photo
 // of a real event/person.
 
-async function buildSafeImagePrompt(title: string, excerpt: string, category: string, geminiKey: string): Promise<string> {
+async function buildSafeImagePrompt(title: string, excerpt: string, category: string, groqKey: string): Promise<string> {
   try {
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${geminiKey}`,
+      'https://api.groq.com/openai/v1/chat/completions',
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
         body: JSON.stringify({
           contents: [{ parts: [{ text: `You are writing an image generation prompt for a news article.
 
@@ -256,40 +246,17 @@ Return ONLY the visual description, nothing else — no preamble.` }] }],
       }
     )
     const data = await res.json()
-    const text = (data.candidates?.[0]?.content?.parts?.[0]?.text || '').trim()
+    const text = (data.choices?.[0]?.message?.content || '').trim()
     if (text) return text
   } catch { /* fall through to generic fallback */ }
 
   return `A photorealistic editorial photograph representing the general theme of a ${category} news story. Natural lighting, documentary photography style, no people's faces visible up close, no text or logos.`
 }
 
-async function generateAIImage(prompt: string, geminiKey: string): Promise<{ buffer: Buffer; mimeType: string } | null> {
-  try {
-    const fullPrompt = `${prompt}
-
-Style requirements: photorealistic, natural lighting, professional editorial news photography, documentary style, 16:9 widescreen composition, no text overlays, no logos, no watermarks, no illustrated or cartoon elements, no specific identifiable real people's faces.`
-
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${geminiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: fullPrompt }] }],
-          generationConfig: { responseModalities: ['IMAGE'], imageConfig: { aspectRatio: '16:9' } },
-        }),
-      }
-    )
-    const data = await res.json()
-    if (data.error) return null
-    const parts = data.candidates?.[0]?.content?.parts || []
-    const imagePart = parts.find((p: any) => p.inlineData?.data)
-    if (!imagePart) return null
-    const buffer = Buffer.from(imagePart.inlineData.data, 'base64')
-    return { buffer, mimeType: imagePart.inlineData.mimeType || 'image/png' }
-  } catch {
-    return null
-  }
+// AI image generation (Gemini-specific feature) — not available on Groq.
+// Falls back to Pexels images automatically.
+async function generateAIImage(_prompt: string, _key: string): Promise<{ buffer: Buffer; mimeType: string } | null> {
+  return null
 }
 
 // Compress to a lightweight web-friendly JPEG — sharp is not available
@@ -301,12 +268,12 @@ async function compressImage(buffer: Buffer): Promise<Buffer> {
 
 async function generateAndUploadAIImage(
   title: string, excerpt: string, category: string, slug: string,
-  wpBase: string, auth: string, geminiKey: string, log: string[]
+  wpBase: string, auth: string, groqKey: string, log: string[]
 ): Promise<number | null> {
   try {
     log.push('Generating original AI image...')
-    const safePrompt = await buildSafeImagePrompt(title, excerpt, category, geminiKey)
-    const aiImage = await generateAIImage(safePrompt, geminiKey)
+    const safePrompt = await buildSafeImagePrompt(title, excerpt, category, groqKey)
+    const aiImage = await generateAIImage(safePrompt, groqKey)
     if (!aiImage) { log.push('AI image generation failed — continuing without image'); return null }
 
     const compressed = await compressImage(aiImage.buffer)
@@ -383,7 +350,7 @@ async function fetchCurrencyRate(base: string, target: string): Promise<number |
 
 async function generateCurrencyContent(
   base: string, target: string, rate: number, prevRate: number, changePct: number,
-  langKey: string, geminiKey: string
+  langKey: string, groqKey: string
 ): Promise<{ title?: string; seo_title?: string; meta_description?: string; focus_keyword?: string; content?: string; __error?: string }> {
   const langName = CURRENCY_LANGUAGES[langKey] || 'English'
   const direction = changePct > 0.05 ? 'risen' : changePct < -0.05 ? 'fallen' : 'remained largely stable'
@@ -411,9 +378,9 @@ Return ONLY valid JSON, no markdown:
 
   try {
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+      'https://api.groq.com/openai/v1/chat/completions',
       {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: { temperature: 0.4, maxOutputTokens: 4096 },
@@ -424,7 +391,7 @@ Return ONLY valid JSON, no markdown:
     if (data.error) {
       return { __error: `Gemini API error (${data.error.code || res.status}): ${data.error.message || JSON.stringify(data.error).slice(0, 150)}` }
     }
-    const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+    const raw = data.choices?.[0]?.message?.content || ''
     if (!raw) {
       const finishReason = data.candidates?.[0]?.finishReason
       return { __error: `Empty response from Gemini${finishReason ? ` (finishReason: ${finishReason})` : ''}` }
@@ -443,11 +410,11 @@ Return ONLY valid JSON, no markdown:
 // Retry wrapper — transient rate-limit/network errors often succeed on retry
 async function generateCurrencyContentWithRetry(
   base: string, target: string, rate: number, prevRate: number, changePct: number,
-  langKey: string, geminiKey: string, maxRetries = 2
+  langKey: string, groqKey: string, maxRetries = 2
 ): Promise<{ title?: string; seo_title?: string; meta_description?: string; focus_keyword?: string; content?: string; __error?: string }> {
   let lastError = 'Unknown error'
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    const result = await generateCurrencyContent(base, target, rate, prevRate, changePct, langKey, geminiKey)
+    const result = await generateCurrencyContent(base, target, rate, prevRate, changePct, langKey, groqKey)
     if (result && !result.__error && result.content) return result
     lastError = result.__error || 'AI returned no content'
     if (attempt < maxRetries) {
@@ -530,7 +497,7 @@ async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T)
 }
 
 async function runCurrencyRatesUpdate(
-  supabase: any, geminiKey: string, wpBase: string, auth: string
+  supabase: any, groqKey: string, wpBase: string, auth: string
 ): Promise<{ updated: number; failed: number; log: string[] }> {
   const log: string[] = []
   const today = new Date().toISOString().split('T')[0]
@@ -591,7 +558,7 @@ async function runCurrencyRatesUpdate(
       .eq('base_currency', base).eq('target_currency', target).eq('language', langKey)
       .single()
 
-    const ai = await generateCurrencyContentWithRetry(base, target, rate, prevRate, changePct, langKey, geminiKey)
+    const ai = await generateCurrencyContentWithRetry(base, target, rate, prevRate, changePct, langKey, groqKey)
     if (!ai || !ai.content) {
       return { ok: false, base, langKey, error: ai?.__error || 'AI content generation failed (unknown reason)' }
     }
@@ -626,14 +593,14 @@ async function runCurrencyRatesUpdate(
 }
 
 async function runArticlePublish(
-  supabase: any, geminiKey: string, pexelsKey: string | undefined, newsApiKey: string | undefined,
+  supabase: any, groqKey: string, pexelsKey: string | undefined, newsApiKey: string | undefined,
   wpBase: string, auth: string, wpUrl: string, adminUserId: string | null, langParam: string, regionParam: string
 ): Promise<{ result: any; log: string[] }> {
   const log: string[] = []
   try {
     log.push(`Starting auto-publish | lang: ${langParam} | region: ${regionParam}`)
     log.push('Fetching trending topic...')
-    const trend = await getTrendingTopic(geminiKey, newsApiKey, regionParam)
+    const trend = await getTrendingTopic(groqKey, newsApiKey, regionParam)
     log.push(`Topic: ${trend.title}`)
 
     const slug = slugify(trend.title)
@@ -645,13 +612,13 @@ async function runArticlePublish(
     }
 
     log.push(`Generating article in ${LANGUAGES[langParam] || 'English'}...`)
-    const article = await generateArticle(trend.title, trend.keywords, trend.category, geminiKey, langParam)
+    const article = await generateArticle(trend.title, trend.keywords, trend.category, groqKey, langParam)
     log.push(`Article: ${article.title}`)
 
     // Run AI image generation and category determination in parallel — independent of each other
     const [wpMediaId, aiCategory] = await Promise.all([
-      generateAndUploadAIImage(article.title, article.excerpt || '', trend.category || 'News', slug, wpBase, auth, geminiKey, log),
-      determineCategory(article.title, article.excerpt || '', geminiKey),
+      generateAndUploadAIImage(article.title, article.excerpt || '', trend.category || 'News', slug, wpBase, auth, groqKey, log),
+      determineCategory(article.title, article.excerpt || '', groqKey),
     ])
 
     const catId = await getOrCreateCategory(wpBase, auth, aiCategory)
@@ -820,7 +787,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const geminiKey = process.env.GEMINI_CRON_KEY || process.env.GEMINI_API_KEY_2 || process.env.GEMINI_API_KEY
+  const groqKey = process.env.GROQ_API_KEY
   const pexelsKey = process.env.PEXELS_API_KEY
   const newsApiKey = process.env.NEWS_API_KEY
   const wpUrl = process.env.WP_URL
@@ -844,7 +811,7 @@ export async function GET(req: NextRequest) {
   // mode=all — everything (original behaviour)
   const mode = url.searchParams.get('mode') || 'article'
 
-  if (!geminiKey) return NextResponse.json({ error: 'GEMINI_API_KEY not set' }, { status: 500 })
+  if (!groqKey) return NextResponse.json({ error: 'GROQ_API_KEY not set' }, { status: 500 })
   if (!wpUrl || !wpUsername || !wpPassword) return NextResponse.json({ error: 'WordPress credentials not set' }, { status: 500 })
 
   const wpBase = wpUrl.replace(/\/$/, '')
@@ -855,10 +822,10 @@ export async function GET(req: NextRequest) {
 
   const [articleOutcome, currencyOutcome, pacingOutcome] = await Promise.all([
     runArticle
-      ? runArticlePublish(supabase, geminiKey, pexelsKey, newsApiKey, wpBase, auth, wpUrl, adminUserId, langParam, regionParam)
+      ? runArticlePublish(supabase, groqKey, pexelsKey, newsApiKey, wpBase, auth, wpUrl, adminUserId, langParam, regionParam)
       : Promise.resolve({ result: { skipped: true }, log: [] }),
     runCurrency
-      ? runCurrencyRatesUpdate(supabase, geminiKey, wpBase, auth).catch((e) => ({ updated: 0, failed: 0, log: [`Currency rates error: ${(e as Error).message}`] }))
+      ? runCurrencyRatesUpdate(supabase, groqKey, wpBase, auth).catch((e) => ({ updated: 0, failed: 0, log: [`Currency rates error: ${(e as Error).message}`] }))
       : Promise.resolve({ updated: 0, failed: 0, log: [] }),
     runCurrency
       ? runDirectAdsPacing(supabase).catch((e) => ({ processed: 0, paused: 0, log: [`Direct-ads pacing error: ${(e as Error).message}`] }))

@@ -45,7 +45,7 @@ function pcmToWavDataUri(pcmBase64: string, sampleRate = 24000, channels = 1, bi
 }
 
 // ── Generate the scene-by-scene script ────────────────────────────
-async function generateScript(title: string, content: string, geminiKey: string) {
+async function generateScript(title: string, content: string, groqKey: string) {
   const prompt = `You are creating a short video script based on this news article, for YouTube and Instagram.
 
 Title: ${title}
@@ -70,10 +70,10 @@ Return ONLY valid JSON, no markdown:
 {"scenes":[{"narration":"...","caption":"...","image_prompt":"..."}]}`
 
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+    'https://api.groq.com/openai/v1/chat/completions',
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: { temperature: 0.5, maxOutputTokens: 4096 },
@@ -84,7 +84,7 @@ Return ONLY valid JSON, no markdown:
   if (data.error) {
     throw new Error(`Gemini API error (${data.error.code || res.status}): ${data.error.message || JSON.stringify(data.error).slice(0, 150)}`)
   }
-  const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+  const raw = data.choices?.[0]?.message?.content || ''
   const finishReason = data.candidates?.[0]?.finishReason || ''
   const cleaned = raw.replace(/```json\n?|```/g, '').trim()
   const match = cleaned.match(/\{[\s\S]*\}/)
@@ -97,7 +97,7 @@ Return ONLY valid JSON, no markdown:
 }
 
 // ── Generate ready-to-paste YouTube + Instagram upload metadata ───
-async function generateUploadMetadata(title: string, content: string, geminiKey: string) {
+async function generateUploadMetadata(title: string, content: string, groqKey: string) {
   const prompt = `You are a YouTube and Instagram growth expert. Based on this news article, generate optimized upload metadata for manually uploading a short video to both platforms.
 
 Title: ${title}
@@ -115,10 +115,10 @@ Return ONLY valid JSON, no markdown:
 
   try {
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+      'https://api.groq.com/openai/v1/chat/completions',
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: { temperature: 0.5, maxOutputTokens: 2048 },
@@ -127,7 +127,7 @@ Return ONLY valid JSON, no markdown:
     )
     const data = await res.json()
     if (data.error) return null
-    const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+    const raw = data.choices?.[0]?.message?.content || ''
     const cleaned = raw.replace(/```json\n?|```/g, '').trim()
     const match = cleaned.match(/\{[\s\S]*\}/)
     if (!match) return null
@@ -138,17 +138,17 @@ Return ONLY valid JSON, no markdown:
 }
 
 // ── Generate one scene's image (Nano Banana), compressed to lightweight JPEG ──
-async function generateSceneImage(prompt: string, geminiKey: string): Promise<string | null> {
+async function generateSceneImage(prompt: string, groqKey: string): Promise<string | null> {
   try {
     const fullPrompt = `${prompt}
 
 Style: photorealistic, natural lighting, professional editorial photography, no text overlays, no logos, no watermarks, no illustrated or cartoon style, no specific identifiable real people's faces.`
 
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${geminiKey}`,
+      'https://api.groq.com/openai/v1/chat/completions',
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
         body: JSON.stringify({
           contents: [{ parts: [{ text: fullPrompt }] }],
           generationConfig: { responseModalities: ['IMAGE'], imageConfig: { aspectRatio: '16:9' } },
@@ -169,13 +169,13 @@ Style: photorealistic, natural lighting, professional editorial photography, no 
 }
 
 // ── Generate one scene's voiceover audio ──────────────────────────
-async function generateSceneAudio(text: string, geminiKey: string, voice: string): Promise<string | null> {
+async function generateSceneAudio(text: string, groqKey: string, voice: string): Promise<string | null> {
   try {
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${geminiKey}`,
+      'https://api.groq.com/openai/v1/chat/completions',
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
         body: JSON.stringify({
           contents: [{ parts: [{ text: `Say in a clear, engaging news-anchor tone: ${text}` }] }],
           generationConfig: {
@@ -208,20 +208,20 @@ export async function POST(req: NextRequest) {
     .from('articles').select('title, excerpt, content').eq('id', article_id).single()
   if (!article) return NextResponse.json({ error: 'Article not found' }, { status: 404 })
 
-  const geminiKey = process.env.GEMINI_API_KEY!
+  const groqKey = process.env.GROQ_API_KEY
   const plainContent = (article.content || article.excerpt || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
 
   try {
     const [scriptScenes, uploadMetadata] = await Promise.all([
-      generateScript(article.title, plainContent, geminiKey),
-      generateUploadMetadata(article.title, plainContent, geminiKey),
+      generateScript(article.title, plainContent, groqKey),
+      generateUploadMetadata(article.title, plainContent, groqKey),
     ])
     if (!scriptScenes.length) return NextResponse.json({ error: 'Script generation returned no scenes' }, { status: 500 })
 
     const sceneResults = await mapWithConcurrency(scriptScenes, 3, async (scene: any) => {
       const [image, audio] = await Promise.all([
-        generateSceneImage(scene.image_prompt, geminiKey),
-        include_voiceover ? generateSceneAudio(scene.narration, geminiKey, voice) : Promise.resolve(null),
+        generateSceneImage(scene.image_prompt, groqKey),
+        include_voiceover ? generateSceneAudio(scene.narration, groqKey, voice) : Promise.resolve(null),
       ])
       return {
         narration: scene.narration,

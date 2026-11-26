@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Content too short to add subheadings' }, { status: 400 })
   }
 
-  const geminiKey = process.env.GEMINI_API_KEY!
+  const groqKey = process.env.GROQ_API_KEY
 
   const prompt = `You are an expert content editor. Analyze this article and suggest H2 subheadings to be inserted between paragraphs.
 
@@ -52,10 +52,10 @@ Return ONLY valid JSON array:
 
   try {
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+      'https://api.groq.com/openai/v1/chat/completions',
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: { temperature: 0.3, maxOutputTokens: 2048 },
@@ -63,7 +63,7 @@ Return ONLY valid JSON array:
       }
     )
     const data = await res.json()
-    const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+    const raw = data.choices?.[0]?.message?.content || ''
     const cleaned = raw.replace(/```json\n?|```/g, '').trim()
     const match = cleaned.match(/\[[\s\S]*\]/)
     if (!match) return NextResponse.json({ error: 'Could not generate subheadings' }, { status: 500 })
