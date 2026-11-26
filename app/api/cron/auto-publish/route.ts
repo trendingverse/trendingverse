@@ -553,8 +553,9 @@ async function runCurrencyRatesUpdate(
     }
   }
 
-  // Step 4 — run AI generation + WordPress push for all tasks, 4 at a time in parallel
-  const taskResults = await mapWithConcurrency(tasks, 4, async (task) => {
+  // Step 4 — run AI generation + WordPress push sequentially to avoid Groq free-tier TPM limit (8k/min)
+  const taskResults = await mapWithConcurrency(tasks, 1, async (task) => {
+    await new Promise(r => setTimeout(r, 5000)) // 5s gap between tasks keeps TPM well under 8k/min
     const { base, target, rate, prevRate, langKey } = task
     const changePct = prevRate > 0 ? ((rate - prevRate) / prevRate) * 100 : 0
     const slug = `${base.toLowerCase()}-${target.toLowerCase()}-exchange-rate-today`
