@@ -141,7 +141,7 @@ Excerpt: ${excerpt}
 
 Return ONLY the category name, nothing else — no punctuation, no explanation.` }],
 temperature: 0.1,
-max_tokens: 20,,
+max_tokens: 20,
         }),
       }
     )

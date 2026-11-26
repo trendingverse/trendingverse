@@ -125,7 +125,7 @@ IMPORTANT:
 - "PO" field = budget_range
 - Never default regions to India unless brief explicitly says India` }],
 temperature: 0.1,
-max_tokens: 1024,,
+max_tokens: 1024,
           }),
         }
       )
@@ -195,7 +195,7 @@ Return ONLY a JSON array, no markdown:
           model: 'llama-3.3-70b-versatile',
 messages: [{ role: 'user', content: prompt }],
 temperature: 0.2,
-max_tokens: 8192,,
+max_tokens: 8192,
         }),
       }
     )

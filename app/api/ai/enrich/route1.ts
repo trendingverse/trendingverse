@@ -45,7 +45,7 @@ Rules:
 Article content:
 ${text}` }],
 temperature: 0.1,
-max_tokens: 4096,,
+max_tokens: 4096,
         }),
       }
     )
@@ -146,7 +146,7 @@ Return this exact JSON structure:
             model: 'llama-3.3-70b-versatile',
 messages: [{ role: 'user', content: prompt }],
 temperature: 0.2,
-max_tokens: 2048,,
+max_tokens: 2048,
           }),
         }
       ),

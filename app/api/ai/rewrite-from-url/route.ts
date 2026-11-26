@@ -109,7 +109,7 @@ The "content" field must be the full rewritten article as plain paragraphs separ
           model: 'llama-3.3-70b-versatile',
 messages: [{ role: 'user', content: prompt }],
 temperature: 0.4,
-max_tokens: 8192,,
+max_tokens: 8192,
         }),
       }
     )

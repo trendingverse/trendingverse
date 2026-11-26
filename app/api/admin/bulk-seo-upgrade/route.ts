@@ -73,7 +73,7 @@ Content: ${plainForAI}
 
 Return ONLY JSON: {"subheadings":["...","...","..."]}` }],
 temperature: 0.3,
-max_tokens: 150,,
+max_tokens: 150,
         }),
       }
     )

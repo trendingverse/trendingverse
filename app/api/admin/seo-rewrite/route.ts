@@ -108,7 +108,7 @@ Return ONLY a valid JSON array:
         model: 'llama-3.3-70b-versatile',
 messages: [{ role: 'user', content: prompt }],
 temperature: 0.3,
-max_tokens: 8192,,
+max_tokens: 8192,
       }),
     }
   )
