@@ -11,7 +11,7 @@ async function fetchTrends(apiKey: string, region: string) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
-        model: 'llama3-70b-8192',
+        model: 'llama-3.1-70b-versatile',
           messages: [{ role: 'user', content: `Today is ${today}. List 6 specific trending news topics RIGHT NOW for ${region}. Be specific — real names, real events happening today.
 Return ONLY valid JSON array:
 [{"title":"Specific trending topic","summary":"one sentence context","category":"Technology","keywords":["kw1","kw2","kw3"]}]` }],

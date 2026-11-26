@@ -65,7 +65,7 @@ async function generateH2s(content: string, title: string, focusKeyword: string,
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
         body: JSON.stringify({
-          model: 'llama3-70b-8192',
+          model: 'llama-3.1-70b-versatile',
 messages: [{ role: 'user', content: `Generate 3 short H2 subheadings for this article. Each should describe a section of the content. Include the keyword "${focusKeyword}" in at least one. Keep each under 8 words.
 
 Title: ${title}
