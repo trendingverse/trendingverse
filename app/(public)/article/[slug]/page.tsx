@@ -45,7 +45,15 @@ export default async function ArticlePage({ params }: Props) {
   if (!article) notFound()
   admin.from('article_views').insert({ article_id: article.id }).then(() => {})
   const { data: affiliates } = await supabase.from('affiliate_links').select('url,trigger_keywords').eq('is_active',true)
-  const content = affiliates?.length ? injectAffiliateLinks(article.content||'', affiliates) : article.content||''
+  // Strip the AI-generated image placeholder (empty src="") that the prompt
+  // injects — it shows as a broken thumbnail. The cover image above the article
+  // is the real hero; we don't need this placeholder in the body.
+  const rawContent = (article.content||'').replace(/<figure>\s*<img[^>]+src=["']["'][^>]*>\s*<\/figure>/gi, '')
+  const content = affiliates?.length ? injectAffiliateLinks(rawContent, affiliates) : rawContent
+
+  // If no cover image, try to pull the first real image from the article body
+  const coverImage = article.cover_image_url ||
+    (rawContent.match(/<img[^>]+src=["']([^"']+)["'][^>]*>/)?.[1] ?? null)
   const { data: related } = await supabase.from('articles').select('id,title,slug,cover_image_url,excerpt,category_name,published_at,reading_time_min,author_name').eq('status','published').eq('category_id',article.category_id||'').neq('id',article.id).limit(3)
   const cat = article.categories as unknown as {name:string;slug:string;color:string}|null
   const tags = (article.article_tags as unknown as {tags:{name:string;slug:string}}[])||[]
@@ -63,7 +71,7 @@ export default async function ArticlePage({ params }: Props) {
               <span>/</span><span className="text-ink-600 line-clamp-1">{article.title}</span>
             </nav>
             {article.is_sponsored && <div className="mb-4 p-3 bg-blue-50 border border-blue-100 rounded-lg text-xs text-blue-700"><strong>Sponsored Content</strong>{article.sponsor_disclosure ? ` — ${article.sponsor_disclosure}` : ''}</div>}
-            {article.cover_image_url && <div className="aspect-[16/9] bg-ink-100 rounded-xl overflow-hidden mb-6"><img src={article.cover_image_url} alt={article.cover_image_alt||article.title} className="w-full h-full object-cover" /></div>}
+            {coverImage && <div className="aspect-[16/9] bg-ink-100 rounded-xl overflow-hidden mb-6"><img src={coverImage} alt={article.cover_image_alt||article.title} className="w-full h-full object-cover" /></div>}
             <div className="flex flex-wrap items-center gap-2 mb-3">
               {cat && <a href={`/${cat.slug}`} className="badge text-white" style={{background:cat.color}}>{cat.name}</a>}
               {article.is_featured && <span className="badge badge-featured">Featured</span>}
