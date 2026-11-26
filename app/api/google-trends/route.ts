@@ -12,6 +12,31 @@ const REGIONS_MAP: Record<string, { label: string; flag: string; gnewsLang: stri
   'Global':         { label: 'Global',        flag: '🌍', gnewsLang: 'en', gnewsCountry: '' },
 }
 
+// Free fallback: Google News RSS (no API key, works on edge)
+async function fetchGoogleNewsRSS(country: string): Promise<{ title: string; description: string; source: string; flag: string; region: string }[]> {
+  const geo = country === 'in' ? 'IN:en' : country === 'us' ? 'US:en' : country === 'gb' ? 'GB:en' : 'US:en'
+  const url = `https://news.google.com/rss?hl=en-IN&gl=${geo.split(':')[0]}&ceid=${geo}`
+  try {
+    const res = await fetch(url, { cache: 'no-store' })
+    if (!res.ok) return []
+    const xml = await res.text()
+    const items = xml.match(/<item>[\s\S]*?<\/item>/g) || []
+    const regionMap: Record<string, { label: string; flag: string }> = {
+      in: { label: 'India', flag: '🇮🇳' },
+      us: { label: 'United States', flag: '🇺🇸' },
+      gb: { label: 'United Kingdom', flag: '🇬🇧' },
+      '': { label: 'Global', flag: '🌍' },
+    }
+    const info = regionMap[country] || { label: 'Global', flag: '🌍' }
+    return items.slice(0, 12).map(item => {
+      const title = (item.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/) || item.match(/<title>(.*?)<\/title>/))?.[1] || ''
+      const desc = (item.match(/<description><!\[CDATA\[(.*?)\]\]><\/description>/) || item.match(/<description>(.*?)<\/description>/))?.[1] || ''
+      const src = (item.match(/<source[^>]*>(.*?)<\/source>/))?.[1] || 'Google News'
+      return { title: title.replace(/ - .*$/, '').trim(), description: desc.replace(/<[^>]+>/g, '').slice(0, 150), source: src, flag: info.flag, region: info.label }
+    }).filter(a => a.title && a.title.length > 10)
+  } catch { return [] }
+}
+
 async function fetchGNews(country: string, lang: string, apiKey: string) {
   const countryParam = country ? `&country=${country}` : ''
   const url = `https://gnews.io/api/v4/top-headlines?lang=${lang}${countryParam}&max=10&apikey=${apiKey}`
@@ -87,7 +112,20 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // Gemini fallback or supplement
+  // Google News RSS fallback (free, no API key needed)
+  if (allTrends.length === 0) {
+    for (const r of regionsToFetch) {
+      const info = REGIONS_MAP[r] || { label: r, flag: '🌍', gnewsLang: 'en', gnewsCountry: '' }
+      try {
+        const articles = await fetchGoogleNewsRSS(info.gnewsCountry)
+        for (const a of articles) {
+          allTrends.push({ title: a.title, description: a.description, category: 'News', region: a.region, flag: a.flag, source: a.source })
+        }
+      } catch { /* continue */ }
+    }
+  }
+
+  // Groq supplement (AI-generated trends)
   if (groqKey) {
     try {
       const geminiTrends = await fetchGeminiTrends(regionsToFetch, groqKey)
