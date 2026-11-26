@@ -1,10 +1,34 @@
 /**
- * TrendingVerse Audience Tracker v1.3
+ * TrendingVerse Audience Tracker v1.4
  * Tracks: pageviews, geo, device, interests, scroll depth
  * Email capture: Google One Tap + popup (12s / 60% scroll / exit intent)
  */
 (function () {
   'use strict';
+
+  // ── Emergency responsive ad fix ──────────────────────────────────
+  // Prevents 728px ad tags from overflowing the viewport on mobile and
+  // cropping page content. Applies even before plugin v2.1.0 is active.
+  (function injectAdCSS() {
+    if (document.getElementById('tv-ad-fix-css')) return;
+    var s = document.createElement('style');
+    s.id = 'tv-ad-fix-css';
+    s.textContent =
+      /* Force ads inside ANY wrapper to be viewport-safe */
+      'ins.adsbygoogle{max-width:100%!important;width:100%!important;box-sizing:border-box!important;}' +
+      /* tv-ad-wrap: grey box + responsive overrides */
+      '.tv-ad-wrap{background:#f2f2f2!important;border-radius:4px;padding:8px 4px 4px;margin:20px auto;clear:both;text-align:center;max-width:100%;overflow:hidden;box-sizing:border-box;}' +
+      '.tv-ad-label,.tv-ad-wrap>span:first-child{display:block!important;font-size:9px!important;line-height:1!important;color:#999!important;letter-spacing:.5px!important;text-transform:uppercase!important;font-family:sans-serif!important;margin-bottom:4px!important;}' +
+      '.tv-ad-wrap ins,.tv-ad-wrap iframe,.tv-ad-wrap div[id^="google_ads"]{max-width:100%!important;width:100%!important;box-sizing:border-box!important;}' +
+      /* Sticky anchor: full-width, no overflow */
+      '.tv-anchor-inner{position:relative;width:100%;background:#f2f2f2;box-shadow:0 -2px 10px rgba(0,0,0,.18);box-sizing:border-box;text-align:center;overflow:hidden;}' +
+      '.tv-anchor-inner ins,.tv-anchor-inner ins.adsbygoogle{display:block!important;width:100%!important;max-width:100%!important;box-sizing:border-box!important;}' +
+      /* Prevent any stray wide element from breaking page layout */
+      'body{overflow-x:hidden!important;max-width:100vw;}';
+    var head = document.head || document.getElementsByTagName('head')[0];
+    if (head) head.insertBefore(s, head.firstChild);
+  })();
+  // ─────────────────────────────────────────────────────────────────
 
   const CMS  = 'https://trendingverse.vercel.app';
   const SITE = window.TV_SITE_URL || window.location.origin;
