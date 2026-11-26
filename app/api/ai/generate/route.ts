@@ -29,7 +29,7 @@ async function generateWithGemini(prompt: string, apiKey: string): Promise<Recor
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
-        model: 'gemma2-9b-it',
+        model: 'openai/gpt-oss-120b',
           messages: [{ role: 'user', content: prompt }],
           temperature: 0.7,
           max_tokens: 8192,

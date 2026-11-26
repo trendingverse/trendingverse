@@ -31,7 +31,7 @@ async function formatContentWithAI(text: string, lang: string, groqKey: string):
           system_instruction: {
             parts: [{ text: 'You are an HTML formatter. Return only valid HTML content. No markdown, no code fences, no explanations.' }]
           },
-          model: 'gemma2-9b-it',
+          model: 'openai/gpt-oss-120b',
 messages: [{ role: 'user', content: `Format this ${lang} article as clean WordPress-ready HTML.
 
 Rules:
@@ -143,7 +143,7 @@ Return this exact JSON structure:
                 text: `You are a JSON-only API. Always respond with valid JSON and nothing else. Never use markdown code fences. The article is in ${detectedLang} — ALL text fields in your response must be in ${detectedLang}. Never translate to English unless the article is in English.`
               }]
             },
-            model: 'gemma2-9b-it',
+            model: 'openai/gpt-oss-120b',
 messages: [{ role: 'user', content: prompt }],
 temperature: 0.2,
 max_tokens: 2048,

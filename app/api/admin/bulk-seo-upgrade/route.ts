@@ -65,7 +65,7 @@ async function generateH2s(content: string, title: string, focusKeyword: string,
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
         body: JSON.stringify({
-          model: 'gemma2-9b-it',
+          model: 'openai/gpt-oss-120b',
 messages: [{ role: 'user', content: `Generate 3 short H2 subheadings for this article. Each should describe a section of the content. Include the keyword "${focusKeyword}" in at least one. Keep each under 8 words.
 
 Title: ${title}
