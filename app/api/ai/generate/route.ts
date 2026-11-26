@@ -45,25 +45,6 @@ async function generateWithGemini(prompt: string, apiKey: string): Promise<Recor
   return JSON.parse(clean)
 }
 
-async function generateWithGroq(prompt: string, apiKey: string): Promise<Record<string, unknown>> {
-  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({
-      model: 'llama-3.3-70b-versatile',
-      messages: [{ role: 'user', content: prompt }],
-      temperature: 0.7,
-      max_tokens: 8192,
-      response_format: { type: 'json_object' },
-    })
-  })
-  if (!res.ok) {
-    const err = await res.json()
-    throw new Error(err.error?.message || `Groq error ${res.status}`)
-  }
-  const data = await res.json()
-  return JSON.parse(data.choices?.[0]?.message?.content || '{}')
-}
 
 async function generateWithOpenAI(prompt: string, apiKey: string): Promise<Record<string, unknown>> {
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -193,8 +174,6 @@ export async function POST(req: NextRequest) {
   const userOpenAIKey = profile?.byoak_openai_key
   const userClaudeKey = profile?.byoak_claude_key
   const hasOwnKey = !!(userGeminiKey || userOpenAIKey || userClaudeKey)
-  const platformKey = process.env.GROQ_API_KEY
-  const platformKey2 = process.env.GROQ_API_KEY_2
   const canUsePlatformKey = plan === 'popular' || plan === 'pro' || plan === 'byoak' || isAdmin
   if (plan === 'free' && !hasOwnKey && !isAdmin) {
     return NextResponse.json({
@@ -232,21 +211,11 @@ export async function POST(req: NextRequest) {
     }
   }
   if (!article && canUsePlatformKey) {
-    // Try platform Gemini key first, then Groq fallback
     const envGeminiKey = process.env.GEMINI_API_KEY
-    const groqKey = platformKey2 || platformKey
     if (envGeminiKey) {
       try {
         modelUsed = 'Gemini 2.0 Flash'
         article = await generateWithGemini(prompt, envGeminiKey)
-      } catch (e) {
-        lastError = (e as Error).message
-      }
-    }
-    if (!article && groqKey) {
-      try {
-        modelUsed = 'Llama 3.3 70B'
-        article = await generateWithGroq(prompt, groqKey)
       } catch (e) {
         lastError = (e as Error).message
       }

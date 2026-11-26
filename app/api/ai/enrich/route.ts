@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
   const { title, content, category } = await req.json()
   if (!title || !content) return NextResponse.json({ error: 'title and content are required' }, { status: 400 })
 
-  const groqKey = process.env.GROQ_API_KEY
+  const geminiEnvKey = process.env.GEMINI_API_KEY
   const wordCount = content.replace(/<[^>]+>/g, ' ').split(/\s+/).filter(Boolean).length
 
   // Use flash-lite for metadata generation — it's a structured extraction task,
@@ -48,43 +48,24 @@ Return ONLY valid JSON:
 }`
 
   try {
-    let raw = ''
-    const geminiKey = process.env.GEMINI_API_KEY
+    const aiKey = geminiEnvKey
+    if (!aiKey) throw new Error('No AI key configured for enrich')
 
-    if (groqKey) {
-      const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${aiKey}`,
+      {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile',
-          messages: [{ role: 'user', content: prompt }],
-          temperature: 0.2,
-          max_tokens: 1024,
-          response_format: { type: 'json_object' },
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.2, maxOutputTokens: 1024 },
         }),
-      })
-      const data = await res.json()
-      if (data.error) throw new Error(data.error.message)
-      raw = data.choices?.[0]?.message?.content || ''
-    } else if (geminiKey) {
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { temperature: 0.2, maxOutputTokens: 1024 },
-          }),
-        }
-      )
-      const data = await res.json()
-      if (data.error) throw new Error(data.error.message)
-      const parts = data.candidates?.[0]?.content?.parts || []
-      raw = parts.filter((p: { text?: string }) => p.text).map((p: { text: string }) => p.text).join('')
-    } else {
-      throw new Error('No AI key configured for enrich')
-    }
+      }
+    )
+    const data = await res.json()
+    if (data.error) throw new Error(data.error.message)
+    const parts = data.candidates?.[0]?.content?.parts || []
+    const raw = parts.filter((p: { text?: string }) => p.text).map((p: { text: string }) => p.text).join('')
 
     const cleaned = raw.replace(/```json\n?|```/g, '').trim()
     const match = cleaned.match(/\{[\s\S]*\}/)
