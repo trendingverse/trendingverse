@@ -331,27 +331,56 @@ Return ONLY the visual description, nothing else — no preamble.` }] }],
 }
 
 // Fetch a relevant image from Pexels (free, 1200px+ for Google Discover)
-async function generateAIImage(_prompt: string, _key: string, pexelsKey?: string, keywords?: string[]): Promise<{ buffer: Buffer; mimeType: string } | null> {
+// usedIds: photo IDs already used in this cron run — skip them to prevent duplicate images
+async function generateAIImage(_prompt: string, _key: string, pexelsKey?: string, keywords?: string[], category?: string, usedIds: Set<number> = new Set()): Promise<{ buffer: Buffer; mimeType: string; photoId: number } | null> {
   if (!pexelsKey || !keywords?.length) return null
   try {
-    const query = keywords.slice(0, 3).join(' ')
+    // Build a visually distinctive query: use category + ONE strong keyword rather than pasting all keywords
+    // This avoids "newspaper" or "chart" images dominating business topics
+    const categoryVisuals: Record<string, string> = {
+      Business: 'office cityscape finance',
+      Technology: 'technology digital innovation',
+      Politics: 'government parliament flag',
+      Health: 'hospital healthcare medical',
+      Sports: 'stadium sports crowd',
+      Entertainment: 'entertainment stage performance',
+      Education: 'university campus students',
+      Lifestyle: 'lifestyle city people',
+      Environment: 'nature environment landscape',
+      World: 'world global city aerial',
+    }
+    const catQuery = categoryVisuals[category || ''] || ''
+    const topKw = keywords.find(k => k.length > 5 && !['report', 'trend', 'update', 'latest', 'news'].includes(k.toLowerCase())) || keywords[0]
+    const query = catQuery ? `${topKw} ${catQuery}` : keywords.slice(0, 2).join(' ')
+
+    // Randomise Pexels page (1-4) to avoid always getting the same first-page results
+    const page = Math.floor(Math.random() * 4) + 1
     const res = await fetch(
-      `https://api.pexels.com/v1/search?query=${encodeURIComponent(query)}&per_page=10&orientation=landscape&size=large`,
+      `https://api.pexels.com/v1/search?query=${encodeURIComponent(query)}&per_page=15&page=${page}&orientation=landscape&size=large`,
       { headers: { Authorization: pexelsKey } }
     )
     if (!res.ok) return null
     const data = await res.json()
-    const photos: any[] = data.photos || []
-    if (!photos.length) return null
-    // Pick randomly from first 5 results for variety
-    const photo = photos[Math.floor(Math.random() * Math.min(5, photos.length))]
+    let photos: any[] = data.photos || []
+    // Filter out already-used photos in this run
+    photos = photos.filter((p: any) => !usedIds.has(p.id))
+    if (!photos.length) {
+      // Fallback: page 1 without used-ID filter as last resort
+      const r2 = await fetch(`https://api.pexels.com/v1/search?query=${encodeURIComponent(catQuery || topKw)}&per_page=15&orientation=landscape&size=large`, { headers: { Authorization: pexelsKey } })
+      if (!r2.ok) return null
+      const d2 = await r2.json()
+      photos = (d2.photos || []).filter((p: any) => !usedIds.has(p.id))
+      if (!photos.length) return null
+    }
+    // Pick randomly from results for variety
+    const photo = photos[Math.floor(Math.random() * Math.min(8, photos.length))]
     // large2x is 1200px+ wide — required for Google Discover eligibility
     const imgUrl = photo.src?.large2x || photo.src?.large || photo.src?.medium
     if (!imgUrl) return null
     const imgRes = await fetch(imgUrl)
     if (!imgRes.ok) return null
     const buffer = Buffer.from(await imgRes.arrayBuffer())
-    return { buffer, mimeType: 'image/jpeg' }
+    return { buffer, mimeType: 'image/jpeg', photoId: photo.id }
   } catch {
     return null
   }
@@ -367,12 +396,13 @@ async function compressImage(buffer: Buffer): Promise<Buffer> {
 async function generateAndUploadAIImage(
   title: string, excerpt: string, category: string, slug: string,
   wpBase: string, auth: string, geminiKey: string, log: string[],
-  pexelsKey?: string, keywords?: string[]
+  pexelsKey?: string, keywords?: string[], usedPexelsIds: Set<number> = new Set()
 ): Promise<{ id: number; url: string } | null> {
   try {
     log.push('Fetching image from Pexels...')
     const safePrompt = await buildSafeImagePrompt(title, excerpt, category, geminiKey)
-    const aiImage = await generateAIImage(safePrompt, geminiKey, pexelsKey, keywords)
+    const aiImage = await generateAIImage(safePrompt, geminiKey, pexelsKey, keywords, category, usedPexelsIds)
+    if (aiImage?.photoId) usedPexelsIds.add(aiImage.photoId) // mark as used for this run
     if (!aiImage) { log.push('AI image generation failed — continuing without image'); return null }
 
     const compressed = await compressImage(aiImage.buffer)
@@ -695,7 +725,9 @@ async function runCurrencyRatesUpdate(
 
 async function runArticlePublish(
   supabase: any, geminiKey: string, pexelsKey: string | undefined, newsApiKey: string | undefined,
-  wpBase: string, auth: string, wpUrl: string, adminUserId: string | null, langParam: string, regionParam: string
+  wpBase: string, auth: string, wpUrl: string, adminUserId: string | null, langParam: string, regionParam: string,
+  usedTopicKeywords: Set<string> = new Set(),  // within-run topic dedup
+  usedPexelsIds: Set<number> = new Set()        // within-run image dedup
 ): Promise<{ result: any; log: string[] }> {
   const log: string[] = []
   try {
@@ -703,6 +735,19 @@ async function runArticlePublish(
     log.push('Fetching trending topic...')
     let trend = await getTrendingTopic(geminiKey, newsApiKey, regionParam)
     log.push(`Topic: ${trend.title}`)
+
+    // Helper: fingerprint a topic by its first 3 keywords joined (catches near-identical topics)
+    const topicKey = (kw: string[]) => kw.slice(0, 3).sort().join('|')
+
+    // Skip if this topic's keywords overlap too much with already-published topics this run
+    if (usedTopicKeywords.has(topicKey(trend.keywords))) {
+      log.push(`Within-run duplicate detected — fetching fresh topic from Gemini...`)
+      const fresh = await getTrendingTopic(geminiKey, undefined, regionParam) // skip newsApi, force Gemini
+      if (!usedTopicKeywords.has(topicKey(fresh.keywords))) {
+        trend = fresh
+        log.push(`Fresh topic: ${trend.title}`)
+      }
+    }
 
     // Retry with up to 5 different fallback topics if duplicate detected
     let isDuplicate = await checkDuplicate(slugify(trend.title), trend.title, wpBase, auth)
@@ -758,6 +803,9 @@ async function runArticlePublish(
       }
     }
 
+    // Mark this topic's keyword fingerprint as used so the next article in this run picks a different theme
+    usedTopicKeywords.add(topicKey(trend.keywords))
+
     const slug = slugify(trend.title)
     if (isDuplicate) {
       log.push(`All topic candidates were duplicates — skipping`)
@@ -771,7 +819,7 @@ async function runArticlePublish(
 
     // Run image fetch and category determination in parallel — independent of each other
     const [wpMediaResult, aiCategory] = await Promise.all([
-      generateAndUploadAIImage(article.title, article.excerpt || '', trend.category || 'News', slug, wpBase, auth, geminiKey, log, pexelsKey, trend.keywords),
+      generateAndUploadAIImage(article.title, article.excerpt || '', trend.category || 'News', slug, wpBase, auth, geminiKey, log, pexelsKey, trend.keywords, usedPexelsIds),
       determineCategory(article.title, article.excerpt || '', geminiKey),
     ])
     const wpMediaId = wpMediaResult?.id ?? null
@@ -1007,11 +1055,16 @@ export async function GET(req: NextRequest) {
   if (runArticle) {
     const regionSchedule = regionParam
       ? [regionParam]  // explicit region from query param → one article
-      : ['USA', 'USA', 'USA', 'India', 'India', 'GCC', 'GCC'] // auto: 3 USA + 2 India + 2 GCC
+      : ['India', 'GCC', 'USA', 'India', 'GCC', 'USA', 'India'] // auto: 3 India + 2 GCC + 2 USA
+
+    // Shared state across all articles in this run — prevents same topic/image in a single cron batch
+    const usedTopicKeywords = new Set<string>()
+    const usedPexelsIds = new Set<number>()
 
     for (const region of regionSchedule) {
       const outcome = await runArticlePublish(
-        supabase, geminiKey, pexelsKey, newsApiKey, wpBase, auth, wpUrl, adminUserId, langParam, region
+        supabase, geminiKey, pexelsKey, newsApiKey, wpBase, auth, wpUrl, adminUserId, langParam, region,
+        usedTopicKeywords, usedPexelsIds
       )
       articleResults.push({ region, ...outcome.result })
       articleLog.push(...outcome.log)
