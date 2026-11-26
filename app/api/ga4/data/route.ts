@@ -35,6 +35,7 @@ async function ga4Query(accessToken: string, propertyId: string, body: Record<st
 }
 
 export async function GET(req: NextRequest) {
+  const mode = req.nextUrl.searchParams.get('mode')
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -69,6 +70,35 @@ export async function GET(req: NextRequest) {
   const propertyId = profile.ga4_property_id
   const endDate = 'today'
   const startDate = '28daysAgo'
+
+  // ── Articles mode: return pageViews per /article/ slug ──────────────────
+  if (mode === 'articles') {
+    try {
+      const data = await ga4Query(accessToken, propertyId, {
+        dateRanges: [{ startDate: '90daysAgo', endDate }],
+        dimensions: [{ name: 'pagePath' }],
+        metrics: [{ name: 'screenPageViews' }],
+        dimensionFilter: {
+          filter: {
+            fieldName: 'pagePath',
+            stringFilter: { matchType: 'BEGINS_WITH', value: '/article/' },
+          },
+        },
+        orderBys: [{ metric: { metricName: 'screenPageViews' }, desc: true }],
+        limit: 5000,
+      })
+      // Build slug → pageViews map
+      const views: Record<string, number> = {}
+      for (const row of data.rows || []) {
+        const path: string = row.dimensionValues[0]?.value || ''
+        const slug = path.replace(/^\/article\//, '').replace(/\/$/, '')
+        if (slug) views[slug] = parseInt(row.metricValues[0]?.value || '0')
+      }
+      return NextResponse.json({ connected: true, views })
+    } catch (e) {
+      return NextResponse.json({ connected: true, views: {}, error: (e as Error).message })
+    }
+  }
 
   try {
     const [overviewData, topPagesData, sourcesData, devicesData, dailyData] = await Promise.all([

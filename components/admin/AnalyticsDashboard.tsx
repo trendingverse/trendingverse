@@ -25,6 +25,8 @@ export function AnalyticsDashboard() {
     plan: string; articlesUsedToday: number; planLimit: number
     isAdmin?: boolean
   } | null>(null)
+  const [ga4Views, setGa4Views] = useState<Record<string, number>>({})
+  const [ga4Connected, setGa4Connected] = useState<boolean | null>(null)
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'all' | 'human' | 'cron'>('all')
   const [showAllArticles, setShowAllArticles] = useState(false)
@@ -32,6 +34,14 @@ export function AnalyticsDashboard() {
   useEffect(() => {
     fetch('/api/analytics-dashboard')
       .then(r => r.json()).then(setData).finally(() => setLoading(false))
+    // Fetch GA4 article-level views in parallel
+    fetch('/api/ga4/data?mode=articles')
+      .then(r => r.json())
+      .then(d => {
+        setGa4Connected(d.connected === true)
+        if (d.views) setGa4Views(d.views)
+      })
+      .catch(() => setGa4Connected(false))
   }, [])
 
   if (loading) return (
@@ -183,7 +193,9 @@ export function AnalyticsDashboard() {
             <th className="text-center px-3 py-2 text-xs font-medium text-ink-500">Source</th>
             <th className="text-center px-3 py-2 text-xs font-medium text-ink-500">Status</th>
             <th className="text-right px-3 py-2 text-xs font-medium text-ink-500">SEO</th>
-            <th className="text-right px-3 py-2 text-xs font-medium text-ink-500">Views</th>
+            <th className="text-right px-3 py-2 text-xs font-medium text-ink-500">
+              Views {ga4Connected === true ? <span className="text-green-500 font-normal">(GA4)</span> : ga4Connected === false ? <span className="text-ink-300 font-normal">(CMS)</span> : null}
+            </th>
             <th className="text-right px-4 py-2 text-xs font-medium text-ink-500">Date</th>
           </tr></thead>
           <tbody>
@@ -208,7 +220,11 @@ export function AnalyticsDashboard() {
                   }`}>{a.status}</span>
                 </td>
                 <td className="px-3 py-2.5 text-right text-xs text-ink-500">{a.seo_score || '-'}</td>
-                <td className="px-3 py-2.5 text-right text-xs text-ink-500">{a.view_count || 0}</td>
+                <td className="px-3 py-2.5 text-right text-xs text-ink-500">
+                  {a.slug && ga4Views[a.slug] != null
+                    ? ga4Views[a.slug].toLocaleString('en-IN')
+                    : (a.view_count || 0).toLocaleString('en-IN')}
+                </td>
                 <td className="px-4 py-2.5 text-right text-xs text-ink-400 whitespace-nowrap">
                   {new Date(a.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' })}
                 </td>
