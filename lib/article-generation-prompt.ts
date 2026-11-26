@@ -9,16 +9,38 @@ export function buildArticlePrompt(params: {
   keywords: string[]
   language: string
   focusKeyword?: string
+  region?: string
 }): string {
-  const { title, category, keywords, language, focusKeyword } = params
+  const { title, category, keywords, language, focusKeyword, region = 'India' } = params
   const kw = focusKeyword || keywords[0] || title.split(' ').slice(0, 3).join(' ')
   const categorySlug = category.toLowerCase().replace(/\s+/g, '-')
 
-  return `You are a senior journalist for TrendingVerse, an Indian news platform.
-Write a complete, original, SEO-optimized news article in ${language}.
+  // Region-specific persona and audience targeting
+  const regionContext: Record<string, { persona: string; audience: string; wordCount: string }> = {
+    'USA': {
+      persona: 'senior American journalist for TrendingVerse, a global news platform',
+      audience: 'US-based English-speaking readers',
+      wordCount: '900-1100',
+    },
+    'GCC': {
+      persona: 'senior journalist covering Gulf and Middle East affairs for TrendingVerse',
+      audience: 'readers in the UAE, Saudi Arabia, Qatar, Kuwait, Bahrain and Oman',
+      wordCount: '750-900',
+    },
+    'India': {
+      persona: 'senior journalist for TrendingVerse, covering Indian and global affairs',
+      audience: 'Indian English-speaking readers',
+      wordCount: '750-900',
+    },
+  }
+  const ctx = regionContext[region] || regionContext['India']
+
+  return `You are a ${ctx.persona}.
+Write a complete, original, SEO-optimized news article in ${language} for ${ctx.audience}.
 
 ARTICLE BRIEF:
 - Title: ${title}
+- Region/Audience: ${region}
 - Category: ${category}
 - Focus keyword: "${kw}"
 - Related keywords: ${keywords.join(', ')}
@@ -26,7 +48,7 @@ ARTICLE BRIEF:
 
 MANDATORY SEO REQUIREMENTS — the article MUST satisfy ALL of these:
 
-1. WORD COUNT: Write 750-900 words of actual body content. Count carefully.
+1. WORD COUNT: Write ${ctx.wordCount} words of actual body content. Count carefully.
 
 2. OPENING PARAGRAPH: The very first paragraph must naturally include the focus keyword "${kw}" within the first 3 sentences.
 
