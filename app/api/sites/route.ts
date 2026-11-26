@@ -71,5 +71,57 @@ export async function POST(req: NextRequest) {
   }).select().single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // ── Auto-assign admin's global template ad units to new publisher site ─────
+  // Template units = admin-created units with no site_url (global / network-agnostic).
+  // Publishers never see this — the plugin fetches and injects silently.
+  try {
+    // 1. Get admin user_id
+    const { data: adminProfile } = await admin
+      .from('user_profiles')
+      .select('id')
+      .eq('email', ADMIN_EMAIL)
+      .single()
+
+    if (adminProfile?.id) {
+      // 2. Fetch active template ad units (created by admin, no site_url = global templates)
+      const { data: templateUnits } = await admin
+        .from('ad_units')
+        .select('id')
+        .eq('is_active', true)
+        .eq('created_by', adminProfile.id)
+        .or('site_url.is.null,site_url.eq.')
+
+      if (templateUnits && templateUnits.length > 0) {
+        // 3. Avoid duplicate assignments — check which units are already assigned
+        const { data: existing } = await admin
+          .from('publisher_ads')
+          .select('ad_unit_id')
+          .eq('publisher_id', user.id)
+          .eq('site_id', data.id)
+
+        const assignedUnitIds = new Set((existing || []).map((r: any) => r.ad_unit_id))
+
+        const toInsert = templateUnits
+          .filter((u: any) => !assignedUnitIds.has(u.id))
+          .map((u: any) => ({
+            publisher_id: user.id,
+            site_id: data.id,
+            ad_unit_id: u.id,
+            is_enabled: true,
+            revenue_share_pct: 70,
+            inject_after_paragraph: 3,
+          }))
+
+        if (toInsert.length > 0) {
+          await admin.from('publisher_ads').insert(toInsert)
+        }
+      }
+    }
+  } catch {
+    // Non-fatal — site is created; ad unit auto-assignment can be done manually
+  }
+  // ─────────────────────────────────────────────────────────────────────────────
+
   return NextResponse.json(data, { status: 201 })
 }
