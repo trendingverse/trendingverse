@@ -127,13 +127,43 @@ async function getTrendingTopic(geminiKey: string, newsApiKey?: string, region =
     }
   } catch { /* final fallback */ }
 
-  const defaults: Record<string, { title: string; category: string; keywords: string[] }> = {
-    'India': { title: `India Business and Technology News ${new Date().getFullYear()}`, category: 'Business', keywords: ['india', 'business', 'technology', 'economy', 'news'] },
-    'UK': { title: `UK Politics and Economy Update ${new Date().getFullYear()}`, category: 'Politics', keywords: ['uk', 'politics', 'economy', 'britain', 'news'] },
-    'US': { title: `US Technology and Business Headlines ${new Date().getFullYear()}`, category: 'Technology', keywords: ['us', 'technology', 'business', 'america', 'news'] },
-    'Global': { title: `Global News and World Affairs ${new Date().getFullYear()}`, category: 'World', keywords: ['global', 'world', 'news', 'international', 'affairs'] },
+  // Rotating fallback pool — indexed by hour of day so each run gets a different topic
+  const hour = new Date().getUTCHours()
+  const min = new Date().getUTCMinutes()
+  const year = new Date().getFullYear()
+  const idx = (hour * 6 + Math.floor(min / 10)) % 24 // 0-23, changes every 10 min
+
+  const fallbackPools: Record<string, { title: string; category: string; keywords: string[] }[]> = {
+    'India': [
+      { title: `India Stock Market Rally Amid Global Uncertainty ${year}`, category: 'Business', keywords: ['india', 'stock', 'market', 'sensex', 'nifty'] },
+      { title: `GST Council Meeting Key Decisions for Indian Businesses ${year}`, category: 'Business', keywords: ['gst', 'india', 'tax', 'business', 'council'] },
+      { title: `India AI Startup Ecosystem Growth and Investment Trends ${year}`, category: 'Technology', keywords: ['india', 'ai', 'startup', 'investment', 'technology'] },
+      { title: `Rupee vs Dollar Exchange Rate Impact on Indian Imports ${year}`, category: 'Business', keywords: ['rupee', 'dollar', 'forex', 'india', 'economy'] },
+      { title: `India Renewable Energy Push Solar Wind Power Targets ${year}`, category: 'Technology', keywords: ['india', 'solar', 'renewable', 'energy', 'climate'] },
+      { title: `India Infrastructure Projects Highway Rail Expansion ${year}`, category: 'Business', keywords: ['india', 'infrastructure', 'highway', 'railway', 'development'] },
+      { title: `Indian Pharma Export Growth and Global Drug Demand ${year}`, category: 'Business', keywords: ['india', 'pharma', 'export', 'medicine', 'global'] },
+      { title: `India Cybersecurity Threats and Digital Safety Measures ${year}`, category: 'Technology', keywords: ['india', 'cybersecurity', 'digital', 'fraud', 'safety'] },
+      { title: `India Agriculture Reforms Farmer Income and MSP Update ${year}`, category: 'Business', keywords: ['india', 'agriculture', 'farmer', 'msp', 'reform'] },
+      { title: `Startup India DPIIT Recognition and Funding Ecosystem ${year}`, category: 'Business', keywords: ['startup', 'india', 'funding', 'dpiit', 'ecosystem'] },
+      { title: `India Electric Vehicle Market Growth and EV Policy ${year}`, category: 'Technology', keywords: ['india', 'electric', 'vehicle', 'ev', 'policy'] },
+      { title: `India Space Economy ISRO Private Sector Opportunities ${year}`, category: 'Technology', keywords: ['isro', 'space', 'india', 'satellite', 'private'] },
+      { title: `India Banking Sector NPA Recovery and Credit Growth ${year}`, category: 'Business', keywords: ['india', 'banking', 'npa', 'credit', 'rbi'] },
+      { title: `India Health Tech Telemedicine Digital Health Growth ${year}`, category: 'Health', keywords: ['india', 'health', 'telemedicine', 'digital', 'wellness'] },
+      { title: `India Semiconductor Chip Manufacturing Ambitions ${year}`, category: 'Technology', keywords: ['india', 'semiconductor', 'chip', 'manufacturing', 'fab'] },
+      { title: `India Tourism Boom Domestic International Travel Surge ${year}`, category: 'Lifestyle', keywords: ['india', 'tourism', 'travel', 'domestic', 'international'] },
+      { title: `Indian Real Estate Market Trends Residential Commercial ${year}`, category: 'Business', keywords: ['india', 'real', 'estate', 'property', 'housing'] },
+      { title: `India FDI Foreign Direct Investment Record Inflows ${year}`, category: 'Business', keywords: ['india', 'fdi', 'foreign', 'investment', 'economy'] },
+      { title: `India Education Technology EdTech Platforms Skill Development ${year}`, category: 'Technology', keywords: ['india', 'edtech', 'education', 'skill', 'online'] },
+      { title: `India Defence Indigenisation Make in India Military ${year}`, category: 'World', keywords: ['india', 'defence', 'military', 'make-in-india', 'export'] },
+      { title: `India Climate Action Net Zero Targets Carbon Policy ${year}`, category: 'World', keywords: ['india', 'climate', 'net-zero', 'carbon', 'environment'] },
+      { title: `India Fintech UPI Digital Payments Global Expansion ${year}`, category: 'Technology', keywords: ['india', 'upi', 'fintech', 'payment', 'digital'] },
+      { title: `India Textile Garment Export Opportunities and Challenges ${year}`, category: 'Business', keywords: ['india', 'textile', 'garment', 'export', 'manufacturing'] },
+      { title: `India Logistics Supply Chain Improvements and Challenges ${year}`, category: 'Business', keywords: ['india', 'logistics', 'supply', 'chain', 'infrastructure'] },
+    ],
   }
-  return defaults[region] || defaults['India']
+
+  const pool = fallbackPools[region] || fallbackPools['India']
+  return pool[idx % pool.length]
 }
 
 // ── REPLACEMENT for generateArticle() in your cron route ─────────
@@ -597,13 +627,43 @@ async function runArticlePublish(
   try {
     log.push(`Starting auto-publish | lang: ${langParam} | region: ${regionParam}`)
     log.push('Fetching trending topic...')
-    const trend = await getTrendingTopic(geminiKey, newsApiKey, regionParam)
+    let trend = await getTrendingTopic(geminiKey, newsApiKey, regionParam)
     log.push(`Topic: ${trend.title}`)
 
-    const slug = slugify(trend.title)
-    const isDuplicate = await checkDuplicate(slug, trend.title, wpBase, auth)
+    // Retry with up to 5 different fallback topics if duplicate detected
+    let isDuplicate = await checkDuplicate(slugify(trend.title), trend.title, wpBase, auth)
     if (isDuplicate) {
-      log.push(`Duplicate detected — skipping`)
+      log.push(`Duplicate detected — trying alternate topics...`)
+      const hour = new Date().getUTCHours()
+      const year = new Date().getFullYear()
+      const alternates = [
+        { title: `India Economy GDP Growth Forecast ${year}`, category: 'Business', keywords: ['india', 'gdp', 'economy', 'growth', 'forecast'] },
+        { title: `India Tech Sector AI Adoption Trends ${year}`, category: 'Technology', keywords: ['india', 'tech', 'ai', 'startup', 'digital'] },
+        { title: `India Export Trade Policy Latest Updates ${year}`, category: 'Business', keywords: ['india', 'export', 'trade', 'policy', 'wto'] },
+        { title: `India Climate Energy Transition Solar Boom ${year}`, category: 'Technology', keywords: ['india', 'solar', 'energy', 'climate', 'green'] },
+        { title: `India Healthcare Innovation Digital Health ${year}`, category: 'Health', keywords: ['india', 'healthcare', 'digital', 'innovation', 'medtech'] },
+        { title: `India Fintech UPI Payments Global Reach ${year}`, category: 'Technology', keywords: ['india', 'upi', 'fintech', 'payment', 'global'] },
+        { title: `India Tourism Hospitality Growth Recovery ${year}`, category: 'Lifestyle', keywords: ['india', 'tourism', 'travel', 'hospitality', 'growth'] },
+        { title: `India Manufacturing PLI Scheme Progress ${year}`, category: 'Business', keywords: ['india', 'manufacturing', 'pli', 'scheme', 'export'] },
+      ]
+      // Pick an alternate based on current hour+minute to vary each run
+      const altIdx = (hour + Math.floor(new Date().getUTCMinutes() / 10)) % alternates.length
+      for (let i = 0; i < alternates.length; i++) {
+        const candidate = alternates[(altIdx + i) % alternates.length]
+        const dupCheck = await checkDuplicate(slugify(candidate.title), candidate.title, wpBase, auth)
+        if (!dupCheck) {
+          trend = candidate
+          isDuplicate = false
+          log.push(`Using alternate topic: ${candidate.title}`)
+          break
+        }
+        log.push(`Alternate also duplicate: ${candidate.title}`)
+      }
+    }
+
+    const slug = slugify(trend.title)
+    if (isDuplicate) {
+      log.push(`All topic candidates were duplicates — skipping`)
       await supabase.from('cron_logs').insert({ status: 'skipped', title: trend.title, wp_url: wpUrl, log, user_id: adminUserId })
       return { result: { success: false, skipped: true, reason: 'duplicate' }, log }
     }
