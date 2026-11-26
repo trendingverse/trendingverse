@@ -34,7 +34,7 @@ async function determineCategory(title: string, excerpt: string, groqKey: string
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
         body: JSON.stringify({
-          model: 'llama-3.1-8b-instant',
+          model: 'gemma2-9b-it',
           messages: [{ role: 'user', content: `Categorize this news article into EXACTLY one of these categories: ${VALID_CATEGORIES.join(', ')}.
 
 Title: ${title}
@@ -113,7 +113,7 @@ async function getTrendingTopic(groqKey: string, newsApiKey?: string, region = '
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
         body: JSON.stringify({
-          model: 'llama-3.1-8b-instant',
+          model: 'gemma2-9b-it',
           messages: [{ role: 'user', content: `Today is ${today}. What is ONE specific breaking or trending news topic in ${region} right now? Pick from: politics, technology, sports, entertainment, business, health. Return ONLY JSON: {"title":"Specific news headline","category":"Technology","keywords":["kw1","kw2","kw3","kw4","kw5"]}` }],
           temperature: 1,
           max_tokens: 256,
@@ -154,7 +154,7 @@ async function generateArticle(title: string, keywords: string[], category: stri
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
         body: JSON.stringify({
-          model: 'llama-3.1-8b-instant',
+          model: 'gemma2-9b-it',
           messages: [{ role: 'user', content: prompt }],
           temperature: 0.7,
           max_tokens: 8192,
@@ -228,7 +228,7 @@ async function buildSafeImagePrompt(title: string, excerpt: string, category: st
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
         body: JSON.stringify({
-          model: 'llama-3.1-8b-instant',
+          model: 'gemma2-9b-it',
           messages: [{ role: 'user', content: `You are writing an image generation prompt for a news article.
 
 Article title: ${title}
@@ -386,7 +386,7 @@ Return ONLY valid JSON, no markdown:
       {
         method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
         body: JSON.stringify({
-          model: 'llama-3.1-8b-instant',
+          model: 'gemma2-9b-it',
           messages: [{ role: 'user', content: prompt }],
           temperature: 0.4,
           max_tokens: 4096,

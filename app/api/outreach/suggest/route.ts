@@ -108,7 +108,7 @@ export async function POST(req: NextRequest) {
         {
           method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
           body: JSON.stringify({
-            model: 'llama-3.1-8b-instant',
+            model: 'gemma2-9b-it',
 messages: [{ role: 'user', content: `Extract campaign details from this brief. May be free text, bullets, or table format.
 
 ${brief}
@@ -192,7 +192,7 @@ Return ONLY a JSON array, no markdown:
       {
         method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
         body: JSON.stringify({
-          model: 'llama-3.1-8b-instant',
+          model: 'gemma2-9b-it',
 messages: [{ role: 'user', content: prompt }],
 temperature: 0.2,
 max_tokens: 8192,
