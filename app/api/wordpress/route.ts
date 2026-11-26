@@ -17,7 +17,7 @@ interface PublisherAd {
   ad_units: AdUnit; inject_after_paragraph: number; is_enabled: boolean; position?: string
 }
 
-const AD_WRAPPER_STYLE = `background:#f2f2f2;border-radius:4px;padding:8px 4px 4px;margin:20px auto;clear:both;text-align:center;`
+const AD_WRAPPER_STYLE = `background:#f2f2f2;border-radius:4px;padding:8px 4px 4px;margin:20px auto;clear:both;text-align:center;max-width:100%;overflow:hidden;box-sizing:border-box;`
 const AD_LABEL_HTML = `<span style="display:block;font-size:9px;line-height:1;color:#999;letter-spacing:.5px;text-transform:uppercase;font-family:sans-serif;margin-bottom:4px;">Advertisement</span>`
 
 function buildAdHtml(unit: AdUnit): string {
@@ -69,7 +69,7 @@ function buildStickyAnchorHtml(unit: AdUnit): string {
   const pad = h + 20  // banner height + small gap so content isn't hidden
   return `
 <div id="${wrapperId}" style="position:fixed;bottom:0;left:0;right:0;z-index:99999;display:flex;justify-content:center;pointer-events:none;">
-  <div style="position:relative;pointer-events:all;background:#fff;box-shadow:0 -2px 10px rgba(0,0,0,.18);width:${w}px;">
+  <div style="position:relative;pointer-events:all;background:#fff;box-shadow:0 -2px 10px rgba(0,0,0,.18);width:${w}px;max-width:100vw;box-sizing:border-box;">
     <button
       onclick="(function(){var el=document.getElementById('${wrapperId}');if(el){el.style.display='none';document.body.style.paddingBottom=el.dataset.prevPad||'';}})()"
       style="position:absolute;top:-22px;right:0;background:rgba(0,0,0,.65);color:#fff;border:none;padding:1px 8px 2px;cursor:pointer;font-size:11px;line-height:1.6;border-radius:3px 3px 0 0;font-family:sans-serif;"

@@ -131,7 +131,7 @@ export default async function ArticlePage({ params }: Props) {
         }
         const html = `
 <div id="${wrapperId}" style="position:fixed;bottom:0;left:0;right:0;z-index:99999;display:flex;justify-content:center;pointer-events:none;">
-  <div style="position:relative;pointer-events:all;background:#fff;box-shadow:0 -2px 10px rgba(0,0,0,.18);width:${w}px;">
+  <div style="position:relative;pointer-events:all;background:#fff;box-shadow:0 -2px 10px rgba(0,0,0,.18);width:${w}px;max-width:100vw;box-sizing:border-box;">
     <button onclick="(function(){var el=document.getElementById('${wrapperId}');if(el){el.style.display='none';document.body.style.paddingBottom=el.dataset.prevPad||'';}})();"
       style="position:absolute;top:-22px;right:0;background:rgba(0,0,0,.65);color:#fff;border:none;padding:1px 8px 2px;cursor:pointer;font-size:11px;line-height:1.6;border-radius:3px 3px 0 0;font-family:sans-serif;"
       aria-label="Close ad">✕ Close</button>

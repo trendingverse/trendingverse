@@ -17,14 +17,14 @@ export function AdSlot({ position, className='' }: Props) {
   const size = sizes[position] || sizes.header
   if (client && slots[position]) {
     return (
-      <div className={`flex justify-center ${className}`}>
-        <ins className="adsbygoogle" style={{display:'block',width:size.w,height:size.h}}
+      <div className={`flex justify-center overflow-hidden w-full ${className}`}>
+        <ins className="adsbygoogle" style={{display:'block',width:size.w,maxWidth:'100%',height:size.h}}
           data-ad-client={client} data-ad-slot={slots[position]} data-ad-format="auto" data-full-width-responsive="true" />
       </div>
     )
   }
   return (
-    <div className={`flex justify-center ${className}`}>
+    <div className={`flex justify-center overflow-hidden w-full ${className}`}>
       <div className="ad-slot" style={{width:size.w,height:size.h,maxWidth:'100%'}}>{size.label} · Advertisement</div>
     </div>
   )
