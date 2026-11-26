@@ -34,13 +34,15 @@ async function determineCategory(title: string, excerpt: string, groqKey: string
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: `Categorize this news article into EXACTLY one of these categories: ${VALID_CATEGORIES.join(', ')}.
+          model: 'llama-3.3-70b-versatile',
+          messages: [{ role: 'user', content: `Categorize this news article into EXACTLY one of these categories: ${VALID_CATEGORIES.join(', ')}.
 
 Title: ${title}
 Excerpt: ${excerpt}
 
-Return ONLY the category name, nothing else — no punctuation, no explanation.` }] }],
-          generationConfig: { temperature: 0.1, maxOutputTokens: 20 },
+Return ONLY the category name, nothing else — no punctuation, no explanation.` }],
+          temperature: 0.1,
+          max_tokens: 20,
         }),
       }
     )
@@ -100,7 +102,7 @@ async function getTrendingTopic(groqKey: string, newsApiKey?: string, region = '
           return { title, category: 'News', keywords: title.split(' ').filter((w: string) => w.length > 4).slice(0, 5) }
         }
       }
-    } catch { /* fallback to Gemini */ }
+    } catch { /* fallback to Groq */ }
   }
 
   const today = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })
@@ -111,8 +113,10 @@ async function getTrendingTopic(groqKey: string, newsApiKey?: string, region = '
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: `Today is ${today}. What is ONE specific breaking or trending news topic in ${region} right now? Pick from: politics, technology, sports, entertainment, business, health. Return ONLY JSON: {"title":"Specific news headline","category":"Technology","keywords":["kw1","kw2","kw3","kw4","kw5"]}` }] }],
-          generationConfig: { temperature: 1 }
+          model: 'llama-3.3-70b-versatile',
+          messages: [{ role: 'user', content: `Today is ${today}. What is ONE specific breaking or trending news topic in ${region} right now? Pick from: politics, technology, sports, entertainment, business, health. Return ONLY JSON: {"title":"Specific news headline","category":"Technology","keywords":["kw1","kw2","kw3","kw4","kw5"]}` }],
+          temperature: 1,
+          max_tokens: 256,
         }),
       }
     )
@@ -137,25 +141,23 @@ async function getTrendingTopic(groqKey: string, newsApiKey?: string, region = '
 }
 
 // ── REPLACEMENT for generateArticle() in your cron route ─────────
-// Uses Gemini JSON mode + higher token limit + resilient parsing to
+// Uses Groq JSON mode + higher token limit + resilient parsing to
 // fix the "No JSON in response" / "Expected ',' or '}'" failures.
 async function generateArticle(title: string, keywords: string[], category: string, groqKey: string, language = 'en') {
   const langName = LANGUAGES[language] || 'English'
   const prompt = buildArticlePrompt({ title, category, keywords, language: langName })
 
-  async function callGemini(): Promise<any> {
+  async function callGroq(): Promise<any> {
     const res = await fetch(
       'https://api.groq.com/openai/v1/chat/completions',
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 16384,              // was 8192 — some long articles still truncating
-            responseMimeType: 'application/json', // force valid JSON, handles escaping internally
-          },
+          model: 'llama-3.3-70b-versatile',
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 0.7,
+          max_tokens: 8192,
         }),
         
       }
@@ -185,13 +187,13 @@ async function generateArticle(title: string, keywords: string[], category: stri
   // One retry — transient truncation / malformed output often succeeds second time.
   let article: any
   try {
-    article = await callGemini()
+    article = await callGroq()
   } catch (e) {
     const msg = (e as Error).message
     // Only retry on parse/truncation-type failures, not hard API errors like quota.
     if (/JSON|MAX_TOKENS|Unexpected|Expected/i.test(msg)) {
       await new Promise(r => setTimeout(r, 1500))
-      article = await callGemini()   // second attempt; if it throws, it propagates up
+      article = await callGroq()   // second attempt; if it throws, it propagates up
     } else {
       throw e
     }
@@ -226,7 +228,8 @@ async function buildSafeImagePrompt(title: string, excerpt: string, category: st
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: `You are writing an image generation prompt for a news article.
+          model: 'llama-3.3-70b-versatile',
+          messages: [{ role: 'user', content: `You are writing an image generation prompt for a news article.
 
 Article title: ${title}
 Category: ${category}
@@ -240,8 +243,9 @@ CRITICAL RULES:
 - No text, logos, or watermarks should appear anywhere in the image.
 - Keep it tasteful and appropriate for a general news audience.
 
-Return ONLY the visual description, nothing else — no preamble.` }] }],
-          generationConfig: { temperature: 0.4, maxOutputTokens: 200 },
+Return ONLY the visual description, nothing else — no preamble.` }],
+          temperature: 0.4,
+          max_tokens: 200,
         }),
       }
     )
@@ -382,23 +386,25 @@ Return ONLY valid JSON, no markdown:
       {
         method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.4, maxOutputTokens: 4096 },
+          model: 'llama-3.3-70b-versatile',
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 0.4,
+          max_tokens: 4096,
         }),
       }
     )
     const data = await res.json()
     if (data.error) {
-      return { __error: `Gemini API error (${data.error.code || res.status}): ${data.error.message || JSON.stringify(data.error).slice(0, 150)}` }
+      return { __error: `Groq API error (${data.error.code || res.status}): ${data.error.message || JSON.stringify(data.error).slice(0, 150)}` }
     }
     const raw = data.choices?.[0]?.message?.content || ''
     if (!raw) {
       const finishReason = data.candidates?.[0]?.finishReason
-      return { __error: `Empty response from Gemini${finishReason ? ` (finishReason: ${finishReason})` : ''}` }
+      return { __error: `Empty response from Groq${finishReason ? ` (finishReason: ${finishReason})` : ''}` }
     }
     const cleaned = raw.replace(/```json\n?|```/g, '').trim()
     const match = cleaned.match(/\{[\s\S]*\}/)
-    if (!match) return { __error: 'No JSON found in Gemini response: ' + raw.slice(0, 120) }
+    if (!match) return { __error: 'No JSON found in Groq response: ' + raw.slice(0, 120) }
     const parsed = JSON.parse(match[0])
     if (!parsed.content) return { __error: 'Parsed JSON missing content field' }
     return parsed
