@@ -24,26 +24,45 @@ function buildPrompt(subject: string, category: string, keywords: string[], lang
 
 async function generateWithGemini(prompt: string, apiKey: string): Promise<Record<string, unknown>> {
   const res = await fetch(
-    'https://api.groq.com/openai/v1/chat/completions',
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'openai/gpt-oss-120b',
-          messages: [{ role: 'user', content: prompt }],
-          temperature: 0.7,
-          max_tokens: 8192,
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.7, maxOutputTokens: 8192 },
       })
     }
   )
   if (!res.ok) {
     const err = await res.json()
-    throw new Error(err.error?.message || `Groq error ${res.status}`)
+    throw new Error(err.error?.message || `Gemini error ${res.status}`)
   }
   const data = await res.json()
   const parts = data.candidates?.[0]?.content?.parts || []
   const text = parts.filter((p: { text?: string }) => p.text).map((p: { text: string }) => p.text).join('')
-  return JSON.parse(text)
+  const clean = text.replace(/```json\n?|```/g, '').trim()
+  return JSON.parse(clean)
+}
+
+async function generateWithGroq(prompt: string, apiKey: string): Promise<Record<string, unknown>> {
+  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify({
+      model: 'llama-3.3-70b-versatile',
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.7,
+      max_tokens: 8192,
+      response_format: { type: 'json_object' },
+    })
+  })
+  if (!res.ok) {
+    const err = await res.json()
+    throw new Error(err.error?.message || `Groq error ${res.status}`)
+  }
+  const data = await res.json()
+  return JSON.parse(data.choices?.[0]?.message?.content || '{}')
 }
 
 async function generateWithOpenAI(prompt: string, apiKey: string): Promise<Record<string, unknown>> {
@@ -199,7 +218,7 @@ export async function POST(req: NextRequest) {
         modelUsed = 'GPT-4o Mini'
         article = await generateWithOpenAI(prompt, userOpenAIKey)
       } else if (userGeminiKey) {
-        modelUsed = 'Gemini 2.5 Flash (your key)'
+        modelUsed = 'Gemini 2.0 Flash (your key)'
         article = await generateWithGemini(prompt, userGeminiKey)
       } else if (userOpenAIKey) {
         modelUsed = 'GPT-4o Mini'
@@ -213,11 +232,21 @@ export async function POST(req: NextRequest) {
     }
   }
   if (!article && canUsePlatformKey) {
-    const key = platformKey2 || platformKey
-    if (key) {
+    // Try platform Gemini key first, then Groq fallback
+    const envGeminiKey = process.env.GEMINI_API_KEY
+    const groqKey = platformKey2 || platformKey
+    if (envGeminiKey) {
       try {
-        modelUsed = 'Gemini 2.5 Flash'
-        article = await generateWithGemini(prompt, key)
+        modelUsed = 'Gemini 2.0 Flash'
+        article = await generateWithGemini(prompt, envGeminiKey)
+      } catch (e) {
+        lastError = (e as Error).message
+      }
+    }
+    if (!article && groqKey) {
+      try {
+        modelUsed = 'Llama 3.3 70B'
+        article = await generateWithGroq(prompt, groqKey)
       } catch (e) {
         lastError = (e as Error).message
       }

@@ -48,23 +48,44 @@ Return ONLY valid JSON:
 }`
 
   try {
-    const res = await fetch(
-      'https://api.groq.com/openai/v1/chat/completions',
-      {
+    let raw = ''
+    const geminiKey = process.env.GEMINI_API_KEY
+
+    if (groqKey) {
+      const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
         body: JSON.stringify({
-          model: 'openai/gpt-oss-120b',
-messages: [{ role: 'user', content: prompt }],
-temperature: 0.2,
-max_tokens: 1024,
+          model: 'llama-3.3-70b-versatile',
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 0.2,
+          max_tokens: 1024,
+          response_format: { type: 'json_object' },
         }),
-      }
-    )
-    const data = await res.json()
-    if (data.error) throw new Error(data.error.message)
+      })
+      const data = await res.json()
+      if (data.error) throw new Error(data.error.message)
+      raw = data.choices?.[0]?.message?.content || ''
+    } else if (geminiKey) {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { temperature: 0.2, maxOutputTokens: 1024 },
+          }),
+        }
+      )
+      const data = await res.json()
+      if (data.error) throw new Error(data.error.message)
+      const parts = data.candidates?.[0]?.content?.parts || []
+      raw = parts.filter((p: { text?: string }) => p.text).map((p: { text: string }) => p.text).join('')
+    } else {
+      throw new Error('No AI key configured for enrich')
+    }
 
-    const raw = data.choices?.[0]?.message?.content || ''
     const cleaned = raw.replace(/```json\n?|```/g, '').trim()
     const match = cleaned.match(/\{[\s\S]*\}/)
     if (!match) throw new Error('Could not parse metadata from AI response')
