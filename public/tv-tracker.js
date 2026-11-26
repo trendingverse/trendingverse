@@ -32,24 +32,30 @@
       if (head) head.insertBefore(s, head.firstChild);
     }
 
-    // ── 2. JS clamp — overrides HTML width attribute reliably ───────
+    // ── 2. JS — remove 728px ads on mobile, clamp others ───────────
     function clampAds() {
       var vw = document.documentElement.clientWidth || window.innerWidth || 375;
+      var isMobile = vw < 768;
       var els = document.querySelectorAll('ins,ins.adsbygoogle');
       for (var i = 0; i < els.length; i++) {
         var el = els[i];
+        var adW = parseInt(el.getAttribute('width') || el.getAttribute('data-ad-width') || '0', 10);
+        // On mobile: remove 728px+ ads entirely so they don't affect layout
+        if (isMobile && adW >= 468) {
+          var wrap = el.parentNode;
+          if (wrap && wrap.parentNode) {
+            wrap.parentNode.removeChild(wrap); // remove the containing paragraph/div too
+          } else {
+            el.parentNode && el.parentNode.removeChild(el);
+          }
+          continue;
+        }
         el.style.setProperty('width', '100%', 'important');
         el.style.setProperty('max-width', vw + 'px', 'important');
         el.style.setProperty('box-sizing', 'border-box', 'important');
         el.style.setProperty('display', 'block', 'important');
-        // Also cap iframes inside ads
-        var frames = el.querySelectorAll('iframe');
-        for (var j = 0; j < frames.length; j++) {
-          frames[j].style.setProperty('max-width', '100%', 'important');
-          frames[j].style.setProperty('width', '100%', 'important');
-        }
       }
-      // Reset body width in case an ad already stretched it
+      // Reset body overflow in case a wide element already stretched it
       document.documentElement.style.setProperty('overflow-x', 'hidden', 'important');
       document.body && document.body.style.setProperty('max-width', '100%', 'important');
       document.body && document.body.style.setProperty('overflow-x', 'hidden', 'important');
