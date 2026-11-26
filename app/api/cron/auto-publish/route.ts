@@ -295,7 +295,7 @@ async function compressImage(buffer: Buffer): Promise<Buffer> {
 async function generateAndUploadAIImage(
   title: string, excerpt: string, category: string, slug: string,
   wpBase: string, auth: string, geminiKey: string, log: string[]
-): Promise<number | null> {
+): Promise<{ id: number; url: string } | null> {
   try {
     log.push('Generating original AI image...')
     const safePrompt = await buildSafeImagePrompt(title, excerpt, category, geminiKey)
@@ -319,8 +319,9 @@ async function generateAndUploadAIImage(
         body: JSON.stringify({ alt_text: title, caption: `${category} news illustration – TrendingVerse` }),
       })
     }
-    log.push(`AI image generated & uploaded (ID: ${media.id}, ${(compressed.length / 1024).toFixed(0)}KB)`)
-    return media.id
+    const imageUrl: string = media.source_url || media.link || ''
+    log.push(`AI image generated & uploaded (ID: ${media.id}, URL: ${imageUrl}, ${(compressed.length / 1024).toFixed(0)}KB)`)
+    return media.id ? { id: media.id, url: imageUrl } : null
   } catch (e) {
     log.push(`AI image error: ${(e as Error).message} — continuing without image`)
     return null
@@ -673,10 +674,12 @@ async function runArticlePublish(
     log.push(`Article: ${article.title}`)
 
     // Run AI image generation and category determination in parallel — independent of each other
-    const [wpMediaId, aiCategory] = await Promise.all([
+    const [wpMediaResult, aiCategory] = await Promise.all([
       generateAndUploadAIImage(article.title, article.excerpt || '', trend.category || 'News', slug, wpBase, auth, geminiKey, log),
       determineCategory(article.title, article.excerpt || '', geminiKey),
     ])
+    const wpMediaId = wpMediaResult?.id ?? null
+    const coverImageUrl = wpMediaResult?.url || null
 
     const catId = await getOrCreateCategory(wpBase, auth, aiCategory)
     const categoryIds = catId ? [catId] : []
@@ -690,10 +693,15 @@ async function runArticlePublish(
 </div>`
     const contentWithAd = (article.content || '').replace('<!-- tv-ad-slot -->', adHtml)
 
-    // Also fix the image placeholder alt text using article title
+    // Strip any <figure> blocks whose <img src> is not a real URL (AI sometimes puts title text as src)
     const finalContent = contentWithAd.replace(
-      /<figure><img src="" alt="[^"]*"/,
-      `<figure><img src="" alt="${(article.title || '').replace(/"/g, '&quot;')}"`
+      /<figure[^>]*>\s*<img[^>]+src="([^"]*)"[^>]*>[^<]*<\/figure>/gi,
+      (match, src) => {
+        // Keep the figure only if src looks like a real URL
+        if (src.startsWith('http://') || src.startsWith('https://') || src.startsWith('/')) return match
+        // Otherwise strip the whole figure block
+        return ''
+      }
     )
 
     log.push('Publishing to WordPress...')
@@ -744,6 +752,7 @@ async function runArticlePublish(
       wp_post_id: wpData.id,
       category_name: aiCategory,
       seo_score: article.seo_score || null,
+      cover_image_url: coverImageUrl || null,
     })
 
     await supabase.from('cron_logs').insert({
