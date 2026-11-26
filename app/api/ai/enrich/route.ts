@@ -54,8 +54,10 @@ Return ONLY valid JSON:
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.2, maxOutputTokens: 1024 },
+          model: 'llama-3.3-70b-versatile',
+messages: [{ role: 'user', content: prompt }],
+temperature: 0.2,
+max_tokens: 1024,,
         }),
       }
     )

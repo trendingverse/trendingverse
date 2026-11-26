@@ -133,13 +133,15 @@ async function determineCategory(title: string, excerpt: string, groqKey: string
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: `Categorize this news article into EXACTLY one of these categories: ${VALID_CATEGORIES.join(', ')}.
+          model: 'llama-3.3-70b-versatile',
+messages: [{ role: 'user', content: `Categorize this news article into EXACTLY one of these categories: ${VALID_CATEGORIES.join(', ')}.
 
 Title: ${title}
 Excerpt: ${excerpt}
 
-Return ONLY the category name, nothing else — no punctuation, no explanation.` }] }],
-          generationConfig: { temperature: 0.1, maxOutputTokens: 20 },
+Return ONLY the category name, nothing else — no punctuation, no explanation.` }],
+temperature: 0.1,
+max_tokens: 20,,
         }),
       }
     )

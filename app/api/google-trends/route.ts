@@ -33,11 +33,13 @@ async function fetchGeminiTrends(regions: string[], groqKey: string) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: `Today is ${today}. List 15 specific trending news headlines from ${regions.join(', ')} happening RIGHT NOW. Be specific — real names, real events. Mix politics, tech, sports, entertainment, business.
+        model: 'llama-3.3-70b-versatile',
+messages: [{ role: 'user', content: `Today is ${today}. List 15 specific trending news headlines from ${regions.join(', ')} happening RIGHT NOW. Be specific — real names, real events. Mix politics, tech, sports, entertainment, business.
 Return ONLY JSON array:
 [{"title":"Specific headline","description":"One sentence","category":"Politics","region":"India","flag":"🇮🇳"}]
-Flags: India=🇮🇳 US=🇺🇸 UK=🇬🇧 Global=🌍` }] }],
-        generationConfig: { temperature: 0.7, maxOutputTokens: 2048 }
+Flags: India=🇮🇳 US=🇺🇸 UK=🇬🇧 Global=🌍` }],
+temperature: 0.7,
+max_tokens: 2048,
       }),
       cache: 'no-store'
     }

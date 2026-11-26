@@ -75,8 +75,10 @@ Return ONLY valid JSON, no markdown:
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.5, maxOutputTokens: 4096 },
+        model: 'llama-3.3-70b-versatile',
+messages: [{ role: 'user', content: prompt }],
+temperature: 0.5,
+max_tokens: 4096,,
       }),
     }
   )
@@ -85,11 +87,11 @@ Return ONLY valid JSON, no markdown:
     throw new Error(`Groq API error (${data.error.code || res.status}): ${data.error.message || JSON.stringify(data.error).slice(0, 150)}`)
   }
   const raw = data.choices?.[0]?.message?.content || ''
-  const finishReason = data.candidates?.[0]?.finishReason || ''
+  const finishReason = data.choices?.[0]?.finish_reason || ''
   const cleaned = raw.replace(/```json\n?|```/g, '').trim()
   const match = cleaned.match(/\{[\s\S]*\}/)
   if (!match) {
-    const truncatedNote = finish_reason === 'length' ? ' [TRUNCATED — hit token limit]' : ''
+    const truncatedNote = finishReason === 'length' ? ' [TRUNCATED — hit token limit]' : ''
     throw new Error(`Could not parse script from Groq response${truncatedNote}. finish_reason=${finishReason}, length=${raw.length}. Tail: ${raw.slice(-200) || '(empty response)'}`)
   }
   const parsed = JSON.parse(match[0])
@@ -120,8 +122,10 @@ Return ONLY valid JSON, no markdown:
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.5, maxOutputTokens: 2048 },
+          model: 'llama-3.3-70b-versatile',
+messages: [{ role: 'user', content: prompt }],
+temperature: 0.5,
+max_tokens: 2048,,
         }),
       }
     )
@@ -137,63 +141,18 @@ Return ONLY valid JSON, no markdown:
   }
 }
 
-// ── Generate one scene's image (Nano Banana), compressed to lightweight JPEG ──
-async function generateSceneImage(prompt: string, groqKey: string): Promise<string | null> {
-  try {
-    const fullPrompt = `${prompt}
-
-Style: photorealistic, natural lighting, professional editorial photography, no text overlays, no logos, no watermarks, no illustrated or cartoon style, no specific identifiable real people's faces.`
-
-    const res = await fetch(
-      'https://api.groq.com/openai/v1/chat/completions',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: fullPrompt }] }],
-          generationConfig: { responseModalities: ['IMAGE'], imageConfig: { aspectRatio: '16:9' } },
-        }),
-      }
-    )
-    const data = await res.json()
-    if (data.error) return null
-    const parts = data.candidates?.[0]?.content?.parts || []
-    const imagePart = parts.find((p: any) => p.inlineData?.data)
-    if (!imagePart) return null
-
-    const buffer = Buffer.from(imagePart.inlineData.data, 'base64')
-    return `data:image/jpeg;base64,${buffer.toString('base64')}`
-  } catch {
-    return null
-  }
+// ── Generate one scene's image — Gemini-specific, not supported on Groq ──
+async function generateSceneImage(_prompt: string, _groqKey: string): Promise<string | null> {
+  // Image generation requires Gemini's responseModalities: ['IMAGE'] which is not available on Groq.
+  // Return null so callers fall back to placeholder images.
+  return null
 }
 
-// ── Generate one scene's voiceover audio ──────────────────────────
-async function generateSceneAudio(text: string, groqKey: string, voice: string): Promise<string | null> {
-  try {
-    const res = await fetch(
-      'https://api.groq.com/openai/v1/chat/completions',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: `Say in a clear, engaging news-anchor tone: ${text}` }] }],
-          generationConfig: {
-            responseModalities: ['AUDIO'],
-            speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice || 'Kore' } } },
-          },
-        }),
-      }
-    )
-    const data = await res.json()
-    if (data.error) return null
-    const parts = data.candidates?.[0]?.content?.parts || []
-    const audioPart = parts.find((p: any) => p.inlineData?.data)
-    if (!audioPart) return null
-    return pcmToWavDataUri(audioPart.inlineData.data)
-  } catch {
-    return null
-  }
+// ── Generate one scene's voiceover audio — Gemini-specific, not supported on Groq ──
+async function generateSceneAudio(_text: string, _groqKey: string, _voice: string): Promise<string | null> {
+  // TTS requires Gemini's speechConfig which is not available on Groq.
+  // Return null so callers fall back to silent/no-audio.
+  return null
 }
 
 export async function POST(req: NextRequest) {

@@ -31,9 +31,8 @@ async function formatContentWithAI(text: string, lang: string, groqKey: string):
           system_instruction: {
             parts: [{ text: 'You are an HTML formatter. Return only valid HTML content. No markdown, no code fences, no explanations.' }]
           },
-          contents: [{
-            parts: [{
-              text: `Format this ${lang} article as clean WordPress-ready HTML.
+          model: 'llama-3.3-70b-versatile',
+messages: [{ role: 'user', content: `Format this ${lang} article as clean WordPress-ready HTML.
 
 Rules:
 - Wrap every paragraph in <p> tags
@@ -44,10 +43,9 @@ Rules:
 - Return ONLY the HTML, nothing else
 
 Article content:
-${text}`
-            }]
-          }],
-          generationConfig: { temperature: 0.1, maxOutputTokens: 4096 },
+${text}` }],
+temperature: 0.1,
+max_tokens: 4096,,
         }),
       }
     )
@@ -145,8 +143,10 @@ Return this exact JSON structure:
                 text: `You are a JSON-only API. Always respond with valid JSON and nothing else. Never use markdown code fences. The article is in ${detectedLang} — ALL text fields in your response must be in ${detectedLang}. Never translate to English unless the article is in English.`
               }]
             },
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { temperature: 0.2, maxOutputTokens: 2048 },
+            model: 'llama-3.3-70b-versatile',
+messages: [{ role: 'user', content: prompt }],
+temperature: 0.2,
+max_tokens: 2048,,
           }),
         }
       ),

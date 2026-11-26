@@ -105,8 +105,10 @@ Return ONLY a valid JSON array:
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.3, maxOutputTokens: 8192 },
+        model: 'llama-3.3-70b-versatile',
+messages: [{ role: 'user', content: prompt }],
+temperature: 0.3,
+max_tokens: 8192,,
       }),
     }
   )
@@ -253,19 +255,21 @@ Return ONLY a valid JSON array, no markdown, no commentary before or after:
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.2, maxOutputTokens: 8192 },
+        model: 'llama-3.3-70b-versatile',
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.2,
+        max_tokens: 8192,
       }),
     }
   )
   const data = await res.json()
   const raw  = data.choices?.[0]?.message?.content || ''
-  const finishReason = data.candidates?.[0]?.finishReason || ''
+  const finishReason = data.choices?.[0]?.finish_reason || ''
   const cleaned = raw.replace(/```json\n?|```/g, '').trim()
   const match = cleaned.match(/\[[\s\S]*\]/)
   if (!match) {
-    const truncatedNote = finish_reason === 'length' ? ' [TRUNCATED — hit token limit, try a smaller batch]' : ''
-    throw new Error(`No JSON array in Gemini response${truncatedNote}. finish_reason=${finishReason}, length=${raw.length}. Tail: ${raw.slice(-200)}`)
+    const truncatedNote = finishReason === 'length' ? ' [TRUNCATED — hit token limit, try a smaller batch]' : ''
+    throw new Error(`No JSON array in Groq response${truncatedNote}. finish_reason=${finishReason}, length=${raw.length}. Tail: ${raw.slice(-200)}`)
   }
   return JSON.parse(match[0])
 }
