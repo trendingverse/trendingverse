@@ -106,7 +106,7 @@ The "content" field must be the full rewritten article as plain paragraphs separ
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
         body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile',
+          model: 'llama-3.1-8b-instant',
 messages: [{ role: 'user', content: prompt }],
 temperature: 0.4,
 max_tokens: 8192,

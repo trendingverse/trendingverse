@@ -75,7 +75,7 @@ Return ONLY valid JSON, no markdown:
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
       body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
+        model: 'llama-3.1-8b-instant',
 messages: [{ role: 'user', content: prompt }],
 temperature: 0.5,
 max_tokens: 4096,
@@ -122,7 +122,7 @@ Return ONLY valid JSON, no markdown:
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
         body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile',
+          model: 'llama-3.1-8b-instant',
 messages: [{ role: 'user', content: prompt }],
 temperature: 0.5,
 max_tokens: 2048,

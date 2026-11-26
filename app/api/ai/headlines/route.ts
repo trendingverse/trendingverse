@@ -10,7 +10,7 @@ async function callGemini(prompt: string, apiKey: string): Promise<string[]> {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
+        model: 'llama-3.1-8b-instant',
           messages: [{ role: 'user', content: prompt }],
           temperature: 1,
           max_tokens: 1024,
