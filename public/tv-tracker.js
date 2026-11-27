@@ -30,27 +30,26 @@
       var s = document.createElement('style');
       s.id = 'tv-ad-fix-css';
       s.textContent =
-        /* Target ins by tag AND by width attribute */
-        'ins,ins.adsbygoogle,ins[width]{display:block!important;max-width:100%!important;width:100%!important;box-sizing:border-box!important;}' +
         /* Clamp html+body */
         'html,body{max-width:100%!important;overflow-x:hidden!important;width:100%!important;}' +
-        /* Common WP theme content wrappers — broad catch for fixed-width themes */
+        /* Common WP theme content wrappers */
         '.site,.site-content,.content-area,.entry-content,.post-content,' +
         'article,.container,.wrapper,.main-content,#content,#main,' +
         '[class*="wrap"],[class*="container"],[class*="content"],[class*="inner"]' +
         '{max-width:100%!important;box-sizing:border-box!important;}' +
-        /* Any element wider than viewport gets clipped, not page-breaking */
+        /* Justify article body text */
+        '.entry-content p,.post-content p,.entry-content li,.post-content li' +
+        '{text-align:justify!important;}' +
+        /* Any element wider than viewport gets clipped */
         'img,video,iframe,table{max-width:100%!important;height:auto;}' +
-        /* tv-ad-wrap: grey box — in-content ads */
-        '.tv-ad-wrap{background:#f2f2f2!important;border-radius:4px;padding:8px 4px 4px;margin:20px auto;clear:both;text-align:center;max-width:100%;overflow:hidden;box-sizing:border-box;}' +
+        /* tv-ad-wrap: centered grey box */
+        '.tv-ad-wrap{background:#f2f2f2!important;border-radius:4px;padding:8px 4px 4px;margin:20px auto;clear:both;text-align:center!important;max-width:100%;overflow:hidden;box-sizing:border-box;}' +
         '.tv-ad-label,.tv-ad-wrap>span:first-child{display:block!important;font-size:9px!important;line-height:1!important;color:#999!important;letter-spacing:.5px!important;text-transform:uppercase!important;font-family:sans-serif!important;margin-bottom:4px!important;}' +
-        /* Center ins inside in-content wrap regardless of width attribute */
-        '.tv-ad-wrap ins,.tv-ad-wrap ins.adsbygoogle,.tv-ad-wrap iframe,.tv-ad-wrap div[id^="google_ads"]{display:block!important;margin:0 auto!important;max-width:100%!important;box-sizing:border-box!important;}' +
-        /* Sticky anchor — keep it tight, centered */
-        '.tv-anchor-inner{position:relative;width:100%;background:#f2f2f2;box-shadow:0 -2px 10px rgba(0,0,0,.18);box-sizing:border-box;text-align:center;overflow:hidden;padding:4px 0 2px;}' +
-        /* Center the ad inside anchor; constrain width so it doesn't stretch full viewport */
-        '.tv-anchor-inner>div:last-child{display:flex!important;justify-content:center!important;align-items:center!important;width:100%!important;}' +
-        '.tv-anchor-inner ins,.tv-anchor-inner ins.adsbygoogle{display:block!important;margin:0 auto!important;max-width:100%!important;box-sizing:border-box!important;}';
+        /* ins inside ad wrap: inline-block so parent text-align:center works */
+        '.tv-ad-wrap ins,.tv-ad-wrap ins.adsbygoogle{display:inline-block!important;max-width:100%!important;box-sizing:border-box!important;vertical-align:top!important;}' +
+        /* Sticky anchor */
+        '.tv-anchor-inner{position:relative;width:100%;background:#f2f2f2;box-shadow:0 -2px 10px rgba(0,0,0,.18);box-sizing:border-box;text-align:center!important;overflow:hidden;padding:4px 0 2px;}' +
+        '.tv-anchor-inner ins,.tv-anchor-inner ins.adsbygoogle{display:inline-block!important;max-width:100%!important;box-sizing:border-box!important;vertical-align:top!important;}';
       if (head) head.insertBefore(s, head.firstChild);
     }
 
@@ -82,16 +81,19 @@
           el.style.setProperty('max-width', vw + 'px', 'important');
         }
         el.style.setProperty('box-sizing', 'border-box', 'important');
-        el.style.setProperty('display', 'block', 'important');
-        el.style.setProperty('margin-left', 'auto', 'important');
-        el.style.setProperty('margin-right', 'auto', 'important');
+        // inline-block + parent text-align:center is not overridable by AdSense async styles
+        el.style.setProperty('display', 'inline-block', 'important');
+        el.style.setProperty('vertical-align', 'top', 'important');
       }
-      // Center ads inside sticky anchor — use flex on the wrapper
+      // Ensure ad wrap parents have text-align:center so inline-block ads center
+      var wraps = document.querySelectorAll('.tv-ad-wrap');
+      for (var m = 0; m < wraps.length; m++) {
+        wraps[m].style.setProperty('text-align', 'center', 'important');
+      }
+      // Center ads inside sticky anchor
       var anchors = document.querySelectorAll('.tv-anchor-inner');
       for (var k = 0; k < anchors.length; k++) {
-        anchors[k].style.setProperty('display', 'flex', 'important');
-        anchors[k].style.setProperty('flex-direction', 'column', 'important');
-        anchors[k].style.setProperty('align-items', 'center', 'important');
+        anchors[k].style.setProperty('text-align', 'center', 'important');
         anchors[k].style.setProperty('width', '100%', 'important');
       }
       // Reset body overflow in case a wide element already stretched it
