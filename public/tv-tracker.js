@@ -6,10 +6,25 @@
 (function () {
   'use strict';
 
-  // ── Emergency responsive ad fix v1.5 ─────────────────────────────
-  // CSS alone is not enough: browsers partially honour the HTML width=""
-  // attribute on <ins> even with !important. JS inline-style wins every time.
+  // ── Mobile layout + ad overflow fix v1.6 ─────────────────────────
   (function fixAdOverflow() {
+    var head = document.head || document.getElementsByTagName('head')[0];
+
+    // ── 0. Ensure correct viewport meta so theme detects mobile ─────
+    // If missing or wrong, the browser uses 980px layout width and the
+    // theme never triggers its responsive breakpoints.
+    (function ensureViewport() {
+      var existing = document.querySelector('meta[name="viewport"]');
+      if (!existing) {
+        var m = document.createElement('meta');
+        m.name = 'viewport';
+        m.content = 'width=device-width, initial-scale=1';
+        if (head) head.insertBefore(m, head.firstChild);
+      } else if (!existing.content.includes('width=device-width')) {
+        existing.content = 'width=device-width, initial-scale=1';
+      }
+    })();
+
     // ── 1. Inject CSS as first-in-head ──────────────────────────────
     if (!document.getElementById('tv-ad-fix-css')) {
       var s = document.createElement('style');
@@ -17,18 +32,22 @@
       s.textContent =
         /* Target ins by tag AND by width attribute */
         'ins,ins.adsbygoogle,ins[width]{display:block!important;max-width:100%!important;width:100%!important;box-sizing:border-box!important;}' +
-        /* Clamp html+body so no child can widen the scrollport */
+        /* Clamp html+body */
         'html,body{max-width:100%!important;overflow-x:hidden!important;width:100%!important;}' +
-        /* Common WP theme content wrappers */
-        '.site,.site-content,.content-area,.entry-content,.post-content,article,.container,.wrapper,.main-content,#content,#main{max-width:100%!important;overflow-x:hidden!important;}' +
-        /* tv-ad-wrap: grey box + responsive overrides */
+        /* Common WP theme content wrappers — broad catch for fixed-width themes */
+        '.site,.site-content,.content-area,.entry-content,.post-content,' +
+        'article,.container,.wrapper,.main-content,#content,#main,' +
+        '[class*="wrap"],[class*="container"],[class*="content"],[class*="inner"]' +
+        '{max-width:100%!important;box-sizing:border-box!important;}' +
+        /* Any element wider than viewport gets clipped, not page-breaking */
+        'img,video,iframe,table{max-width:100%!important;height:auto;}' +
+        /* tv-ad-wrap: grey box */
         '.tv-ad-wrap{background:#f2f2f2!important;border-radius:4px;padding:8px 4px 4px;margin:20px auto;clear:both;text-align:center;max-width:100%;overflow:hidden;box-sizing:border-box;}' +
         '.tv-ad-label,.tv-ad-wrap>span:first-child{display:block!important;font-size:9px!important;line-height:1!important;color:#999!important;letter-spacing:.5px!important;text-transform:uppercase!important;font-family:sans-serif!important;margin-bottom:4px!important;}' +
         '.tv-ad-wrap ins,.tv-ad-wrap iframe,.tv-ad-wrap div[id^="google_ads"]{max-width:100%!important;width:100%!important;box-sizing:border-box!important;}' +
-        /* Sticky anchor: full-width, no overflow */
+        /* Sticky anchor */
         '.tv-anchor-inner{position:relative;width:100%;background:#f2f2f2;box-shadow:0 -2px 10px rgba(0,0,0,.18);box-sizing:border-box;text-align:center;overflow:hidden;}' +
         '.tv-anchor-inner ins,.tv-anchor-inner ins.adsbygoogle{display:block!important;width:100%!important;max-width:100%!important;box-sizing:border-box!important;}';
-      var head = document.head || document.getElementsByTagName('head')[0];
       if (head) head.insertBefore(s, head.firstChild);
     }
 
