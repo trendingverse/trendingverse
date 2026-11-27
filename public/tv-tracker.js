@@ -76,6 +76,16 @@
         el.style.setProperty('max-width', vw + 'px', 'important');
         el.style.setProperty('box-sizing', 'border-box', 'important');
         el.style.setProperty('display', 'block', 'important');
+        el.style.setProperty('margin-left', 'auto', 'important');
+        el.style.setProperty('margin-right', 'auto', 'important');
+      }
+      // Center ads inside sticky anchor
+      var anchors = document.querySelectorAll('.tv-anchor-inner>div:last-child');
+      for (var k = 0; k < anchors.length; k++) {
+        anchors[k].style.setProperty('display', 'flex', 'important');
+        anchors[k].style.setProperty('justify-content', 'center', 'important');
+        anchors[k].style.setProperty('align-items', 'center', 'important');
+        anchors[k].style.setProperty('width', '100%', 'important');
       }
       // Reset body overflow in case a wide element already stretched it
       document.documentElement.style.setProperty('overflow-x', 'hidden', 'important');
