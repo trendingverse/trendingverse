@@ -55,7 +55,8 @@ export async function GET(req: NextRequest) {
         gam_network_code,
         gam_unit_path,
         size_width,
-        size_height
+        size_height,
+        device
       )
     `)
     .eq('publisher_id', publisherId)
@@ -72,6 +73,7 @@ export async function GET(req: NextRequest) {
       gam_unit_path: unit?.gam_unit_path,
       size_width: unit?.size_width,
       size_height: unit?.size_height,
+      device: unit?.device || 'all',
       is_enabled: a.is_enabled,
       inject_after_paragraph: a.inject_after_paragraph,
       revenue_share_pct: a.revenue_share_pct,
