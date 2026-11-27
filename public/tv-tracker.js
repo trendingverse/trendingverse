@@ -72,18 +72,25 @@
           }
           continue;
         }
-        el.style.setProperty('width', '100%', 'important');
-        el.style.setProperty('max-width', vw + 'px', 'important');
+        // If ad is wider than viewport, clamp it; otherwise keep natural width and center it
+        if (adW > 0 && adW <= vw) {
+          // Ad fits — keep its natural width, just center it
+          el.style.setProperty('width', adW + 'px', 'important');
+        } else {
+          // Ad wider than viewport (or unknown width) — shrink to fit
+          el.style.setProperty('width', '100%', 'important');
+          el.style.setProperty('max-width', vw + 'px', 'important');
+        }
         el.style.setProperty('box-sizing', 'border-box', 'important');
         el.style.setProperty('display', 'block', 'important');
         el.style.setProperty('margin-left', 'auto', 'important');
         el.style.setProperty('margin-right', 'auto', 'important');
       }
-      // Center ads inside sticky anchor
-      var anchors = document.querySelectorAll('.tv-anchor-inner>div:last-child');
+      // Center ads inside sticky anchor — use flex on the wrapper
+      var anchors = document.querySelectorAll('.tv-anchor-inner');
       for (var k = 0; k < anchors.length; k++) {
         anchors[k].style.setProperty('display', 'flex', 'important');
-        anchors[k].style.setProperty('justify-content', 'center', 'important');
+        anchors[k].style.setProperty('flex-direction', 'column', 'important');
         anchors[k].style.setProperty('align-items', 'center', 'important');
         anchors[k].style.setProperty('width', '100%', 'important');
       }
