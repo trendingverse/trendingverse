@@ -41,13 +41,16 @@
         '{max-width:100%!important;box-sizing:border-box!important;}' +
         /* Any element wider than viewport gets clipped, not page-breaking */
         'img,video,iframe,table{max-width:100%!important;height:auto;}' +
-        /* tv-ad-wrap: grey box */
+        /* tv-ad-wrap: grey box — in-content ads */
         '.tv-ad-wrap{background:#f2f2f2!important;border-radius:4px;padding:8px 4px 4px;margin:20px auto;clear:both;text-align:center;max-width:100%;overflow:hidden;box-sizing:border-box;}' +
         '.tv-ad-label,.tv-ad-wrap>span:first-child{display:block!important;font-size:9px!important;line-height:1!important;color:#999!important;letter-spacing:.5px!important;text-transform:uppercase!important;font-family:sans-serif!important;margin-bottom:4px!important;}' +
-        '.tv-ad-wrap ins,.tv-ad-wrap iframe,.tv-ad-wrap div[id^="google_ads"]{max-width:100%!important;width:100%!important;box-sizing:border-box!important;}' +
-        /* Sticky anchor */
-        '.tv-anchor-inner{position:relative;width:100%;background:#f2f2f2;box-shadow:0 -2px 10px rgba(0,0,0,.18);box-sizing:border-box;text-align:center;overflow:hidden;}' +
-        '.tv-anchor-inner ins,.tv-anchor-inner ins.adsbygoogle{display:block!important;width:100%!important;max-width:100%!important;box-sizing:border-box!important;}';
+        /* Center ins inside in-content wrap regardless of width attribute */
+        '.tv-ad-wrap ins,.tv-ad-wrap ins.adsbygoogle,.tv-ad-wrap iframe,.tv-ad-wrap div[id^="google_ads"]{display:block!important;margin:0 auto!important;max-width:100%!important;box-sizing:border-box!important;}' +
+        /* Sticky anchor — keep it tight, centered */
+        '.tv-anchor-inner{position:relative;width:100%;background:#f2f2f2;box-shadow:0 -2px 10px rgba(0,0,0,.18);box-sizing:border-box;text-align:center;overflow:hidden;padding:4px 0 2px;}' +
+        /* Center the ad inside anchor; constrain width so it doesn't stretch full viewport */
+        '.tv-anchor-inner>div:last-child{display:flex!important;justify-content:center!important;align-items:center!important;width:100%!important;}' +
+        '.tv-anchor-inner ins,.tv-anchor-inner ins.adsbygoogle{display:block!important;margin:0 auto!important;max-width:100%!important;box-sizing:border-box!important;}';
       if (head) head.insertBefore(s, head.firstChild);
     }
 
