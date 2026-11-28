@@ -2,7 +2,7 @@ export const runtime = 'edge'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { computeSeoScore } from '@/lib/seo-scorer'
-import { buildArticlePrompt, VALID_CATEGORIES } from '@/lib/article-generation-prompt'
+import { buildArticlePrompt, VALID_CATEGORIES, type ArticleSource } from '@/lib/article-generation-prompt'
 import { computePacing, resolveStatus, computeSpend } from '@/lib/pacing-engine'
 export const maxDuration = 300 // Vercel will clamp to your plan's actual max if lower
 
@@ -77,152 +77,131 @@ function slugify(text: string): string {
                             // slug stored in Supabase.
 }
 
-async function getTrendingTopic(geminiKey: string, newsApiKey?: string, region = 'India') {
+// ── REAL-SOURCE TOPIC DISCOVERY ──────────────────────────────────
+// Every auto-published article must be based on a real story from a real
+// publisher, published in the last 36 hours. There is NO fallback to
+// AI-invented headlines or hardcoded evergreen titles: if no fresh real
+// story is available, the run is skipped. (The old fallbacks produced
+// fabricated "breaking news" and hundreds of near-duplicate posts.)
+export interface SourcedTopic {
+  title: string
+  category: string
+  keywords: string[]
+  source: ArticleSource
+}
+
+const MAX_SOURCE_AGE_MS = 36 * 60 * 60 * 1000
+
+function decodeEntities(s: string): string {
+  return s
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&apos;/g, "'")
+    .replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+}
+
+function keywordsFrom(title: string): string[] {
+  const stop = new Set(['about', 'after', 'their', 'there', 'which', 'would', 'could', 'should', 'these', 'those', 'where', 'while', 'with', 'from', 'into', 'over', 'says', 'said'])
+  return title.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').split(/\s+/)
+    .filter(w => w.length > 4 && !stop.has(w)).slice(0, 5)
+}
+
+async function fromNewsApi(newsApiKey: string, region: string): Promise<SourcedTopic[]> {
+  let url = ''
+  if (region === 'India') {
+    url = `https://newsapi.org/v2/everything?sources=the-times-of-india,the-hindu,ndtv,india-today&pageSize=20&sortBy=publishedAt&apiKey=${newsApiKey}`
+  } else if (region === 'GCC') {
+    url = `https://newsapi.org/v2/top-headlines?sources=al-jazeera-english&pageSize=20&apiKey=${newsApiKey}`
+  } else if (region === 'UK') {
+    url = `https://newsapi.org/v2/top-headlines?country=gb&pageSize=20&apiKey=${newsApiKey}`
+  } else {
+    url = `https://newsapi.org/v2/top-headlines?country=us&pageSize=20&apiKey=${newsApiKey}`
+  }
+  const res = await fetch(url, {})
+  if (!res.ok) return []
+  const data = await res.json()
+  const now = Date.now()
+  return (data.articles || [])
+    .filter((a: any) => a.title && a.title !== '[Removed]' && a.title.length > 20 && a.url)
+    .filter((a: any) => !a.publishedAt || now - new Date(a.publishedAt).getTime() < MAX_SOURCE_AGE_MS)
+    .map((a: any) => {
+      const title = a.title.replace(/ [-|] [^-|]+$/, '').trim()
+      return {
+        title,
+        category: 'News',
+        keywords: keywordsFrom(title),
+        source: {
+          title,
+          url: a.url,
+          publisher: a.source?.name || new URL(a.url).hostname.replace(/^www\./, ''),
+          description: a.description || '',
+          publishedAt: a.publishedAt || undefined,
+        },
+      }
+    })
+}
+
+// Google News RSS — free, no key. Used when NEWS_API_KEY is missing or empty.
+async function fromGoogleNews(region: string): Promise<SourcedTopic[]> {
+  const ed: Record<string, string> = {
+    India: 'hl=en-IN&gl=IN&ceid=IN:en',
+    GCC: 'hl=en-AE&gl=AE&ceid=AE:en',
+    UK: 'hl=en-GB&gl=GB&ceid=GB:en',
+    USA: 'hl=en-US&gl=US&ceid=US:en',
+  }
+  const res = await fetch(`https://news.google.com/rss?${ed[region] || ed.India}`, {
+    headers: { 'User-Agent': 'Mozilla/5.0 (compatible; TrendingVerseBot/1.0)' },
+  })
+  if (!res.ok) return []
+  const xml = await res.text()
+  const now = Date.now()
+  const items = xml.split('<item>').slice(1).map(chunk => chunk.split('</item>')[0])
+  const out: SourcedTopic[] = []
+  for (const it of items) {
+    const get = (tag: string) => (it.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`)) || [])[1] || ''
+    const rawTitle = decodeEntities(get('title'))
+    const link = decodeEntities(get('link'))
+    const pubDate = get('pubDate')
+    const publisher = decodeEntities(get('source')) || ''
+    if (!rawTitle || !link || rawTitle.length < 20) continue
+    if (pubDate && now - new Date(pubDate).getTime() > MAX_SOURCE_AGE_MS) continue
+    const suffix = publisher ? ` - ${publisher}` : ''
+    const title = suffix && rawTitle.endsWith(suffix) ? rawTitle.slice(0, -suffix.length).trim() : rawTitle
+    out.push({
+      title,
+      category: 'News',
+      keywords: keywordsFrom(title),
+      source: {
+        title,
+        url: link,
+        publisher: publisher || 'Google News',
+        description: decodeEntities(get('description')).slice(0, 600),
+        publishedAt: pubDate ? new Date(pubDate).toISOString() : undefined,
+      },
+    })
+  }
+  return out
+}
+
+async function getSourcedTopics(newsApiKey: string | undefined, region = 'India'): Promise<SourcedTopic[]> {
+  let topics: SourcedTopic[] = []
   if (newsApiKey) {
-    try {
-      let url = ''
-      if (region === 'India') {
-        url = `https://newsapi.org/v2/everything?sources=the-times-of-india,the-hindu,ndtv,india-today&pageSize=10&sortBy=publishedAt&apiKey=${newsApiKey}`
-      } else if (region === 'GCC') {
-        url = `https://newsapi.org/v2/top-headlines?sources=al-jazeera-english,the-national&pageSize=10&apiKey=${newsApiKey}`
-      } else if (region === 'UK') {
-        url = `https://newsapi.org/v2/top-headlines?country=gb&pageSize=10&apiKey=${newsApiKey}`
-      } else {
-        // USA default
-        url = `https://newsapi.org/v2/top-headlines?country=us&pageSize=10&apiKey=${newsApiKey}`
-      }
-      const res = await fetch(url, {})
-      if (res.ok) {
-        const data = await res.json()
-        const articles = (data.articles || []).filter((a: { title: string }) =>
-          a.title && a.title !== '[Removed]' && a.title.length > 20
-        )
-        if (articles.length > 0) {
-          const pick = articles[Math.floor(Math.random() * Math.min(5, articles.length))]
-          const title = pick.title.replace(/ [-|] [^-|]+$/, '').trim()
-          return { title, category: 'News', keywords: title.split(' ').filter((w: string) => w.length > 4).slice(0, 5) }
-        }
-      }
-    } catch { /* fallback to Gemini */ }
+    try { topics = await fromNewsApi(newsApiKey, region) } catch { /* try Google News */ }
   }
-
-  const today = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })
-  try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${geminiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: `Today is ${today}. What is ONE specific breaking or trending news topic in ${region} right now? Pick from: politics, technology, sports, entertainment, business, health. Return ONLY JSON: {"title":"Specific news headline","category":"Technology","keywords":["kw1","kw2","kw3","kw4","kw5"]}` }] }],
-          generationConfig: { temperature: 1, maxOutputTokens: 256 },
-        }),
-      }
-    )
-    if (res.ok) {
-      const data = await res.json()
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
-      const match = text.match(/\{[\s\S]*\}/)
-      if (match) {
-        const parsed = JSON.parse(match[0])
-        if (parsed.title) return parsed
-      }
-    }
-  } catch { /* final fallback */ }
-
-  // Rotating fallback pool — indexed by hour of day so each run gets a different topic
-  const hour = new Date().getUTCHours()
-  const min = new Date().getUTCMinutes()
-  const year = new Date().getFullYear()
-  const idx = (hour * 6 + Math.floor(min / 10)) % 24 // 0-23, changes every 10 min
-
-  const fallbackPools: Record<string, { title: string; category: string; keywords: string[] }[]> = {
-    'USA': [
-      { title: `US Federal Reserve Interest Rate Decision Impact ${year}`, category: 'Business', keywords: ['federal reserve', 'interest rates', 'us economy', 'inflation', 'fed'] },
-      { title: `America AI Technology Regulation and Innovation Policy ${year}`, category: 'Technology', keywords: ['ai regulation', 'us tech policy', 'artificial intelligence', 'congress', 'innovation'] },
-      { title: `US Housing Market Trends Mortgage Rates Real Estate ${year}`, category: 'Business', keywords: ['us housing', 'mortgage rates', 'real estate', 'home prices', 'market'] },
-      { title: `American Healthcare System Reform Costs and Coverage ${year}`, category: 'Health', keywords: ['us healthcare', 'medical costs', 'insurance', 'reform', 'coverage'] },
-      { title: `US Stock Market S&P 500 Nasdaq Performance ${year}`, category: 'Business', keywords: ['us stock market', 's&p 500', 'nasdaq', 'wall street', 'investing'] },
-      { title: `US-China Trade Relations Tariffs and Economic Impact ${year}`, category: 'Business', keywords: ['us china trade', 'tariffs', 'trade war', 'supply chain', 'economy'] },
-      { title: `America Electric Vehicle Adoption EV Infrastructure ${year}`, category: 'Technology', keywords: ['us electric vehicles', 'ev adoption', 'charging infrastructure', 'tesla', 'ford'] },
-      { title: `US Immigration Policy Work Visa H1B Changes ${year}`, category: 'Politics', keywords: ['us immigration', 'h1b visa', 'work visa', 'immigration policy', 'dhs'] },
-      { title: `American Cybersecurity Threats and Federal Response ${year}`, category: 'Technology', keywords: ['us cybersecurity', 'cyber threats', 'federal response', 'data breach', 'nsa'] },
-      { title: `US Unemployment Jobs Report Labor Market Trends ${year}`, category: 'Business', keywords: ['us unemployment', 'jobs report', 'labor market', 'employment', 'wages'] },
-      { title: `America Social Media Regulation TikTok Meta Congress ${year}`, category: 'Technology', keywords: ['social media regulation', 'tiktok', 'meta', 'congress', 'big tech'] },
-      { title: `US Defense Budget Military Spending Priorities ${year}`, category: 'Politics', keywords: ['us defense', 'military budget', 'pentagon', 'national security', 'spending'] },
-      { title: `American Climate Policy Clean Energy Transition ${year}`, category: 'Environment', keywords: ['us climate policy', 'clean energy', 'ira', 'renewable energy', 'emissions'] },
-      { title: `US Consumer Spending Retail Sales Economic Outlook ${year}`, category: 'Business', keywords: ['us consumer spending', 'retail sales', 'economic outlook', 'gdp', 'recession'] },
-      { title: `America Semiconductor Chip Manufacturing CHIPS Act ${year}`, category: 'Technology', keywords: ['us semiconductors', 'chips act', 'intel', 'tsmc', 'manufacturing'] },
-      { title: `US Healthcare Drug Prices Pharma Policy Reform ${year}`, category: 'Health', keywords: ['drug prices', 'pharma', 'medicare', 'prescription', 'biden inflation'] },
-      { title: `American Higher Education College Costs Student Loans ${year}`, category: 'Education', keywords: ['college costs', 'student loans', 'higher education', 'tuition', 'fafsa'] },
-      { title: `US Tech Layoffs Silicon Valley Job Market ${year}`, category: 'Technology', keywords: ['tech layoffs', 'silicon valley', 'job market', 'google amazon meta', 'unemployment'] },
-      { title: `America Small Business Growth Entrepreneurship Trends ${year}`, category: 'Business', keywords: ['us small business', 'entrepreneurship', 'startup', 'sba', 'loans'] },
-      { title: `US Inflation CPI Consumer Prices Economic Data ${year}`, category: 'Business', keywords: ['us inflation', 'cpi', 'consumer prices', 'cost of living', 'federal reserve'] },
-      { title: `American Sports Industry Revenue Business of NFL NBA ${year}`, category: 'Sports', keywords: ['sports industry', 'nfl', 'nba', 'revenue', 'media rights'] },
-      { title: `US Renewable Energy Solar Wind Power Growth ${year}`, category: 'Technology', keywords: ['us solar', 'wind energy', 'renewable power', 'grid', 'energy transition'] },
-      { title: `America Mental Health Crisis Awareness and Treatment ${year}`, category: 'Health', keywords: ['mental health', 'us health crisis', 'therapy', 'insurance coverage', 'awareness'] },
-      { title: `US Foreign Policy NATO Alliances Global Strategy ${year}`, category: 'Politics', keywords: ['us foreign policy', 'nato', 'alliances', 'ukraine', 'global strategy'] },
-    ],
-    'GCC': [
-      { title: `Saudi Arabia Vision 2030 Progress Economic Diversification ${year}`, category: 'Business', keywords: ['saudi vision 2030', 'economic diversification', 'riyadh', 'neom', 'investment'] },
-      { title: `UAE Dubai Real Estate Investment Market Growth ${year}`, category: 'Business', keywords: ['dubai real estate', 'uae property', 'investment', 'expo city', 'market'] },
-      { title: `Oil Prices OPEC Production Cuts Gulf Economy ${year}`, category: 'Business', keywords: ['opec', 'oil prices', 'gulf economy', 'production cuts', 'crude oil'] },
-      { title: `UAE Artificial Intelligence Strategy Technology Hub ${year}`, category: 'Technology', keywords: ['uae ai', 'dubai tech', 'artificial intelligence', 'smart city', 'strategy'] },
-      { title: `GCC Tourism Growth Dubai Abu Dhabi Saudi Visitors ${year}`, category: 'Lifestyle', keywords: ['gcc tourism', 'dubai visitors', 'saudi tourism', 'gulf travel', 'expo'] },
-      { title: `Qatar LNG Gas Exports Energy Market Leadership ${year}`, category: 'Business', keywords: ['qatar lng', 'gas exports', 'energy market', 'qatargas', 'global energy'] },
-      { title: `UAE Golden Visa Residency Rules NRI Expat Benefits ${year}`, category: 'Business', keywords: ['uae golden visa', 'residency', 'expat', 'nri', 'investment visa'] },
-      { title: `Saudi Aramco Business Performance Oil Industry ${year}`, category: 'Business', keywords: ['saudi aramco', 'oil industry', 'revenue', 'petroleum', 'global energy'] },
-      { title: `GCC Fintech Digital Banking Payments Growth ${year}`, category: 'Technology', keywords: ['gcc fintech', 'digital banking', 'payments', 'uae', 'saudi fintech'] },
-      { title: `Dubai Expo City Innovation Business Hub ${year}`, category: 'Business', keywords: ['expo city dubai', 'innovation hub', 'business district', 'investment', 'uae'] },
-      { title: `GCC Healthcare Investment Medical Tourism Growth ${year}`, category: 'Health', keywords: ['gcc healthcare', 'medical tourism', 'saudi health', 'uae hospitals', 'investment'] },
-      { title: `UAE Renewable Energy Solar Nuclear Barakah ${year}`, category: 'Technology', keywords: ['uae solar', 'barakah nuclear', 'renewable energy', 'clean power', 'sustainability'] },
-      { title: `Saudi Arabia Entertainment Sports Events Vision 2030 ${year}`, category: 'Entertainment', keywords: ['saudi entertainment', 'vision 2030', 'sports events', 'concerts', 'formula e'] },
-      { title: `India GCC Remittance NRI Money Transfer Trends ${year}`, category: 'Business', keywords: ['india gcc remittance', 'nri money transfer', 'gulf workers', 'uae india', 'remittance'] },
-      { title: `Kuwait Bahrain Economy Reforms Investment Climate ${year}`, category: 'Business', keywords: ['kuwait economy', 'bahrain reforms', 'gulf investment', 'business climate', 'gcc'] },
-      { title: `GCC Cybersecurity Threats Digital Transformation ${year}`, category: 'Technology', keywords: ['gcc cybersecurity', 'digital transformation', 'uae cyber', 'saudi security', 'threats'] },
-      { title: `UAE Education Technology Schools Universities ${year}`, category: 'Education', keywords: ['uae education', 'dubai schools', 'universities', 'edtech', 'technology'] },
-      { title: `Saudi Arabia IPO Stock Market Tadawul Growth ${year}`, category: 'Business', keywords: ['saudi ipo', 'tadawul', 'stock market', 'aramco', 'investment'] },
-      { title: `Gulf Airlines Emirates Etihad Aviation Recovery Growth ${year}`, category: 'Business', keywords: ['emirates airline', 'etihad', 'gulf aviation', 'travel recovery', 'passenger growth'] },
-      { title: `GCC Food Security Agriculture Water Technology ${year}`, category: 'Business', keywords: ['gcc food security', 'water technology', 'agriculture', 'vertical farming', 'sustainability'] },
-    ],
-    'India': [
-      { title: `India Stock Market Rally Amid Global Uncertainty ${year}`, category: 'Business', keywords: ['india', 'stock', 'market', 'sensex', 'nifty'] },
-      { title: `GST Council Meeting Key Decisions for Indian Businesses ${year}`, category: 'Business', keywords: ['gst', 'india', 'tax', 'business', 'council'] },
-      { title: `India AI Startup Ecosystem Growth and Investment Trends ${year}`, category: 'Technology', keywords: ['india', 'ai', 'startup', 'investment', 'technology'] },
-      { title: `Rupee vs Dollar Exchange Rate Impact on Indian Imports ${year}`, category: 'Business', keywords: ['rupee', 'dollar', 'forex', 'india', 'economy'] },
-      { title: `India Renewable Energy Push Solar Wind Power Targets ${year}`, category: 'Technology', keywords: ['india', 'solar', 'renewable', 'energy', 'climate'] },
-      { title: `India Infrastructure Projects Highway Rail Expansion ${year}`, category: 'Business', keywords: ['india', 'infrastructure', 'highway', 'railway', 'development'] },
-      { title: `Indian Pharma Export Growth and Global Drug Demand ${year}`, category: 'Business', keywords: ['india', 'pharma', 'export', 'medicine', 'global'] },
-      { title: `India Cybersecurity Threats and Digital Safety Measures ${year}`, category: 'Technology', keywords: ['india', 'cybersecurity', 'digital', 'fraud', 'safety'] },
-      { title: `India Agriculture Reforms Farmer Income and MSP Update ${year}`, category: 'Business', keywords: ['india', 'agriculture', 'farmer', 'msp', 'reform'] },
-      { title: `Startup India DPIIT Recognition and Funding Ecosystem ${year}`, category: 'Business', keywords: ['startup', 'india', 'funding', 'dpiit', 'ecosystem'] },
-      { title: `India Electric Vehicle Market Growth and EV Policy ${year}`, category: 'Technology', keywords: ['india', 'electric', 'vehicle', 'ev', 'policy'] },
-      { title: `India Space Economy ISRO Private Sector Opportunities ${year}`, category: 'Technology', keywords: ['isro', 'space', 'india', 'satellite', 'private'] },
-      { title: `India Banking Sector NPA Recovery and Credit Growth ${year}`, category: 'Business', keywords: ['india', 'banking', 'npa', 'credit', 'rbi'] },
-      { title: `India Health Tech Telemedicine Digital Health Growth ${year}`, category: 'Health', keywords: ['india', 'health', 'telemedicine', 'digital', 'wellness'] },
-      { title: `India Semiconductor Chip Manufacturing Ambitions ${year}`, category: 'Technology', keywords: ['india', 'semiconductor', 'chip', 'manufacturing', 'fab'] },
-      { title: `India Tourism Boom Domestic International Travel Surge ${year}`, category: 'Lifestyle', keywords: ['india', 'tourism', 'travel', 'domestic', 'international'] },
-      { title: `Indian Real Estate Market Trends Residential Commercial ${year}`, category: 'Business', keywords: ['india', 'real', 'estate', 'property', 'housing'] },
-      { title: `India FDI Foreign Direct Investment Record Inflows ${year}`, category: 'Business', keywords: ['india', 'fdi', 'foreign', 'investment', 'economy'] },
-      { title: `India Education Technology EdTech Platforms Skill Development ${year}`, category: 'Technology', keywords: ['india', 'edtech', 'education', 'skill', 'online'] },
-      { title: `India Defence Indigenisation Make in India Military ${year}`, category: 'World', keywords: ['india', 'defence', 'military', 'make-in-india', 'export'] },
-      { title: `India Climate Action Net Zero Targets Carbon Policy ${year}`, category: 'World', keywords: ['india', 'climate', 'net-zero', 'carbon', 'environment'] },
-      { title: `India Fintech UPI Digital Payments Global Expansion ${year}`, category: 'Technology', keywords: ['india', 'upi', 'fintech', 'payment', 'digital'] },
-      { title: `India Textile Garment Export Opportunities and Challenges ${year}`, category: 'Business', keywords: ['india', 'textile', 'garment', 'export', 'manufacturing'] },
-      { title: `India Logistics Supply Chain Improvements and Challenges ${year}`, category: 'Business', keywords: ['india', 'logistics', 'supply', 'chain', 'infrastructure'] },
-    ],
+  if (topics.length === 0) {
+    try { topics = await fromGoogleNews(region) } catch { /* nothing available */ }
   }
-
-  const pool = fallbackPools[region] || fallbackPools['India']
-  return pool[idx % pool.length]
+  // Light shuffle of the top 10 so consecutive runs don't always pick item #1
+  const head = topics.slice(0, 10).sort(() => Math.random() - 0.5)
+  return [...head, ...topics.slice(10)]
 }
 
 // ── REPLACEMENT for generateArticle() in your cron route ─────────
 // Uses Groq JSON mode + higher token limit + resilient parsing to
 // fix the "No JSON in response" / "Expected ',' or '}'" failures.
-async function generateArticle(title: string, keywords: string[], category: string, geminiKey: string, language = 'en', region = 'India') {
+async function generateArticle(title: string, keywords: string[], category: string, geminiKey: string, language = 'en', region = 'India', source?: ArticleSource) {
   const langName = LANGUAGES[language] || 'English'
-  const prompt = buildArticlePrompt({ title, category, keywords, language: langName, region })
+  const prompt = buildArticlePrompt({ title, category, keywords, language: langName, region, source })
 
   async function callGroq(): Promise<any> {
     const res = await fetch(
@@ -732,89 +711,35 @@ async function runArticlePublish(
   const log: string[] = []
   try {
     log.push(`Starting auto-publish | lang: ${langParam} | region: ${regionParam}`)
-    log.push('Fetching trending topic...')
-    let trend = await getTrendingTopic(geminiKey, newsApiKey, regionParam)
-    log.push(`Topic: ${trend.title}`)
-
-    // Helper: fingerprint a topic by its first 3 keywords joined (catches near-identical topics)
+    log.push('Fetching real news stories...')
+    // Fingerprint a topic by its first 3 keywords (catches near-identical topics within a run)
     const topicKey = (kw: string[]) => kw.slice(0, 3).sort().join('|')
+    const candidates = await getSourcedTopics(newsApiKey, regionParam)
+    log.push(`Real stories found: ${candidates.length}`)
 
-    // Skip if this topic's keywords overlap too much with already-published topics this run
-    if (usedTopicKeywords.has(topicKey(trend.keywords))) {
-      log.push(`Within-run duplicate detected — fetching fresh topic from Gemini...`)
-      const fresh = await getTrendingTopic(geminiKey, undefined, regionParam) // skip newsApi, force Gemini
-      if (!usedTopicKeywords.has(topicKey(fresh.keywords))) {
-        trend = fresh
-        log.push(`Fresh topic: ${trend.title}`)
+    // Pick the first fresh real story that isn't already on the site or used this run.
+    let trend: SourcedTopic | null = null
+    for (const c of candidates.slice(0, 8)) {
+      if (usedTopicKeywords.has(topicKey(c.keywords))) continue
+      if (await checkDuplicate(slugify(c.title), c.title, wpBase, auth)) {
+        log.push(`Already covered: ${c.title}`)
+        continue
       }
+      trend = c
+      break
     }
 
-    // Retry with up to 5 different fallback topics if duplicate detected
-    let isDuplicate = await checkDuplicate(slugify(trend.title), trend.title, wpBase, auth)
-    if (isDuplicate) {
-      log.push(`Duplicate detected — trying alternate topics...`)
-      const hour = new Date().getUTCHours()
-      const year = new Date().getFullYear()
-      const alternatesByRegion: Record<string, { title: string; category: string; keywords: string[] }[]> = {
-        India: [
-          { title: `India Economy GDP Growth Forecast ${year}`, category: 'Business', keywords: ['india', 'gdp', 'economy', 'growth', 'forecast'] },
-          { title: `India Tech Sector AI Adoption Trends ${year}`, category: 'Technology', keywords: ['india', 'tech', 'ai', 'startup', 'digital'] },
-          { title: `India Export Trade Policy Latest Updates ${year}`, category: 'Business', keywords: ['india', 'export', 'trade', 'policy', 'wto'] },
-          { title: `India Climate Energy Transition Solar Boom ${year}`, category: 'Technology', keywords: ['india', 'solar', 'energy', 'climate', 'green'] },
-          { title: `India Healthcare Innovation Digital Health ${year}`, category: 'Health', keywords: ['india', 'healthcare', 'digital', 'innovation', 'medtech'] },
-          { title: `India Fintech UPI Payments Global Reach ${year}`, category: 'Technology', keywords: ['india', 'upi', 'fintech', 'payment', 'global'] },
-          { title: `India Tourism Hospitality Growth Recovery ${year}`, category: 'Lifestyle', keywords: ['india', 'tourism', 'travel', 'hospitality', 'growth'] },
-          { title: `India Manufacturing PLI Scheme Progress ${year}`, category: 'Business', keywords: ['india', 'manufacturing', 'pli', 'scheme', 'export'] },
-        ],
-        USA: [
-          { title: `US Economy Consumer Spending Outlook ${year}`, category: 'Business', keywords: ['us economy', 'consumer spending', 'retail', 'growth', 'gdp'] },
-          { title: `America Technology AI Innovation Leadership ${year}`, category: 'Technology', keywords: ['us tech', 'ai', 'innovation', 'silicon valley', 'startups'] },
-          { title: `US Healthcare Reform Drug Pricing Changes ${year}`, category: 'Health', keywords: ['us healthcare', 'drug prices', 'reform', 'insurance', 'medicare'] },
-          { title: `America Climate Policy Clean Energy Jobs ${year}`, category: 'Environment', keywords: ['us climate', 'clean energy', 'jobs', 'inflation reduction act', 'solar'] },
-          { title: `US Labor Market Wages Employment Trends ${year}`, category: 'Business', keywords: ['us jobs', 'wages', 'employment', 'labor market', 'fed'] },
-          { title: `America Housing Affordability Mortgage Crisis ${year}`, category: 'Business', keywords: ['us housing', 'affordability', 'mortgage', 'home prices', 'rates'] },
-          { title: `US China Geopolitics Trade Sanctions ${year}`, category: 'Politics', keywords: ['us china', 'trade', 'sanctions', 'geopolitics', 'tariffs'] },
-          { title: `America Retail E-Commerce Amazon Growth ${year}`, category: 'Business', keywords: ['us retail', 'e-commerce', 'amazon', 'consumer', 'online shopping'] },
-        ],
-        GCC: [
-          { title: `UAE Economy Diversification Non-Oil Growth ${year}`, category: 'Business', keywords: ['uae economy', 'diversification', 'non-oil', 'growth', 'sectors'] },
-          { title: `Saudi Arabia Investment Projects Mega Development ${year}`, category: 'Business', keywords: ['saudi investment', 'mega projects', 'neom', 'vision 2030', 'development'] },
-          { title: `Gulf Expat Job Market Opportunities Skills ${year}`, category: 'Business', keywords: ['gulf jobs', 'expat', 'uae employment', 'saudi jobs', 'gcc careers'] },
-          { title: `GCC Startup Ecosystem Venture Capital Growth ${year}`, category: 'Technology', keywords: ['gcc startups', 'venture capital', 'fintech', 'uae tech', 'investment'] },
-          { title: `Dubai Trade Hub Logistics Global Commerce ${year}`, category: 'Business', keywords: ['dubai trade', 'logistics', 'global commerce', 'jebel ali', 'free zone'] },
-          { title: `Saudi Sports Entertainment Industry Growth ${year}`, category: 'Entertainment', keywords: ['saudi sports', 'entertainment', 'boxing', 'golf liv', 'vision 2030'] },
-          { title: `GCC Banking Finance Islamic Finance Growth ${year}`, category: 'Finance', keywords: ['gcc banking', 'islamic finance', 'uae banks', 'saudi banks', 'financial sector'] },
-          { title: `Gulf Renewable Energy Hydrogen Future ${year}`, category: 'Technology', keywords: ['gulf renewable', 'hydrogen', 'solar', 'energy transition', 'uae saudi'] },
-        ],
-      }
-      const alternates = alternatesByRegion[regionParam] || alternatesByRegion['India']
-      // Pick an alternate based on current hour+minute to vary each run
-      const altIdx = (hour + Math.floor(new Date().getUTCMinutes() / 10)) % alternates.length
-      for (let i = 0; i < alternates.length; i++) {
-        const candidate = alternates[(altIdx + i) % alternates.length]
-        const dupCheck = await checkDuplicate(slugify(candidate.title), candidate.title, wpBase, auth)
-        if (!dupCheck) {
-          trend = candidate
-          isDuplicate = false
-          log.push(`Using alternate topic: ${candidate.title}`)
-          break
-        }
-        log.push(`Alternate also duplicate: ${candidate.title}`)
-      }
+    if (!trend) {
+      log.push('No fresh, uncovered real story available — skipping (no invented or evergreen fallback).')
+      await supabase.from('cron_logs').insert({ status: 'skipped', title: null, wp_url: wpUrl, log, user_id: adminUserId })
+      return { result: { success: false, skipped: true, reason: 'no_real_source' }, log }
     }
-
-    // Mark this topic's keyword fingerprint as used so the next article in this run picks a different theme
+    log.push(`Topic: ${trend.title} (source: ${trend.source.publisher})`)
     usedTopicKeywords.add(topicKey(trend.keywords))
-
     const slug = slugify(trend.title)
-    if (isDuplicate) {
-      log.push(`All topic candidates were duplicates — skipping`)
-      await supabase.from('cron_logs').insert({ status: 'skipped', title: trend.title, wp_url: wpUrl, log, user_id: adminUserId })
-      return { result: { success: false, skipped: true, reason: 'duplicate' }, log }
-    }
 
     log.push(`Generating article in ${LANGUAGES[langParam] || 'English'} for region: ${regionParam}...`)
-    const article = await generateArticle(trend.title, trend.keywords, trend.category, geminiKey, langParam, regionParam)
+    const article = await generateArticle(trend.title, trend.keywords, trend.category, geminiKey, langParam, regionParam, trend.source)
     log.push(`Article: ${article.title}`)
 
     // Run image fetch and category determination in parallel — independent of each other
@@ -840,9 +765,13 @@ async function runArticlePublish(
     // The theme already renders the featured image above the content.
     // Strip the leading <figure> placeholder from the content body entirely
     // to avoid a duplicate image at the top of every article.
+    // Always end with a visible attribution to the real source story.
+    const escHtml = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+    const sourceLine = `<p class="tv-source"><strong>Source:</strong> <a href="${escHtml(trend.source.url)}" rel="nofollow noopener" target="_blank">${escHtml(trend.source.publisher)}</a> &mdash; ${escHtml(trend.source.title)}</p>`
     const finalContent = contentWithAd
       .replace(/^\s*<figure[^>]*>\s*<img[^>]*>\s*<\/figure>\s*/i, '')
-      .trimStart()
+      .replace(/<p class="tv-author-byline">[\s\S]*?<\/p>/gi, '') // site template renders the byline
+      .trimStart() + '\n' + sourceLine
 
     log.push('Publishing to WordPress...')
     const wpRes = await fetch(`${wpBase}/wp-json/wp/v2/posts`, {
