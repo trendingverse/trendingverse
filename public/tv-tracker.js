@@ -128,7 +128,7 @@
   })();
   // ─────────────────────────────────────────────────────────────────
 
-  const CMS  = 'https://trendingverse.vercel.app';
+  const CMS  = 'https://trendingverse-pages.pages.dev';
   const SITE = window.TV_SITE_URL || window.location.origin;
   const CAT  = window.TV_CATEGORY || '';
   const PAGE = window.location.href;
