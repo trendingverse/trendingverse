@@ -92,7 +92,7 @@ async function fetchGNews(country: string, lang: string, apiKey: string) {
 async function fetchGeminiTrends(regions: string[], geminiKey: string): Promise<{ items: unknown[]; error?: string }> {
   const today = new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
   // Try models in order until one works
-  const models = ['gemini-1.5-flash', 'gemini-1.5-flash', 'gemini-1.5-flash']
+  const models = ['gemini-2.0-flash-lite', 'gemini-2.0-flash-lite', 'gemini-2.0-flash-lite']
   for (const model of models) {
     try {
       const res = await fetch(
