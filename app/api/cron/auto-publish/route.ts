@@ -1055,7 +1055,7 @@ export async function GET(req: NextRequest) {
   if (runArticle) {
     const regionSchedule = regionParam
       ? [regionParam]  // explicit region from query param → one article
-      : ['India', 'GCC', 'USA', 'India', 'GCC', 'USA', 'India'] // auto: 3 India + 2 GCC + 2 USA
+      : ['India', 'GCC', 'USA'] // 1 per region per run — stays within Cloudflare subrequest limit
 
     // Shared state across all articles in this run — prevents same topic/image in a single cron batch
     const usedTopicKeywords = new Set<string>()
