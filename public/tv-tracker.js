@@ -278,6 +278,21 @@
     return function() { return maxScroll; };
   }
 
+  // ── POPUNDER AD INJECTION ─────────────────────────────────────
+  (function injectPopunder() {
+    try {
+      fetch(CMS + '/api/mediation/popunder?site=' + encodeURIComponent(SITE))
+        .then(function(r) { return r.ok ? r.json() : null; })
+        .then(function(d) {
+          if (!d || !d.code) return;
+          var wrap = document.createElement('div');
+          wrap.innerHTML = d.code;
+          document.body && document.body.appendChild(wrap);
+        })
+        .catch(function() {});
+    } catch(e) {}
+  })();
+
   // ── FALLBACK POPUP ────────────────────────────────────────────
   function initPopup(fp) {
     if (sessionStorage.getItem('_tvlc')) return;
