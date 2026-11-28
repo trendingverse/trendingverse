@@ -284,9 +284,12 @@
       fetch(CMS + '/api/mediation/popunder?site=' + encodeURIComponent(SITE))
         .then(function(r) { return r.ok ? r.json() : null; })
         .then(function(d) {
-          if (!d || !d.code) return;
+          if (!d) return;
+          // API returns `code` (joined string) or `codes` (array)
+          var html = d.code || (d.codes && d.codes.join('\n')) || '';
+          if (!html) return;
           var wrap = document.createElement('div');
-          wrap.innerHTML = d.code;
+          wrap.innerHTML = html;
           document.body && document.body.appendChild(wrap);
         })
         .catch(function() {});

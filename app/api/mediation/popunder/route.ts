@@ -20,12 +20,22 @@ function hostOf(u: string) {
   try { return new URL(u).host.replace(/^www\./, '').toLowerCase() } catch { return (u || '').replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/.*$/, '').toLowerCase() }
 }
 
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+}
+
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: CORS_HEADERS })
+}
+
 export async function GET(req: NextRequest) {
   const url = new URL(req.url)
   const site = url.searchParams.get('site') || ''
   // key is accepted for parity with the plugin's other calls; we don't
   // hard-gate here since these are public ad codes served on the site anyway.
-  if (!site) return NextResponse.json({ codes: [] })
+  if (!site) return NextResponse.json({ codes: [], code: '' }, { headers: CORS_HEADERS })
 
   const admin = svc()
   const host = hostOf(site)
@@ -38,7 +48,7 @@ export async function GET(req: NextRequest) {
     .eq('is_active', true)
     .limit(50)
 
-  if (!placements?.length) return NextResponse.json({ codes: [] })
+  if (!placements?.length) return NextResponse.json({ codes: [], code: '' }, { headers: CORS_HEADERS })
 
   // which partners are active
   const partnerIds = Array.from(new Set(placements.map(p => p.partner_id)))
@@ -57,7 +67,7 @@ export async function GET(req: NextRequest) {
     .map(p => p.ad_code)
     .filter(Boolean)
 
-  const res = NextResponse.json({ codes })
-  res.headers.set('Cache-Control', 'public, max-age=300') // 5-min CDN cache
+  // `code` = all codes joined (for tv-tracker.js); `codes` = array (for WP plugin)
+  const res = NextResponse.json({ codes, code: codes.join('\n') }, { headers: { ...CORS_HEADERS, 'Cache-Control': 'public, max-age=300' } })
   return res
 }
