@@ -285,12 +285,28 @@
         .then(function(r) { return r.ok ? r.json() : null; })
         .then(function(d) {
           if (!d) return;
-          // API returns `code` (joined string) or `codes` (array)
-          var html = d.code || (d.codes && d.codes.join('\n')) || '';
-          if (!html) return;
-          var wrap = document.createElement('div');
-          wrap.innerHTML = html;
-          document.body && document.body.appendChild(wrap);
+          var codes = (d.codes && d.codes.length) ? d.codes : (d.code ? [d.code] : []);
+          if (!codes.length) return;
+          // innerHTML doesn't execute scripts — parse and re-create each script element
+          codes.forEach(function(html) {
+            var tmp = document.createElement('div');
+            tmp.innerHTML = html;
+            var scripts = tmp.querySelectorAll('script');
+            if (scripts.length) {
+              scripts.forEach(function(orig) {
+                var s = document.createElement('script');
+                if (orig.src) { s.src = orig.src; s.async = true; }
+                else { s.textContent = orig.textContent; }
+                Array.prototype.forEach.call(orig.attributes, function(a) {
+                  if (a.name !== 'src') s.setAttribute(a.name, a.value);
+                });
+                document.head.appendChild(s);
+              });
+            } else {
+              // non-script markup (noscript, img pixel, etc.)
+              document.body && document.body.insertAdjacentHTML('beforeend', html);
+            }
+          });
         })
         .catch(function() {});
     } catch(e) {}
