@@ -770,6 +770,7 @@ async function runArticlePublish(
     const sourceLine = `<p class="tv-source"><strong>Source:</strong> <a href="${escHtml(trend.source.url)}" rel="nofollow noopener" target="_blank">${escHtml(trend.source.publisher)}</a> &mdash; ${escHtml(trend.source.title)}</p>`
     const finalContent = contentWithAd
       .replace(/^\s*<figure[^>]*>\s*<img[^>]*>\s*<\/figure>\s*/i, '')
+      .replace(/^\s*<h1[^>]*>.*?<\/h1>\s*/is, '') // strip leading H1 — WP already renders the post title
       .replace(/<p class="tv-author-byline">[\s\S]*?<\/p>/gi, '') // site template renders the byline
       .trimStart() + '\n' + sourceLine
 
