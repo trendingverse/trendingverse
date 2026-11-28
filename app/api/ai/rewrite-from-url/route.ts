@@ -102,7 +102,7 @@ The "content" field must be the full rewritten article as plain paragraphs separ
   try {
     if (!geminiKey) return NextResponse.json({ error: 'AI service not configured' }, { status: 500 })
     const aiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${geminiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${geminiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

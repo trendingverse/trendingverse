@@ -100,7 +100,7 @@ Return ONLY a valid JSON array:
 [{"id":1,"discover_headline":"...","seo_title":"...","meta_description":"...","focus_keyword":"...","keywords":["tag1","tag2"],"category":"Politics","seo_score_before":40,"seo_score_after":78}]`
 
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${geminiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${geminiKey}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -249,7 +249,7 @@ Return ONLY a valid JSON array, no markdown, no commentary before or after:
 [{"id":1,"current_category":"Politics","correct_category":"World","needs_change":true,"reason":"max 5 words"}]`
 
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${geminiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${geminiKey}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
